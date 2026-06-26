@@ -1,0 +1,36 @@
+from __future__ import annotations
+
+from app.llm.base import LLMProvider
+from app.llm.prompt import PLAN_TOOL
+
+_DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+
+
+class AnthropicProvider(LLMProvider):
+    def __init__(self, api_key: str, model: str | None = None) -> None:
+        try:
+            import anthropic
+        except ImportError as exc:
+            raise RuntimeError(
+                "The 'anthropic' package is not installed in the sidecar. "
+                "Rebuild with: npm run sidecar:build"
+            ) from exc
+
+        self._client = anthropic.Anthropic(api_key=api_key)
+        self._model = model or _DEFAULT_MODEL
+
+    def complete(self, system_prompt: str, user_message: str) -> list[dict]:
+        response = self._client.messages.create(
+            model=self._model,
+            max_tokens=2048,
+            system=system_prompt,
+            tools=[PLAN_TOOL],
+            tool_choice={"type": "tool", "name": "create_git_plan"},
+            messages=[{"role": "user", "content": user_message}],
+        )
+
+        for block in response.content:
+            if block.type == "tool_use" and block.name == "create_git_plan":
+                return block.input.get("steps", [])
+
+        raise RuntimeError("The AI did not return a structured Git plan.")

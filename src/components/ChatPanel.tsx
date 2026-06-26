@@ -1,0 +1,354 @@
+﻿import { FormEvent, useEffect, useRef, useState } from "react";
+import type {
+  ChatTranscriptEntry,
+  LocalActionPlan,
+} from "../lib/types";
+import type { WizardData, WizardFlowId } from "../lib/flows";
+import { WizardMenu } from "./WizardMenu";
+import { WizardStep } from "./WizardStep";
+
+interface ChatPanelProps {
+  repositorySelected: boolean;
+  busy: boolean;
+  transcript: ChatTranscriptEntry[];
+  pendingPlanId?: string | null;
+  applicationError?: string | null;
+  onSubmit: (message: string) => Promise<void>;
+  onApprovePlan: (planId: string) => Promise<void>;
+  onCancelPlan: (planId: string) => Promise<void>;
+  onWizardSelect: (flowId: WizardFlowId) => void;
+  onWizardNext: (choiceLabel: string, data: Partial<WizardData>) => void;
+  onWizardConfirm: () => void;
+  onWizardCancel: () => void;
+  onAddToGitignore: (paths: string[]) => Promise<void>;
+}
+
+function statusLabel(status: "pending" | "executed" | "cancelled" | "failed") {
+  switch (status) {
+    case "pending":
+      return "AWAITING APPROVAL";
+    case "executed":
+      return "EXECUTED";
+    case "cancelled":
+      return "CANCELLED";
+    case "failed":
+      return "FAILED";
+  }
+}
+
+function PlanCard({
+  plan,
+  status,
+  busy,
+  active,
+  onApprove,
+  onCancel,
+}: {
+  plan: LocalActionPlan;
+  status: "pending" | "executed" | "cancelled" | "failed";
+  busy: boolean;
+  active: boolean;
+  onApprove: (planId: string) => void;
+  onCancel: (planId: string) => void;
+}) {
+  return (
+    <section className={`plan-card plan-card-${status}`}>
+      <div className="plan-card-heading">
+        <div>
+          <span>
+            {plan.source === "llm" ? "AI GIT PLAN" : "LOCAL GIT PLAN"}
+            {plan.source === "llm" && <span className="plan-ai-badge">AI</span>}
+          </span>
+          <strong>Review before execution</strong>
+        </div>
+        <em>{statusLabel(status)}</em>
+      </div>
+
+      <p className="plan-explanation">
+        {status === "executed"
+          ? "This approved plan was executed successfully."
+          : status === "cancelled"
+            ? "This plan was cancelled. No Git changes were made."
+            : status === "failed"
+              ? "This approved plan could not be completed."
+              : plan.explanation}
+      </p>
+
+      <ol className="plan-step-list">
+        {plan.steps.map((step, index) => (
+          <li key={`${step.kind}-${index}`} className="plan-step">
+            <span className="plan-step-number">{index + 1}</span>
+            <div>
+              <strong>{step.title}</strong>
+              <p>{step.detail}</p>
+
+              {step.paths.length > 0 && (
+                <ul className="plan-path-list">
+                  {step.paths.map((path) => (
+                    <li key={path}>
+                      <code>{path}</code>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {step.commitMessage && (
+                <p className="plan-commit-message">
+                  Commit message: <code>{step.commitMessage}</code>
+                </p>
+              )}
+
+              {step.remote && step.branch && (
+                <p className="plan-push-target">
+                  Target: <code>{step.branch} → {step.remote}/{step.branch}</code>
+                </p>
+              )}
+              {step.branch && step.kind !== "push" && (
+                <p className="plan-metadata">
+                  Branch: <code>{step.branch}</code>
+                </p>
+              )}
+
+              {step.kind === "commit" && step.paths.length > 0 && (
+                <p className="plan-metadata">
+                  Files included: <code>{step.paths.length}</code>
+                </p>
+              )}
+
+              {step.ahead !== null && step.ahead !== undefined && (
+                <p className="plan-metadata">
+                  Ahead: <code>{step.ahead}</code>
+                </p>
+              )}
+
+              {step.behind !== null && step.behind !== undefined && (
+                <p className="plan-metadata">
+                  Behind: <code>{step.behind}</code>
+                </p>
+              )}
+
+              {step.force !== null && step.force !== undefined && (
+                <p className="plan-metadata">
+                  Force: <code>{step.force ? "true" : "false"}</code>
+                </p>
+              )}
+
+              {step.commandPreview && (
+                <div className="plan-command-preview">
+                  <span>Equivalent Git command</span>
+                  <code>{step.commandPreview}</code>
+                </div>
+              )}              
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {status === "pending" && active && plan.planId && (
+        <div className="plan-actions">
+          <button
+            type="button"
+            className="plan-approve-button"
+            disabled={busy}
+            onClick={() => onApprove(plan.planId ?? "")}
+          >
+            {busy ? "Executing..." : "Approve and execute"}
+          </button>
+          <button
+            type="button"
+            className="plan-cancel-button"
+            disabled={busy}
+            onClick={() => onCancel(plan.planId ?? "")}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TranscriptItem({
+  entry,
+  busy,
+  pendingPlanId,
+  onApprovePlan,
+  onCancelPlan,
+  onWizardSelect,
+  onWizardNext,
+  onWizardConfirm,
+  onWizardCancel,
+  onAddToGitignore,
+}: {
+  entry: ChatTranscriptEntry;
+  busy: boolean;
+  pendingPlanId?: string | null;
+  onApprovePlan: (planId: string) => void;
+  onCancelPlan: (planId: string) => void;
+  onWizardSelect: (flowId: WizardFlowId) => void;
+  onWizardNext: (choiceLabel: string, data: Partial<WizardData>) => void;
+  onWizardConfirm: () => void;
+  onWizardCancel: () => void;
+  onAddToGitignore: (paths: string[]) => Promise<void>;
+}) {
+  if (entry.kind === "user") {
+    return (
+      <section className="user-message-card">
+        <span>You</span>
+        <p>{entry.message}</p>
+      </section>
+    );
+  }
+
+  if (entry.kind === "result") {
+    return (
+      <section className="result-card">
+        <div className="result-card-heading">
+          <span>LOCAL RESULT</span>
+          <strong>{entry.title}</strong>
+        </div>
+        <p>{entry.summary}</p>
+        <pre>{entry.content || "No output returned."}</pre>
+      </section>
+    );
+  }
+
+  if (entry.kind === "error") {
+    return (
+      <section className="error-card">
+        <strong>Request could not be completed</strong>
+        <p>{entry.message}</p>
+      </section>
+    );
+  }
+
+  if (entry.kind === "wizard_menu") {
+    return <WizardMenu onSelect={onWizardSelect} busy={busy} compact={entry.variant === "compact"} />;
+  }
+
+  if (entry.kind === "wizard_step") {
+    return (
+      <WizardStep
+        entry={entry}
+        busy={busy}
+        onNext={onWizardNext}
+        onConfirm={onWizardConfirm}
+        onCancel={onWizardCancel}
+        onAddToGitignore={onAddToGitignore}
+      />
+    );
+  }
+
+  return (
+    <PlanCard
+      plan={entry.plan}
+      status={entry.status}
+      busy={busy}
+      active={entry.plan.planId === pendingPlanId}
+      onApprove={onApprovePlan}
+      onCancel={onCancelPlan}
+    />
+  );
+}
+
+export function ChatPanel({
+  repositorySelected,
+  busy,
+  transcript,
+  pendingPlanId,
+  applicationError,
+  onSubmit,
+  onApprovePlan,
+  onCancelPlan,
+  onWizardSelect,
+  onWizardNext,
+  onWizardConfirm,
+  onWizardCancel,
+  onAddToGitignore,
+}: ChatPanelProps) {
+  const [message, setMessage] = useState("");
+  const endOfTranscriptRef = useRef<HTMLDivElement | null>(null);
+  const hasPendingPlan = Boolean(pendingPlanId);
+
+  useEffect(() => {
+    endOfTranscriptRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [transcript, busy]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = message.trim();
+    if (!trimmed || busy || hasPendingPlan || !repositorySelected) return;
+
+    await onSubmit(trimmed);
+    setMessage("");
+  }
+
+  return (
+    <main className="chat-panel">
+      <div className="chat-scroll">
+        {!repositorySelected ? (
+          <section className="empty-state">
+            <div className="empty-state-icon">⌘</div>
+            <h2>No repository selected</h2>
+            <p>Add a local Git repository from the left sidebar to start.</p>
+          </section>
+        ) : (
+          <>
+            <div className="transcript-list">
+              {transcript.map((entry) => (
+                <TranscriptItem
+                  key={entry.id}
+                  entry={entry}
+                  busy={busy}
+                  pendingPlanId={pendingPlanId}
+                  onApprovePlan={(planId) => void onApprovePlan(planId)}
+                  onCancelPlan={(planId) => void onCancelPlan(planId)}
+                  onWizardSelect={onWizardSelect}
+                  onWizardNext={onWizardNext}
+                  onWizardConfirm={onWizardConfirm}
+                  onWizardCancel={onWizardCancel}
+                  onAddToGitignore={onAddToGitignore}
+                />
+              ))}
+            </div>
+
+            {applicationError && (
+              <section className="error-card">
+                <strong>Application notice</strong>
+                <p>{applicationError}</p>
+              </section>
+            )}
+
+            <div ref={endOfTranscriptRef} />
+          </>
+        )}
+      </div>
+
+      <form className="chat-composer" onSubmit={submit}>
+        <span className="composer-icon" aria-hidden="true">+</span>
+        <input
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          placeholder={
+            !repositorySelected
+              ? "Add a repository to begin..."
+              : hasPendingPlan
+                ? "Approve or cancel the current plan first..."
+                : "Describe the Git action you want..."
+          }
+          disabled={!repositorySelected || busy || hasPendingPlan}
+          aria-label="Git assistant request"
+        />
+        <button
+          type="submit"
+          disabled={!repositorySelected || busy || hasPendingPlan || !message.trim()}
+        >
+          {busy ? "..." : "➜"}
+        </button>
+      </form>
+      <p className="composer-hint">
+        Local Git only. Write actions are planned first, then run only after your approval.
+      </p>
+    </main>
+  );
+}

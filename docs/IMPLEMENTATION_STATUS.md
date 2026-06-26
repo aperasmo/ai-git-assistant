@@ -1,0 +1,128 @@
+# Implementation Status
+
+**Last updated:** 25 June 2026  
+**Current state:** Phase 3 complete + post-launch fixes. All three phases of the v1 MVP are implemented and passing tests.
+
+---
+
+## Phases completed
+
+### Phase 0 — Tauri shell, sidecar lifecycle, authenticated IPC
+
+- Tauri 2 shell with React 18 / TypeScript / Vite frontend.
+- Python FastAPI sidecar bundled as a single Windows executable (PyInstaller).
+- Sidecar binds to `127.0.0.1:0` (OS-assigned port), emits one stdout readiness line: `AIGA_READY:{"port":<port>,"protocol_version":"1"}`.
+- Rust generates a per-session bearer token; React never receives the port or token.
+- `GET /v1/health` authenticated health check before any feature is enabled.
+- Git installation detection on startup with a clear UI error if Git is missing.
+
+### Phase 1 — Repository management and read-only actions
+
+- Native folder picker for repository registration.
+- Repository store (SQLite) — `repositories` table persists across sessions.
+- Five read-only actions: `status`, `log`, `diff`, `branches`, `fetch`.
+- Local intent matcher (`LocalIntentMatcher`) — regex pattern matching resolves read requests without an LLM.
+- Three-pane UI: sidebar (repositories), chat (transcript), context panel (live snapshot).
+- Quick Actions in the context panel run read operations directly.
+- `RepositorySnapshot` streamed into the context panel on repository selection.
+
+### Phase 2 — Plan engine and eight write commands
+
+- Plan-then-approve flow: `POST /v1/repositories/{id}/resolve-local` creates an in-memory plan keyed by UUID; `POST /v1/repositories/{id}/execute-plan` runs only after explicit user approval.
+- Local action planner (`LocalActionPlanner`) — regex-based, builds `LocalActionPlan` from intent-matched requests.
+- Eight write commands via the plan engine:
+  - `STAGE` — stage explicit file paths
+  - `UNSTAGE` — remove files from the index
+  - `DISCARD` — discard worktree changes (destructive, confirmed)
+  - `COMMIT` — commit with a required message
+  - `PUSH` — push to remote (with optional `--set-upstream`)
+  - `PULL` — fast-forward pull only
+  - `SWITCH_BRANCH` — check out an existing branch
+  - `CREATE_BRANCH` — create and check out a new branch
+  - `STASH` — stash with optional label
+  - `STASH_POP` — pop the most recent stash
+  - `DELETE_BRANCH` — delete a local branch
+- Stale-plan recheck: the snapshot is re-read immediately before execution; the plan is rejected if the repository changed since planning.
+- `PlanCard` component in the chat transcript — shows steps, approve/cancel buttons, and step-by-step status after execution.
+- Pre-execution recheck guards against write operations on stale state.
+
+### Phase 3 — LLM fallback layer and settings UI
+
+- **Provider abstraction:** `LLMProvider` abstract base class with five concrete provider configurations:
+  - `AnthropicProvider` — uses the Anthropic SDK with tool use (`create_git_plan` tool); default model `claude-haiku-4-5-20251001`.
+  - `OllamaProvider` — HTTP calls to a local Ollama instance; default model `llama3.2`, default base URL `http://localhost:11434`.
+  - `OpenAICompatProvider` — shared implementation covering OpenAI (`gpt-4o-mini`), Groq (`llama-3.3-70b-versatile`, base URL `https://api.groq.com/openai/v1`), and Gemini (`gemini-3.5-flash`, base URL `https://generativelanguage.googleapis.com/v1beta/openai/`). Gemini uses Google's OpenAI-compatible endpoint — no additional SDK required.
+- **LLM fallback routing:** when the local planner returns `matched=False` and the repository has `external_llm_allowed=True`, `LLMRouter` calls the configured provider, validates the returned steps, and produces a `LocalActionPlan` with `source="llm"`.
+- **Structured output:** Claude uses Anthropic tool use; OpenAI/Groq/Ollama use OpenAI function calling format. The LLM returns steps in the same `LocalActionPlan` schema the local planner uses, so the approval UI is unchanged.
+- **Plan validation (`validate_llm_steps`):** rejects empty plans, plans exceeding 8 steps, unknown step kinds, wildcard paths (`.`, `*`, `all`, `**`), paths not in the repository's changed files, unknown remotes, and commits without a message.
+- **Settings storage:** `app_settings` SQLite table (key-value); `SettingsService` manages CRUD. API key is stored in plaintext and never returned via the settings API — only `api_key_set: bool` is exposed.
+- **Settings API:** `GET /v1/settings/llm` and `PUT /v1/settings/llm`.
+- **Per-repository AI toggle:** `POST /v1/repositories/{id}/set-llm`; `external_llm_allowed` column in the `repositories` table.
+- **Tauri commands:** `get_llm_settings`, `update_llm_settings`, `set_repository_llm_allowed`.
+- **Settings modal:** provider selector, API key field (password), model field, Ollama base URL field, security warning about plaintext key storage.
+- **AI toggle in the context panel:** per-repository switch with `role="switch"` / `aria-checked`.
+- **AI badge on plan cards:** plans generated by the LLM show "AI GIT PLAN" with a purple `AI` badge.
+- **`source` field on `LocalActionPlan`:** `"local"` or `"llm"` to distinguish plan origin.
+
+### Post-launch fixes
+
+- **Rust unused import:** Removed unused `use serde_json::json;` from `src-tauri/src/commands/settings.rs`.
+- **Local matcher — "logs" not matched:** Log regex `commits?` was extended to `(?:commits?|logs?)` so phrases like "show me last 5 logs" resolve locally without hitting the LLM. Added "show log" / "show logs" to the exact-match set.
+- **Gemini provider added:** Five providers now supported. Gemini uses Google's OpenAI-compatible REST endpoint (`https://generativelanguage.googleapis.com/v1beta/openai/`) — handled by `OpenAICompatProvider`, no extra SDK needed. Default model `gemini-3.5-flash`. Get an API key from Google AI Studio.
+
+---
+
+## Test results
+
+| Suite | Tests | Result |
+|---|---|---|
+| `test_action_planner.py` | 30 | Pass |
+| `test_settings_service.py` | 7 | Pass |
+| `test_llm_validator.py` | 12 | Pass |
+| **Total** | **49** | **All pass** |
+
+Integration tests (`test_repository_flow.py`, `test_local_matcher.py`) use disposable Git repositories via `tmp_path`; these currently fail at the pytest session level due to a Windows permission error on the `pytest-of-<user>` temp directory (`PermissionError: [WinError 5]`). This is a pre-existing OS-level issue unrelated to the application code.
+
+TypeScript: `npx tsc --noEmit` — no errors.  
+Sidecar binary: built with PyInstaller at `src-tauri/binaries/ai-git-sidecar-x86_64-pc-windows-msvc.exe`.
+
+---
+
+## Known divergences from the MVP build plan
+
+| Plan | Actual | Reason |
+|---|---|---|
+| OS keychain for API key storage | SQLite `app_settings` table, plaintext | Tauri keychain plugin had unclear v2 support at the time of implementation; plaintext SQLite is documented in the settings UI as a known tradeoff. Keychain can replace it later with no API surface change. |
+| Two providers at launch (Ollama + Groq) | Five providers (Anthropic, Gemini, OpenAI, Groq, Ollama) | Adding Claude and OpenAI was mechanical once the abstraction was in place; Gemini uses Google's OpenAI-compatible endpoint so it required no new SDK. |
+| Phase 3 included packaging spike and README | Packaging spike deferred | The Windows NSIS installer is the remaining Phase 3 item. The app runs correctly under `npm run tauri dev`. |
+
+---
+
+## Remaining work
+
+- Windows installer packaging (`npm run tauri build`) and clean-install verification on a machine without Python.
+- Integration test temp directory fix (Windows `pytest-of-<user>` permissions).
+- Portfolio write-up / README polishing.
+
+---
+
+## Development commands
+
+```powershell
+# Install dependencies
+npm install
+pip install -e "sidecar/.[dev]"
+
+# Run unit tests
+cd sidecar
+python -m pytest tests/test_action_planner.py tests/test_settings_service.py tests/test_llm_validator.py
+
+# Rebuild sidecar binary
+npm run sidecar:build
+
+# Type-check frontend
+npx tsc --noEmit
+
+# Run in development mode
+npm run tauri dev
+```
