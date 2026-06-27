@@ -5,9 +5,10 @@ interface TopBarProps {
   repository?: Repository | null;
   gitStatus?: GitInstallationStatus | null;
   onOpenSettings: () => void;
+  onOpenTour: () => void;
 }
 
-export function TopBar({ repository, gitStatus, onOpenSettings }: TopBarProps) {
+export function TopBar({ repository, gitStatus, onOpenSettings, onOpenTour }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="topbar-title">
@@ -39,6 +40,9 @@ export function TopBar({ repository, gitStatus, onOpenSettings }: TopBarProps) {
         <span className={gitStatus?.status === "available" ? "git-ready" : "git-warning"}>
           {gitStatus?.status === "available" ? "Git ready" : "Git check pending"}
         </span>
+        <button type="button" className="tour-button" onClick={onOpenTour} title="Take a tour">
+          ?
+        </button>
         <button type="button" className="text-button" onClick={onOpenSettings}>
           Settings
         </button>

@@ -11,7 +11,7 @@ export function CommandBar({ onSelect, disabled }: CommandBarProps) {
 
   return (
     <div className="command-bar">
-      <div className="command-bar-row">
+      <div className="command-bar-row" data-tour="command-read">
         <span className="command-bar-section-label">READ</span>
         {readFlows.map((flow) => (
           <button
@@ -27,7 +27,7 @@ export function CommandBar({ onSelect, disabled }: CommandBarProps) {
           </button>
         ))}
       </div>
-      <div className="command-bar-row">
+      <div className="command-bar-row" data-tour="command-write">
         <span className="command-bar-section-label">WRITE</span>
         {writeFlows.map((flow) => (
           <button
@@ -37,6 +37,7 @@ export function CommandBar({ onSelect, disabled }: CommandBarProps) {
             disabled={disabled}
             onClick={() => onSelect(flow.id)}
             title={flow.description}
+            data-tour={flow.id === "connect_remote" ? "connect-remote" : undefined}
           >
             <span className="command-pill-icon">{flow.icon}</span>
             {flow.label}

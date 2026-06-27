@@ -870,4 +870,97 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   background: #141d16;
 }
 .command-pill:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ── Tour button ─────────────────────────────────────────── */
+.tour-button {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid #2e343d; background: #1a1e24;
+  color: #6f7783; font-size: 13px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s;
+}
+.tour-button:hover { border-color: #388bfd; color: #e8eaed; }
+
+/* ── Walkthrough overlay ─────────────────────────────────── */
+.walkthrough-overlay {
+  position: fixed; inset: 0; z-index: 500;
+}
+.walkthrough-overlay-dim { background: rgba(0,0,0,.75); }
+
+.walkthrough-spotlight {
+  position: absolute; border-radius: 10px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.75);
+  border: 2px solid rgba(56,139,253,.55);
+  transition: top .28s ease, left .28s ease, width .28s ease, height .28s ease;
+  animation: tour-pulse 2s ease-in-out infinite;
+}
+@keyframes tour-pulse {
+  0%, 100% { border-color: rgba(56,139,253,.55); }
+  50%       { border-color: rgba(56,139,253,.9); }
+}
+
+.walkthrough-tooltip {
+  position: fixed; z-index: 501;
+  background: #151a22; border: 1px solid #2a3240;
+  border-radius: 14px; padding: 20px 22px 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.7);
+  animation: tour-fade-in .2s ease;
+}
+@keyframes tour-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.walkthrough-tooltip-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.walkthrough-step-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  color: #388bfd; text-transform: uppercase;
+}
+.walkthrough-x {
+  border: none; background: transparent; color: #59616e;
+  font-size: 13px; padding: 2px 4px; line-height: 1;
+  transition: color .13s;
+}
+.walkthrough-x:hover { color: #e8eaed; }
+
+.walkthrough-title {
+  margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #e8eaed;
+}
+.walkthrough-body {
+  margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #8b949e;
+}
+
+.walkthrough-actions {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.walkthrough-btn {
+  border-radius: 8px; font-size: 12.5px; padding: 7px 14px;
+  border: 1px solid transparent; transition: all .13s;
+}
+.walkthrough-next, .walkthrough-finish {
+  background: #1f6feb; border-color: #1f6feb; color: #fff; font-weight: 600;
+}
+.walkthrough-next:hover, .walkthrough-finish:hover { background: #388bfd; border-color: #388bfd; }
+.walkthrough-back {
+  background: transparent; border-color: #2e343d; color: #8b949e;
+}
+.walkthrough-back:hover { border-color: #59616e; color: #e8eaed; }
+.walkthrough-skip {
+  background: transparent; border: none; color: #59616e; font-size: 12px;
+  margin-left: auto; padding: 7px 4px;
+}
+.walkthrough-skip:hover { color: #8b949e; }
+
+.walkthrough-dots {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 14px; justify-content: center;
+}
+.walkthrough-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: #2e343d;
+  transition: background .2s, width .2s;
+}
+.walkthrough-dot-active { background: #388bfd; width: 14px; border-radius: 3px; }
 .wizard-context-item:disabled { opacity: .4; cursor: default; }

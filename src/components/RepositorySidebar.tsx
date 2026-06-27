@@ -37,6 +37,7 @@ export function RepositorySidebar({
             className="small-button"
             onClick={onAdd}
             disabled={isBusy}
+            data-tour="add-repo"
           >
             + Add
           </button>
@@ -45,7 +46,7 @@ export function RepositorySidebar({
 
       <div className="repo-filter-placeholder">Filter repositories...</div>
 
-      <div className="repository-list">
+      <div className="repository-list" data-tour="repo-list">
         {repositories.length === 0 ? (
           <p className="sidebar-empty">No repository added yet.</p>
         ) : (

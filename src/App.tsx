@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
 import { CloneRepositoryModal } from "./components/CloneRepositoryModal";
+import { Walkthrough } from "./components/Walkthrough";
 import { RepositoryContextPanel } from "./components/RepositoryContextPanel";
 import { RepositoryDecisionDialog } from "./components/RepositoryDecisionDialog";
 import { RepositorySidebar } from "./components/RepositorySidebar";
@@ -79,6 +80,8 @@ export default function App() {
     useState<FolderClassification | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
   const activeWizardRef = useRef<WizardState | null>(null);
   // Paths the user has requested to gitignore this session, keyed by repositoryId.
   // These are filtered out of every wizard file-pick run so they don't reappear.
@@ -1084,6 +1087,31 @@ export default function App() {
     }));
   }
 
+  // Auto-launch tour on first visit; skip during startup.
+  useEffect(() => {
+    if (bootstrap?.sidecarStatus === "ready" && !localStorage.getItem("aga-tour-v1")) {
+      setTourOpen(true);
+    }
+  }, [bootstrap?.sidecarStatus]);
+
+  function openTour() {
+    setTourStep(0);
+    setTourOpen(true);
+  }
+
+  function closeTour() {
+    setTourOpen(false);
+    localStorage.setItem("aga-tour-v1", "done");
+  }
+
+  function nextTourStep() {
+    setTourStep((s) => s + 1);
+  }
+
+  function prevTourStep() {
+    setTourStep((s) => Math.max(0, s - 1));
+  }
+
   async function toggleRepositoryLlm(allowed: boolean) {
     const repositoryId = activeRepositoryId;
     if (!repositoryId) return;
@@ -1121,6 +1149,7 @@ export default function App() {
         repository={activeRepository}
         gitStatus={gitStatus}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenTour={openTour}
       />
 
       <div className="app-body">
@@ -1169,6 +1198,14 @@ export default function App() {
       )}
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      <Walkthrough
+        open={tourOpen}
+        step={tourStep}
+        onNext={nextTourStep}
+        onBack={prevTourStep}
+        onClose={closeTour}
+      />
 
       {cloneOpen && (
         <CloneRepositoryModal
