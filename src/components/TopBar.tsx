@@ -16,7 +16,7 @@ export function TopBar({ repository, gitStatus, activeLlm, onOpenSettings, onOpe
       <div className="topbar-title">
         <BrandMark />
         <strong>AI Git Assistant</strong>
-        <span className="beta-tag">PHASE 3</span>
+        <span className="beta-tag">PHASE A</span>
       </div>
 
       <div className="topbar-context">
