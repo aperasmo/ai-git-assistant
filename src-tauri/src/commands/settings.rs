@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::{
@@ -8,6 +9,12 @@ use crate::{
     },
     sidecar_proxy::SidecarProxy,
 };
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LLMTestResult {
+    pub ok: bool,
+    pub message: String,
+}
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn get_llm_settings(
@@ -24,6 +31,14 @@ pub async fn update_llm_settings(
     proxy: State<'_, SidecarProxy>,
 ) -> Result<LLMSettings, String> {
     proxy.put(&state, "/v1/settings/llm", &request).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn test_llm_connection(
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<LLMTestResult, String> {
+    proxy.post(&state, "/v1/settings/llm/test", &serde_json::Value::Null).await
 }
 
 #[tauri::command(rename_all = "camelCase")]

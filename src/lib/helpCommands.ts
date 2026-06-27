@@ -1,0 +1,299 @@
+export type HelpCategory = "read" | "write" | "terminal";
+
+export interface HelpCommand {
+  id: string;
+  name: string;
+  category: HelpCategory;
+  description: string;
+  appPhrases?: string[];   // example phrases to type in the app (supported only)
+  gitCommand: string;      // command template
+  gitExample: string;      // concrete runnable example
+}
+
+export const HELP_COMMANDS: HelpCommand[] = [
+  // ── READ ──────────────────────────────────────────────────────────────────
+  {
+    id: "status",
+    name: "What changed?",
+    category: "read",
+    description: "Shows all staged, modified, and untracked files in your working tree. The fastest way to see the current state of your repo.",
+    appPhrases: ["what changed", "git status", "status"],
+    gitCommand: "git status",
+    gitExample: "git status",
+  },
+  {
+    id: "log",
+    name: "Recent commits",
+    category: "read",
+    description: "Lists the most recent commits with hash, author, date, and message. Useful for reviewing history or finding a commit to reference.",
+    appPhrases: ["show log", "recent commits", "last 5 commits"],
+    gitCommand: "git log -n<number>",
+    gitExample: "git log -n10",
+  },
+  {
+    id: "diff",
+    name: "View differences",
+    category: "read",
+    description: "Shows what has changed in your files since the last commit — lines added, removed, or modified.",
+    appPhrases: ["show diff", "what's different", "view diff"],
+    gitCommand: "git diff HEAD",
+    gitExample: "git diff HEAD",
+  },
+  {
+    id: "branches",
+    name: "All branches",
+    category: "read",
+    description: "Lists all local branches and their upstream tracking branches. The current branch is marked with an asterisk.",
+    appPhrases: ["show branches", "list branches", "all branches"],
+    gitCommand: "git branch -a",
+    gitExample: "git branch -a",
+  },
+  {
+    id: "fetch",
+    name: "Refresh remote status",
+    category: "read",
+    description: "Downloads the latest refs from the remote without modifying your local branches. Updates the ahead/behind counters.",
+    appPhrases: ["fetch", "refresh remote", "refresh remote status"],
+    gitCommand: "git fetch --prune",
+    gitExample: "git fetch --prune",
+  },
+
+  // ── WRITE ─────────────────────────────────────────────────────────────────
+  {
+    id: "stage",
+    name: "Stage files",
+    category: "write",
+    description: "Marks specific files to be included in the next commit. Only the files you name are staged — no silent 'add everything'.",
+    appPhrases: [
+      "stage src/login.py",
+      "add Login.tsx and App.tsx",
+      "stage all modified files",
+    ],
+    gitCommand: "git add -- <file> [<file> ...]",
+    gitExample: "git add -- src/login.py src/auth.py",
+  },
+  {
+    id: "commit",
+    name: "Commit",
+    category: "write",
+    description: "Creates a snapshot of staged files with a message describing the change. The plan shows every file and the exact message before anything runs.",
+    appPhrases: [
+      "commit login.py with message \"Fix validation\"",
+      "commit my changes with message \"Add dark mode\"",
+      "commit all modified files with message \"Refactor auth\"",
+    ],
+    gitCommand: "git commit -m \"<message>\"",
+    gitExample: "git commit -m \"Fix login validation edge case\"",
+  },
+  {
+    id: "commit_push",
+    name: "Commit & push",
+    category: "write",
+    description: "Stages, commits, and pushes in one reviewed plan. Ideal for when your changes are ready to share.",
+    appPhrases: [
+      "commit Login.jsx with message \"Fix layout\", then push",
+      "commit my changes with message \"Deploy hotfix\", then push",
+    ],
+    gitCommand: "git add -- <files> && git commit -m \"<msg>\" && git push",
+    gitExample: "git add -- src/App.tsx && git commit -m \"Update layout\" && git push origin main",
+  },
+  {
+    id: "push",
+    name: "Push",
+    category: "write",
+    description: "Uploads your local commits to the remote branch. Always non-force — your remote history is never overwritten.",
+    appPhrases: ["push", "push current branch", "push to main"],
+    gitCommand: "git push <remote> <branch>",
+    gitExample: "git push origin main",
+  },
+  {
+    id: "pull",
+    name: "Pull",
+    category: "write",
+    description: "Downloads and integrates remote commits using fast-forward only. Blocked if your branch has diverged — preventing accidental merge commits.",
+    appPhrases: ["pull", "sync with remote", "git pull"],
+    gitCommand: "git pull --ff-only",
+    gitExample: "git pull --ff-only",
+  },
+  {
+    id: "unstage",
+    name: "Unstage files",
+    category: "write",
+    description: "Removes files from the staging area without discarding your changes. The edits stay in your working tree — you just won't commit them yet.",
+    appPhrases: [
+      "unstage login.py",
+      "remove login.py from staging",
+      "unstage login.py and auth.py",
+    ],
+    gitCommand: "git restore --staged -- <file> [<file> ...]",
+    gitExample: "git restore --staged -- src/login.py",
+  },
+  {
+    id: "discard",
+    name: "Discard changes",
+    category: "write",
+    description: "Reverts a file back to its last committed state, permanently losing any unsaved edits. The app shows a danger warning before running.",
+    appPhrases: [
+      "discard login.py",
+      "discard changes in login.py",
+    ],
+    gitCommand: "git restore -- <file> [<file> ...]",
+    gitExample: "git restore -- src/login.py",
+  },
+  {
+    id: "switch",
+    name: "Switch branch",
+    category: "write",
+    description: "Checks out an existing branch and updates your working tree. Blocked if you have uncommitted changes that would be overwritten.",
+    appPhrases: [
+      "switch to main",
+      "checkout dev_1",
+      "switch to feature/auth",
+    ],
+    gitCommand: "git switch <branch>",
+    gitExample: "git switch feature/auth",
+  },
+  {
+    id: "create_branch",
+    name: "Create branch",
+    category: "write",
+    description: "Creates a new branch from the current HEAD and checks it out immediately. Use it to start a new feature or fix without touching your main branch.",
+    appPhrases: [
+      "create branch feature/auth",
+      "new branch hotfix/login",
+    ],
+    gitCommand: "git switch -c <branch-name>",
+    gitExample: "git switch -c feature/user-auth",
+  },
+  {
+    id: "delete_branch",
+    name: "Delete branch",
+    category: "write",
+    description: "Safely removes a branch that has been fully merged. Fails if the branch has unmerged commits, protecting you from accidental data loss.",
+    appPhrases: [
+      "delete branch old-feature",
+      "remove branch hotfix/login",
+    ],
+    gitCommand: "git branch -d <branch-name>",
+    gitExample: "git branch -d feature/old-login",
+  },
+  {
+    id: "stash",
+    name: "Stash changes",
+    category: "write",
+    description: "Saves your current uncommitted work to a temporary stack and reverts to a clean working tree. Great for quickly switching context.",
+    appPhrases: [
+      "stash",
+      "stash my changes",
+      "stash with message \"WIP login form\"",
+    ],
+    gitCommand: "git stash push --include-untracked",
+    gitExample: "git stash push --include-untracked -m \"WIP login form\"",
+  },
+  {
+    id: "stash_pop",
+    name: "Pop stash",
+    category: "write",
+    description: "Restores the most recent stash entry back into your working tree and removes it from the stash list.",
+    appPhrases: ["stash pop", "restore stash", "apply stash"],
+    gitCommand: "git stash pop",
+    gitExample: "git stash pop",
+  },
+  {
+    id: "connect_remote",
+    name: "Connect remote",
+    category: "write",
+    description: "Links your local repo to a remote URL (GitHub, GitLab, etc.), renames the branch to main, and pushes your commits — all in one guided flow.",
+    appPhrases: ["connect remote"],
+    gitCommand: "git remote add <name> <url>",
+    gitExample: "git remote add origin https://github.com/user/repo.git",
+  },
+
+  // ── TERMINAL ONLY ─────────────────────────────────────────────────────────
+  {
+    id: "merge",
+    name: "Merge",
+    category: "terminal",
+    description: "Integrates changes from another branch into your current branch. Creates a merge commit if histories have diverged. Can produce conflicts that require manual resolution.",
+    gitCommand: "git merge <branch>",
+    gitExample: "git merge feature/auth",
+  },
+  {
+    id: "rebase",
+    name: "Rebase",
+    category: "terminal",
+    description: "Moves your branch's commits on top of another branch, rewriting history for a cleaner linear timeline. Risky on shared branches — prefer merge for public work.",
+    gitCommand: "git rebase <branch>",
+    gitExample: "git rebase main",
+  },
+  {
+    id: "cherry_pick",
+    name: "Cherry-pick",
+    category: "terminal",
+    description: "Applies a single commit from any branch onto your current branch — without bringing the rest of that branch's history.",
+    gitCommand: "git cherry-pick <commit-hash>",
+    gitExample: "git cherry-pick a1b2c3d",
+  },
+  {
+    id: "reset_soft",
+    name: "Reset (soft)",
+    category: "terminal",
+    description: "Moves HEAD back to a previous commit while keeping all changes staged. Useful for rewording a commit or splitting it into smaller ones.",
+    gitCommand: "git reset --soft <commit>",
+    gitExample: "git reset --soft HEAD~1",
+  },
+  {
+    id: "reset_hard",
+    name: "Reset (hard)",
+    category: "terminal",
+    description: "Moves HEAD back to a previous commit and permanently discards all changes after it. This cannot be undone — use with extreme care.",
+    gitCommand: "git reset --hard <commit>",
+    gitExample: "git reset --hard HEAD~1",
+  },
+  {
+    id: "revert",
+    name: "Revert",
+    category: "terminal",
+    description: "Creates a new commit that undoes the changes of a previous commit. Safe for shared branches because it preserves history rather than rewriting it.",
+    gitCommand: "git revert <commit-hash>",
+    gitExample: "git revert a1b2c3d",
+  },
+  {
+    id: "reflog",
+    name: "Reflog",
+    category: "terminal",
+    description: "Shows a log of every place HEAD has pointed — including commits that no longer appear in normal log. Your safety net for recovering 'lost' commits after a reset.",
+    gitCommand: "git reflog",
+    gitExample: "git reflog",
+  },
+  {
+    id: "tag",
+    name: "Tag",
+    category: "terminal",
+    description: "Creates a named reference to a specific commit — typically used for release versions. Tags can be lightweight or annotated with a message.",
+    gitCommand: "git tag <name> [<commit>]",
+    gitExample: "git tag v1.0.0",
+  },
+  {
+    id: "blame",
+    name: "Blame",
+    category: "terminal",
+    description: "Shows which commit and author last modified each line of a file. Useful for understanding why a line of code exists.",
+    gitCommand: "git blame <file>",
+    gitExample: "git blame src/login.py",
+  },
+  {
+    id: "bisect",
+    name: "Bisect",
+    category: "terminal",
+    description: "Uses binary search to find the exact commit that introduced a bug. You mark commits as 'good' or 'bad' and Git narrows it down automatically.",
+    gitCommand: "git bisect start",
+    gitExample: "git bisect start\ngit bisect bad HEAD\ngit bisect good v1.0.0",
+  },
+];
+
+export const CATEGORY_LABELS: Record<HelpCategory, string> = {
+  read: "READ",
+  write: "WRITE",
+  terminal: "TERMINAL ONLY",
+};

@@ -4,11 +4,13 @@ import { BrandMark } from "./BrandMark";
 interface TopBarProps {
   repository?: Repository | null;
   gitStatus?: GitInstallationStatus | null;
+  activeLlm?: { provider: string; model: string } | null;
   onOpenSettings: () => void;
   onOpenTour: () => void;
+  onOpenHelp: () => void;
 }
 
-export function TopBar({ repository, gitStatus, onOpenSettings, onOpenTour }: TopBarProps) {
+export function TopBar({ repository, gitStatus, activeLlm, onOpenSettings, onOpenTour, onOpenHelp }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="topbar-title">
@@ -40,8 +42,16 @@ export function TopBar({ repository, gitStatus, onOpenSettings, onOpenTour }: To
         <span className={gitStatus?.status === "available" ? "git-ready" : "git-warning"}>
           {gitStatus?.status === "available" ? "Git ready" : "Git check pending"}
         </span>
+        {activeLlm && (
+          <span className="active-llm-badge" title={`AI: ${activeLlm.model}`}>
+            AI: {activeLlm.provider}
+          </span>
+        )}
         <button type="button" className="tour-button" onClick={onOpenTour} title="Take a tour">
           ?
+        </button>
+        <button type="button" className="text-button" onClick={onOpenHelp}>
+          Help
         </button>
         <button type="button" className="text-button" onClick={onOpenSettings}>
           Settings

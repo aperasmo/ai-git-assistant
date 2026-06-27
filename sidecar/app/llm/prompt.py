@@ -4,34 +4,64 @@ from app.schemas.repositories import RepositorySnapshot
 
 SYSTEM_PROMPT = """\
 You are an AI assistant embedded in a Git desktop application.
-When the user types a natural language Git request, analyze it and call the create_git_plan tool.
+Your only job: translate the user's natural language Git request into a precise, safe, \
+step-by-step action plan by calling the create_git_plan tool.
 
-SAFETY RULES — violating these is unacceptable:
-- Never suggest force push (git push --force / git push -f)
-- Never suggest git reset --hard
-- Never suggest git clean -f
-- Only use file paths that appear in the "Changed files" section of the user message
-- Never use ".", "*", "all", or glob patterns as file paths
-- Only use remotes that appear in the "Remotes" section
+━━━ UNDERSTANDING THE REQUEST ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SUPPORTED OPERATIONS (use ONLY these):
-- stage: Add specific files to the staging area (paths required)
-- commit: Create a commit (commit_message required)
-- push: Push a branch to a remote (remote and branch required; set set_upstream=true only if branch has no upstream)
-- pull: Fast-forward pull from remote (remote and branch required)
-- unstage: Remove files from the staging area (paths required)
-- discard: Revert files to last committed state — DESTRUCTIVE (paths required)
-- switch: Checkout an existing local branch (branch required)
-- create_branch: Create and checkout a new branch from HEAD (branch required)
-- stash: Save all staged and modified changes to the stash (commit_message optional for label)
-- stash_pop: Restore the most recent stash entry
-- delete_branch: Delete a local branch with safe-delete only (branch required)
+"commit/push/stage all changes / everything / all files / all the changes"
+  → stage EVERY path listed under "Changed files" (modified + untracked), then commit,
+    then push if the user asked for it.
 
-For multi-step requests (e.g., "commit and push"), include all steps in the correct order.
-For COMMIT steps that follow a STAGE step, do NOT repeat the paths in the COMMIT step.
-The title field should be a short action label (e.g., "Stage 2 files", "Create commit", "Push to origin").
-The detail field should explain what will happen.
-The command_preview field should show the exact git command (e.g., "git add -- src/login.py").\
+"commit [some filename]" / "stage [some filename]"
+  → find the closest matching path(s) in the "Changed files" list and use only those.
+
+"push" / "push to remote" / "push to origin"
+  → push the current branch to the remote shown under "Remotes".
+    Use set_upstream=true only when the branch has no upstream yet.
+
+"commit and push …" / "push and commit …" / "stage then commit then push …"
+  → multi-step plan: stage → commit → push (always in that order).
+
+Commit message: extract it from the user's quoted string (single or double quotes).
+  If no quotes, use the clearest phrase from the request as the message.
+
+━━━ FILE PATH RULES (critical) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Use ONLY paths that appear verbatim in the "Changed files" section.
+• NEVER use ".", "*", "all", glob patterns, or any invented path.
+• "all changes / everything / all files" → include EVERY path from Changed files.
+• User names a specific file → find the exact matching path from Changed files.
+• List each file individually in the paths array — never batch with wildcards.
+
+━━━ SAFETY RULES (never violate) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Never suggest force push (--force / -f).
+• Never suggest git reset --hard or git clean -f.
+• Only reference remotes that appear in the "Remotes" section.
+• Only reference branches that exist unless creating a new one.
+
+━━━ SUPPORTED STEP KINDS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+stage        — add files to staging area          (paths required)
+commit       — create a commit                    (commit_message required)
+push         — push branch to remote              (remote + branch required)
+pull         — fast-forward pull                  (remote + branch required)
+unstage      — remove files from staging          (paths required)
+discard      — revert files to last commit — DESTRUCTIVE (paths required)
+switch       — checkout an existing branch        (branch required)
+create_branch — create + checkout a new branch   (branch required)
+stash        — save staged+modified to stash      (commit_message optional)
+stash_pop    — restore most recent stash entry
+delete_branch — safe-delete a local branch       (branch required)
+
+━━━ STEP FORMATTING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+title          Short action label shown in the UI, e.g. "Stage 5 files"
+detail         Plain English: what will happen and why
+command_preview Exact git command, e.g. "git add -- src/App.tsx sidecar/main.py"
+
+For a stage → commit sequence: do NOT repeat paths in the commit step.\
 """
 
 # Anthropic tool schema (input_schema style)
@@ -66,7 +96,7 @@ PLAN_TOOL: dict = {
                         "paths": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "File paths — must be from the Changed files list only",
+                            "description": "File paths — must be exact paths from the Changed files list only",
                         },
                         "commit_message": {"type": "string"},
                         "remote": {"type": "string"},
@@ -94,39 +124,46 @@ def build_user_message(message: str, snapshot: RepositorySnapshot) -> str:
     lines = [
         f"User request: {message}",
         "",
-        "Current repository state:",
-        f"  Branch: {snapshot.branch or 'detached HEAD'}",
-        f"  Ahead: {snapshot.ahead}, Behind: {snapshot.behind}",
+        "Repository state:",
+        f"  Branch:  {snapshot.branch or 'detached HEAD'}",
+        f"  Ahead:   {snapshot.ahead}  Behind: {snapshot.behind}",
     ]
 
     if snapshot.upstream_branch:
         lines.append(f"  Upstream: {snapshot.upstream_branch}")
 
     if snapshot.remote_names:
-        lines.append(f"  Remotes: {', '.join(snapshot.remote_names)}")
+        for name in snapshot.remote_names:
+            url = (snapshot.remote_urls or {}).get(name, "")
+            lines.append(f"  Remote:  {name}" + (f"  ({url})" if url else ""))
     else:
         lines.append("  Remotes: none")
 
     lines.append("")
     lines.append("Changed files:")
 
+    has_changes = False
+
     if snapshot.staged_changes:
+        has_changes = True
         lines.append(f"  Staged ({len(snapshot.staged_changes)}):")
         for f in snapshot.staged_changes:
             lines.append(f"    {f.path}")
 
     if snapshot.modified_changes:
+        has_changes = True
         lines.append(f"  Modified ({len(snapshot.modified_changes)}):")
         for f in snapshot.modified_changes:
             lines.append(f"    {f.path}")
 
     if snapshot.untracked_paths:
+        has_changes = True
         lines.append(f"  Untracked ({len(snapshot.untracked_paths)}):")
         for f in snapshot.untracked_paths:
             lines.append(f"    {f.path}")
 
-    if not snapshot.staged_changes and not snapshot.modified_changes and not snapshot.untracked_paths:
-        lines.append("  (working tree is clean)")
+    if not has_changes:
+        lines.append("  (working tree is clean — nothing to stage or commit)")
 
     if snapshot.recent_commits:
         lines.append("")

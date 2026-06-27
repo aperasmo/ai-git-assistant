@@ -45,6 +45,7 @@ pub fn run() {
             commands::repositories::clone_repository,
             commands::settings::get_llm_settings,
             commands::settings::update_llm_settings,
+            commands::settings::test_llm_connection,
             commands::settings::set_repository_llm_allowed,
         ])
         .build(tauri::generate_context!())

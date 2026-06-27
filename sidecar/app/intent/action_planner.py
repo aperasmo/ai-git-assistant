@@ -60,6 +60,28 @@ _DELETE_BRANCH_PATTERN = re.compile(
     r"^\s*(?:delete|remove)\s+branch\s+(?P<branch>[A-Za-z0-9._/-]+)\s*[.!?]*$",
     re.IGNORECASE,
 )
+_STAGE_ALL_THEN_COMMIT_PATTERN = re.compile(
+    r"^\s*(?:stage|add)\s+"
+    r"(?:all(?:\s+(?:files?|changes?|modified(?:\s+files?)?))?|everything|(?:my\s+)?changes?)\s*"
+    r",?\s*(?:then\s+|and\s+)?"
+    r"commit(?P<push_inline>\s+and\s+push)?\s*"
+    r"(?:with\s+)?(?:message\s+(?:is\s+)?)?(?P<quote>[\"'])(?P<commit_msg>.+?)(?P=quote)"
+    r"(?P<push_tail>.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+# Detects "and push" / "then push" appearing before the quoted message
+_PUSH_PREFIX_PATTERN = re.compile(
+    r",?\s*\b(?:and|then)\s+push(?:\s+(?:current\s+branch|to\s+[A-Za-z0-9._/-]+))?\s*",
+    re.IGNORECASE,
+)
+# Matches "push and commit [all/changes/...] with message '...'"
+_PUSH_AND_COMMIT_PATTERN = re.compile(
+    r"^\s*push\s+and\s+commit\s+"
+    r"(?:all(?:\s+the)?(?:\s+(?:files?|changes?|modified(?:\s+files?)?))?|everything|(?:my\s+|the\s+)?(?:all\s+)?changes?)\s*"
+    r"(?:with\s+)?(?:message\s+(?:is\s+)?)?(?P<quote>[\"'])(?P<commit_msg>.+?)(?P=quote)"
+    r"(?P<push_tail>.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class LocalActionPlanner:
@@ -107,6 +129,23 @@ class LocalActionPlanner:
         commit_plan = self._plan_commit(repository_id, raw_message, snapshot)
         if commit_plan is not None:
             return commit_plan
+
+        push_and_commit_match = _PUSH_AND_COMMIT_PATTERN.match(raw_message)
+        if push_and_commit_match:
+            commit_msg = push_and_commit_match.group("commit_msg")
+            rewritten = f'commit all modified files with message "{commit_msg}", then push'
+            return self._plan_commit(repository_id, rewritten, snapshot)  # type: ignore[return-value]
+
+        stage_all_commit_match = _STAGE_ALL_THEN_COMMIT_PATTERN.match(raw_message)
+        if stage_all_commit_match:
+            commit_msg = stage_all_commit_match.group("commit_msg")
+            push_requested = bool(
+                stage_all_commit_match.group("push_inline")
+                or _PUSH_TAIL_PATTERN.match(stage_all_commit_match.group("push_tail") or "")
+            )
+            suffix = ", then push" if push_requested else ""
+            rewritten = f'commit all modified files with message "{commit_msg}"{suffix}'
+            return self._plan_commit(repository_id, rewritten, snapshot)  # type: ignore[return-value]
 
         stage_match = _STAGE_PATTERN.match(raw_message)
         if stage_match:
@@ -206,23 +245,14 @@ class LocalActionPlanner:
         if delete_branch_match:
             return self._plan_delete_branch(repository_id, raw_message, snapshot, delete_branch_match.group("branch"))
 
-        lowered = raw_message.lower().lstrip()
-        if lowered.startswith("commit"):
-            raise ValidationFailure(
-                'Use a quoted commit message, for example: Commit src/login.py with message "Add login validation".'
-            )
-        if lowered.startswith(("stage", "add", "push")):
-            raise ValidationFailure(
-                "The requested Git action could not be planned. Use explicit repository-relative paths and a supported command pattern."
-            )
-
         return LocalActionPlan(
             matched=False,
             repository_id=repository_id,
             message=raw_message,
             explanation=(
-                "Supported local requests include status, diff, branches, recent commits, "
-                "stage explicit paths, commit with a quoted message, and push the current branch."
+                "The local planner did not recognise this request. "
+                "If you have an AI provider configured and enabled for this repository, "
+                "it will handle the request automatically."
             ),
         )
 
@@ -239,8 +269,14 @@ class LocalActionPlanner:
 
         quoted_message = self._extract_quoted_commit_message(message)
         before_message = message[len("commit") : quoted_message.start].strip()
+
+        # Strip "and push" / "then push" that appears before the quoted message
+        push_in_prefix = bool(_PUSH_PREFIX_PATTERN.search(before_message))
+        before_message = _PUSH_PREFIX_PATTERN.sub(" ", before_message).strip()
+
+        # Strip message connectors: "with message", "message is", "with", etc.
         target = re.sub(
-            r"\bwith(?:\s+message)?\s*$",
+            r"\b(?:with\s+)?message\s+is\s*$|\bwith(?:\s+message)?\s*$",
             "",
             before_message,
             flags=re.IGNORECASE,
@@ -248,9 +284,11 @@ class LocalActionPlanner:
         target = target.strip().rstrip(",").strip()
 
         if not target:
-            raise ValidationFailure("Name the files to commit, or say 'commit staged changes'.")
+            # "commit and push with message '...'" with no explicit target → all modified
+            target = "changes"
 
-        push_requested, requested_push_branch = self._parse_push_tail(message[quoted_message.end :])
+        push_requested_tail, requested_push_branch = self._parse_push_tail(message[quoted_message.end :])
+        push_requested = push_in_prefix or push_requested_tail
         commit_message = quoted_message.value
         steps: list[ActionPlanStep] = []
 
@@ -965,10 +1003,16 @@ class LocalActionPlanner:
             "all modified",
             "modified files",
             "all changes",
+            "all the changes",
             "all my changes",
             "my changes",
+            "the changes",
             "changes",
             "changed files",
+            "all changed files",
+            "all the files",
+            "the files",
+            "all files",
             "all unstaged files",
             "unstaged files",
             "everything",

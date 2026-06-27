@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
 import { CloneRepositoryModal } from "./components/CloneRepositoryModal";
+import { HelpModal } from "./components/HelpModal";
 import { Walkthrough } from "./components/Walkthrough";
 import { RepositoryContextPanel } from "./components/RepositoryContextPanel";
 import { RepositoryDecisionDialog } from "./components/RepositoryDecisionDialog";
@@ -80,6 +81,8 @@ export default function App() {
     useState<FolderClassification | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [activeLlm, setActiveLlm] = useState<{ provider: string; model: string } | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const activeWizardRef = useRef<WizardState | null>(null);
@@ -183,6 +186,9 @@ export default function App() {
             if (loaded.length > 0 && activeRepositoryIdRef.current === null) {
               selectRepository(loaded[0].id);
             }
+            desktopApi.getLlmSettings().then((s) => {
+              if (s.provider) setActiveLlm({ provider: s.provider, model: s.model ?? "" });
+            }).catch(() => {});
           }
         }
       } catch (cause) {
@@ -1148,8 +1154,10 @@ export default function App() {
       <TopBar
         repository={activeRepository}
         gitStatus={gitStatus}
+        activeLlm={activeLlm}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenTour={openTour}
+        onOpenHelp={() => setHelpOpen(true)}
       />
 
       <div className="app-body">
@@ -1197,7 +1205,12 @@ export default function App() {
         />
       )}
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSaved={(provider, model) => setActiveLlm({ provider, model })}
+      />
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <Walkthrough
         open={tourOpen}

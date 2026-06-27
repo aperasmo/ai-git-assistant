@@ -5,6 +5,7 @@ export type WizardFlowId =
   | "log"
   | "diff"
   | "branches"
+  | "fetch"
   | "commit_push"
   | "stage_only"
   | "switch_branch"
@@ -26,6 +27,7 @@ export const FLOWS: FlowDef[] = [
   { id: "log",           label: "Recent commits",   icon: "⊙", description: "View commit history",      category: "read"  },
   { id: "diff",          label: "View differences", icon: "⊟", description: "Show unstaged changes",    category: "read"  },
   { id: "branches",      label: "All branches",     icon: "⑂", description: "List local & remote",      category: "read"  },
+  { id: "fetch",         label: "Fetch remote",     icon: "⟳", description: "Refresh remote status",    category: "read"  },
   { id: "commit_push",   label: "Commit & push",    icon: "↑", description: "Stage, commit and push",   category: "write" },
   { id: "stage_only",    label: "Stage & commit",   icon: "✔", description: "Stage files and commit",   category: "write" },
   { id: "switch_branch", label: "Switch branch",    icon: "⇄", description: "Checkout another branch",  category: "write" },

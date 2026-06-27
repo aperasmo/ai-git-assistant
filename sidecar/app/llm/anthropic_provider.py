@@ -19,6 +19,13 @@ class AnthropicProvider(LLMProvider):
         self._client = anthropic.Anthropic(api_key=api_key)
         self._model = model or _DEFAULT_MODEL
 
+    def ping(self) -> None:
+        self._client.messages.create(
+            model=self._model,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+
     def complete(self, system_prompt: str, user_message: str) -> list[dict]:
         response = self._client.messages.create(
             model=self._model,

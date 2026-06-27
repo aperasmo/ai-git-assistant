@@ -16,6 +16,15 @@ class OllamaProvider(LLMProvider):
         self._model = model or _DEFAULT_MODEL
         self._base_url = (base_url or _DEFAULT_BASE_URL).rstrip("/")
 
+    def ping(self) -> None:
+        try:
+            resp = httpx.get(f"{self._base_url}/api/tags", timeout=10.0)
+            resp.raise_for_status()
+        except httpx.ConnectError as exc:
+            raise RuntimeError(
+                f"Could not connect to Ollama at {self._base_url}. Make sure Ollama is running."
+            ) from exc
+
     def complete(self, system_prompt: str, user_message: str) -> list[dict]:
         payload = {
             "model": self._model,

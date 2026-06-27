@@ -66,6 +66,9 @@ export const desktopApi = {
   updateLlmSettings: (request: UpdateLLMSettingsRequest) =>
     invoke<LLMSettings>("update_llm_settings", { request }),
 
+  testLlmConnection: () =>
+    invoke<{ ok: boolean; message: string }>("test_llm_connection"),
+
   setRepositoryLlmAllowed: (repositoryId: string, allowed: boolean) =>
     invoke<Repository>("set_repository_llm_allowed", { repositoryId, allowed }),
 };

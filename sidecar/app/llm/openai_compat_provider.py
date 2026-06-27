@@ -41,6 +41,13 @@ class OpenAICompatProvider(LLMProvider):
             base_url=effective_base_url,
         )
 
+    def ping(self) -> None:
+        self._client.chat.completions.create(
+            model=self._model,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+
     def complete(self, system_prompt: str, user_message: str) -> list[dict]:
         response = self._client.chat.completions.create(
             model=self._model,

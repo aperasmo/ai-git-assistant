@@ -5,6 +5,7 @@ import type { LLMProviderKind, LLMSettings } from "../lib/types";
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+  onSaved?: (provider: string, model: string) => void;
 }
 
 const PROVIDERS: { value: LLMProviderKind; label: string; needsKey: boolean }[] = [
@@ -23,7 +24,7 @@ const DEFAULT_MODELS: Record<LLMProviderKind, string> = {
   ollama: "deepseek-r1:8b",
 };
 
-export function SettingsModal({ open, onClose }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [provider, setProvider] = useState<LLMProviderKind | "">("");
   const [apiKey, setApiKey] = useState("");
@@ -32,12 +33,15 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const firstFocusRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     if (!open) return;
     setSaveError(null);
     setSaved(false);
+    setTestResult(null);
     desktopApi
       .getLlmSettings()
       .then((s) => {
@@ -79,10 +83,24 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      if (provider) onSaved?.(provider, (model.trim() || DEFAULT_MODELS[provider as LLMProviderKind]) ?? "");
     } catch (err) {
       setSaveError(typeof err === "string" ? err : "Failed to save settings.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleTestConnection() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await desktopApi.testLlmConnection();
+      setTestResult(result);
+    } catch {
+      setTestResult({ ok: false, message: "Request failed — check that the sidecar is running." });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -180,12 +198,27 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           )}
 
           {saveError && <p className="settings-error">{saveError}</p>}
+          {testResult && (
+            <p className={testResult.ok ? "settings-test-ok" : "settings-error"}>
+              {testResult.ok ? "✓ " : "✗ "}{testResult.message}
+            </p>
+          )}
         </div>
 
         <div className="modal-footer">
           <button type="button" className="text-button" onClick={onClose}>
             Cancel
           </button>
+          {provider && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={handleTestConnection}
+              disabled={testing || saving}
+            >
+              {testing ? "Testing..." : "Test connection"}
+            </button>
+          )}
           <button
             type="button"
             className="primary-button"
