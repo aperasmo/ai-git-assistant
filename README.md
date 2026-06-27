@@ -1,198 +1,201 @@
 # AI Git Assistant
 
-A local-first desktop application for performing common Git workflows through natural-language chat. Built with Tauri 2, React 18, TypeScript, and a Python FastAPI sidecar.
+**Use plain English to manage your Git projects — no commands to memorise.**
+
+AI Git Assistant is a Windows desktop app that turns what you want to do into the exact Git steps needed. Type something like *"commit all my changes with message 'Fix login bug'"* and the app shows you exactly what it will run — before running anything. You review, you approve, it executes.
 
 ---
 
 ## What it does
 
-Type plain English. The app figures out the Git operation, shows you exactly what will happen, and waits for your approval before changing anything.
+- **Understands plain English** — type what you want, not `git add -A && git commit -m "…"`
+- **Shows every step before running** — nothing happens without your approval
+- **Works with any Git repository** on your machine
+- **Connects to an AI provider** (optional) so it can understand requests the built-in patterns don't cover
+- **Safe by design** — no force pushes, no hard resets, no surprises
 
-```text
-What changed?
-show branches
-last 10 commits
-show me the diff
+---
 
-stage src/login.py and tests/test_login.py
+## Requirements
 
-commit staged changes with message "Add login validation"
+- Windows 10 or 11 (64-bit)
+- [Git for Windows](https://git-scm.com/download/win) installed
 
-commit src/routes/login.py with message "Fix redirect" then push
+That's it. No Python, no Node.js, nothing else to install.
 
-push current branch
+---
 
-pull
+## Installation
 
-switch to feature/login
-create branch feature/payments
+1. Download **`AI Git Assistant_0.1.0_x64-setup.exe`** from the [Releases](../../releases) page
+2. Double-click the installer and follow the prompts
+3. Launch **AI Git Assistant** from your Start menu or desktop shortcut
 
+> Your settings and repositories are saved in `C:\Users\<you>\.ai-git-assistant\` and survive reinstalls and updates.
+
+---
+
+## Quick start (5 minutes)
+
+### 1 — Add your repository
+
+Click **+ Add** in the left sidebar and select your project folder.
+The app automatically reads your branches, changed files, and remote connections.
+
+### 2 — Run a command using the command bar
+
+The bar at the bottom has two rows of buttons:
+
+| Row | What it does |
+|-----|-------------|
+| **READ** | View status, recent commits, file differences, branches |
+| **WRITE** | Commit, push, pull, switch branch, stash, and more |
+
+Click any button and the app walks you through it step by step.
+
+### 3 — Or just type what you want
+
+Use the text box at the very bottom. Examples that work right away:
+
+```
+what changed?
+show recent commits
+commit all my changes with message "Fix login bug"
+push and commit everything with message "Add dark mode"
+stage changes then commit and push with message "Update readme"
+switch to main
+create branch feature/new-login
 stash my changes
-pop stash
-
-unstage src/login.py
-discard changes to src/login.py
-
-delete branch old-feature
 ```
 
-Requests the local planner can't recognise are forwarded to the configured AI provider (Anthropic, OpenAI, Groq, or Ollama), which returns the same structured plan — so the approval step is unchanged regardless of how the plan was created.
+The app turns your sentence into a Git plan and shows it to you before doing anything.
 
 ---
 
-## Key design properties
+## Setting up AI (optional but recommended)
 
-**Plan-then-approve** — every write operation builds a plan first. You review the steps, then click Approve. Nothing runs until you say so.
+The built-in planner handles most common requests. For everything else — unusual phrasing, complex multi-step tasks — you can connect an AI provider and the app becomes fully conversational.
 
-**Local-first** — read operations and common write patterns resolve entirely on-device with a regex planner. No network, no tokens consumed.
+### Step 1 — Get an API key
 
-**LLM fallback is opt-in** — you configure a provider in Settings and explicitly enable AI for each repository. The app never sends repository context to an external service without your consent.
+Choose one provider (all have free tiers or cheap pay-as-you-go):
 
-**Constrained execution** — no arbitrary shell access. The sidecar runs a fixed set of Git commands with validated argument arrays and `shell=False`.
+| Provider | Sign up | Best for |
+|----------|---------|----------|
+| **Anthropic (Claude)** | [console.anthropic.com](https://console.anthropic.com) | Most accurate |
+| **Groq** | [console.groq.com](https://console.groq.com) | Fastest, generous free tier |
+| **Google Gemini** | [aistudio.google.com](https://aistudio.google.com) | Free tier |
+| **OpenAI** | [platform.openai.com](https://platform.openai.com) | Widely known |
+| **Ollama** | [ollama.com](https://ollama.com) | 100% local, no key needed, requires separate install |
 
-**No credential storage** — the app calls your system Git, which uses Windows Credential Manager or your existing SSH configuration. Your GitHub tokens never touch this app.
+### Step 2 — Add it to the app
+
+1. Click **Settings** in the top-right corner
+2. Choose your provider from the dropdown
+3. Paste your API key
+4. Click **Save**
+5. Click **Test connection** to confirm it works
+
+### Step 3 — That's it
+
+From now on, any request the app doesn't recognise locally is automatically sent to your AI provider. You still see and approve every step — the AI just figures out what steps to take.
 
 ---
 
-## Architecture
+## The approval screen
+
+Every write operation (commit, push, branch, etc.) shows a plan like this before running:
 
 ```
-React UI
-  ↓ Tauri named commands (never raw HTTP)
-Rust IPC proxy
-  ↓ authenticated loopback HTTP (per-session bearer token)
-Python FastAPI sidecar (127.0.0.1, OS-assigned port)
-  ↓ subprocess with validated argument arrays, shell=False
-System Git CLI
+1. Stage 3 files
+   git add -- src/App.tsx src/login.py README.md
+
+2. Create commit
+   git commit -m "Fix login bug"
+
+3. Push to origin
+   git push origin main
 ```
 
-React never sees the sidecar port or bearer token. The sidecar never accepts connections from outside the loopback interface.
+Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever runs without your explicit approval.
 
 ---
 
-## AI providers
+## Supported commands
 
-| Provider | Type | Default model | Setup |
-|---|---|---|---|
-| Anthropic (Claude) | Cloud | `claude-haiku-4-5-20251001` | API key in Settings |
-| Google Gemini | Cloud | `gemini-3.5-flash` | API key from [Google AI Studio](https://aistudio.google.com/) |
-| OpenAI | Cloud | `gpt-4o-mini` | API key in Settings |
-| Groq | Cloud (free tier) | `llama-3.3-70b-versatile` | API key in Settings |
-| Ollama | Local | `llama3.2` | No key required; Ollama must be running |
-
-API keys are stored in the local SQLite database. The raw key is never returned by the settings API.
-
----
-
-## Operations
-
-### Read (automatic, no approval needed)
-
-| Command | Example |
+### Read (instant, no approval needed)
+| What to type | What it does |
 |---|---|
-| Status | `what changed?` / `git status` |
-| Log | `last 10 commits` / `show recent commits` |
-| Diff | `show me the diff` |
-| Branches | `show branches` |
-| Fetch | `refresh remote status` |
+| `what changed?` | Show modified, staged, and untracked files |
+| `show recent commits` | Last 10 commits with hash and message |
+| `show diff` | Line-by-line changes in modified files |
+| `list branches` | All local and remote branches |
+| `fetch` | Refresh remote status (ahead/behind counts) |
 
-### Write (plan preview + approval required)
-
-| Command | Example |
+### Write (always shows a plan first)
+| What to type | What it does |
 |---|---|
-| Stage | `stage src/login.py` |
-| Unstage | `unstage src/login.py` |
-| Discard | `discard changes to src/login.py` |
-| Commit | `commit staged changes with message "Fix login"` |
-| Commit + push | `commit src/login.py with message "Fix login" then push` |
-| Push | `push current branch` |
-| Pull | `pull` |
-| Switch branch | `switch to feature/login` |
-| Create branch | `create branch feature/payments` |
-| Stash | `stash my changes` |
-| Stash pop | `pop stash` |
-| Delete branch | `delete branch old-feature` |
+| `commit all my changes with message "..."` | Stage everything + commit |
+| `commit and push with message "..."` | Stage + commit + push |
+| `push` | Push current branch to remote |
+| `pull` | Fast-forward pull from remote |
+| `switch to main` | Checkout branch |
+| `create branch feature/name` | New branch from HEAD |
+| `stash my changes` | Save work in progress |
+| `stash pop` | Restore last stash |
+| `unstage login.py` | Remove file from staging |
+| `discard changes in login.py` | Revert file to last commit |
 
-### Not supported (permanent safety boundaries)
-
-- Force push
-- `git reset`
-- `git clean`
-- Any operation that modifies published history
+Or click any button in the command bar for a guided step-by-step wizard.
 
 ---
 
-## Getting started
+## Walkthrough tour
 
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) 18+
-- [Rust](https://rustup.rs/) (for Tauri)
-- [Python](https://www.python.org/) 3.12+
-- [Git](https://git-scm.com/)
-
-### Development
-
-```powershell
-npm install
-pip install -e "sidecar/.[dev]"
-npm run tauri dev
-```
-
-### Build sidecar binary
-
-The Tauri app launches a bundled sidecar executable, not the raw Python source. Rebuild after any Python changes:
-
-```powershell
-npm run sidecar:build
-```
-
-### Run tests
-
-```powershell
-cd sidecar
-python -m pytest tests/test_action_planner.py tests/test_settings_service.py tests/test_llm_validator.py
-```
-
-### Type-check frontend
-
-```powershell
-npx tsc --noEmit
-```
+New to the app? Click the **?** button in the top-right corner to launch a guided tour that highlights every part of the interface.
 
 ---
 
-## Project structure
+## Git command reference
 
-```text
-ai-git-assistant/
-├── src/                          React/TypeScript UI
-│   ├── components/               ChatPanel, ContextPanel, SettingsModal, ...
-│   └── lib/                      api.ts, types.ts
-├── src-tauri/                    Rust shell
-│   └── src/
-│       ├── commands/             bootstrap, repositories, settings
-│       ├── models/               typed structs matching Python schemas
-│       ├── sidecar.rs            process lifecycle
-│       └── sidecar_proxy.rs      authenticated HTTP to sidecar
-├── sidecar/                      Python FastAPI service
-│   └── app/
-│       ├── api/                  routes: repositories, settings
-│       ├── git/                  client, inspector, parser
-│       ├── intent/               local_matcher, action_planner
-│       ├── llm/                  base, router, providers, validator, prompt
-│       ├── schemas/              repositories, settings
-│       └── services/             repository_service, repository_store, settings_service
-└── docs/                         architecture and decision records
-```
+Click **Help** in the top-right corner for a full reference of every supported command — including syntax, examples, and which ones require a terminal.
 
 ---
 
-## Security notes
+## Troubleshooting
 
-- The webview cannot reach the sidecar directly.
-- The sidecar port and session token are never exposed to JavaScript.
-- All Git commands use argument arrays (`shell=False`).
-- AI providers only receive repository context (branch, file counts, recent commit messages) — never file contents or credentials.
-- Per-repository AI access must be explicitly enabled before any data is sent to a provider.
-- API keys are stored in plaintext SQLite (see `docs/DECISIONS.md` for the tradeoff reasoning).
+**"Git check pending" in the top bar**
+Git for Windows is not installed or not on your PATH.
+Download it from [git-scm.com/download/win](https://git-scm.com/download/win) and restart the app.
+
+**"The local planner did not recognise this request"**
+Either rephrase your request, or set up an AI provider in Settings — it will handle anything the built-in patterns miss.
+
+**Test connection shows an error**
+Double-check your API key. Make sure you clicked **Save** before clicking **Test connection**.
+
+**Ollama: connection failed**
+Ollama must be running before the app can use it. Open a terminal and run `ollama serve`, then try again.
+Also make sure you have pulled a model first: `ollama pull deepseek-r1:8b`
+
+**The app remembered my repositories from a previous install**
+Settings and repo list are stored in `C:\Users\<you>\.ai-git-assistant\ai-git-assistant.db`.
+Delete that file for a completely clean start.
+
+---
+
+## Privacy
+
+- Your code and file contents are **never sent anywhere**
+- Only the **names of changed files**, current **branch**, and your **typed request** are sent to the AI provider when the AI fallback is used
+- If you use Ollama, everything stays on your machine — nothing leaves your computer
+
+---
+
+## Feedback
+
+Found a bug or have a suggestion? Open an issue on this repository and describe what happened.
+
+---
+
+*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase A*
