@@ -1075,11 +1075,13 @@ export default function App() {
     const repositoryId = activeRepositoryId;
     if (!repositoryId) return;
     activeWizardRef.current = null;
-    appendTranscriptEntry(repositoryId, {
-      id: createTranscriptId(),
-      kind: "wizard_menu",
-      variant: "compact",
-    });
+    // Remove all active wizard steps so the command bar re-enables immediately.
+    setTranscripts((current) => ({
+      ...current,
+      [repositoryId]: (current[repositoryId] ?? []).filter(
+        (e) => !(e.kind === "wizard_step" && e.status === "active"),
+      ),
+    }));
   }
 
   async function toggleRepositoryLlm(allowed: boolean) {

@@ -819,4 +819,55 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   color: #c3cad4; font-size: 12px;
 }
 .wizard-context-item:hover:not(:disabled) { background: #252a32; color: #e8eaed; }
+
+/* ── Command Bar ─────────────────────────────────────────── */
+.command-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 16px 10px;
+  border-top: 1px solid #1a1e26;
+  background: #0d1017;
+}
+.command-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.command-bar-section-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  color: #3a4050;
+  min-width: 38px;
+  text-transform: uppercase;
+  user-select: none;
+}
+.command-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  border: 1px solid #252b35;
+  background: #13171e;
+  color: #7a8394;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: border-color .13s, color .13s, background .13s;
+}
+.command-pill-icon { font-size: 11px; opacity: .8; }
+.command-pill-read:hover:not(:disabled) {
+  border-color: #388bfd;
+  color: #e6edf3;
+  background: #161d2a;
+}
+.command-pill-write:hover:not(:disabled) {
+  border-color: #3fb950;
+  color: #e6edf3;
+  background: #141d16;
+}
+.command-pill:disabled { opacity: .35; cursor: not-allowed; }
 .wizard-context-item:disabled { opacity: .4; cursor: default; }

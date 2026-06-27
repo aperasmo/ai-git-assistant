@@ -4,7 +4,7 @@ import type {
   LocalActionPlan,
 } from "../lib/types";
 import type { WizardData, WizardFlowId } from "../lib/flows";
-import { WizardMenu } from "./WizardMenu";
+import { CommandBar } from "./CommandBar";
 import { WizardStep } from "./WizardStep";
 
 interface ChatPanelProps {
@@ -174,7 +174,6 @@ function TranscriptItem({
   pendingPlanId,
   onApprovePlan,
   onCancelPlan,
-  onWizardSelect,
   onWizardNext,
   onWizardConfirm,
   onWizardCancel,
@@ -185,7 +184,6 @@ function TranscriptItem({
   pendingPlanId?: string | null;
   onApprovePlan: (planId: string) => void;
   onCancelPlan: (planId: string) => void;
-  onWizardSelect: (flowId: WizardFlowId) => void;
   onWizardNext: (choiceLabel: string, data: Partial<WizardData>) => void;
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
@@ -223,7 +221,7 @@ function TranscriptItem({
   }
 
   if (entry.kind === "wizard_menu") {
-    return <WizardMenu onSelect={onWizardSelect} busy={busy} compact={entry.variant === "compact"} />;
+    return null;
   }
 
   if (entry.kind === "wizard_step") {
@@ -269,6 +267,11 @@ export function ChatPanel({
   const [message, setMessage] = useState("");
   const endOfTranscriptRef = useRef<HTMLDivElement | null>(null);
   const hasPendingPlan = Boolean(pendingPlanId);
+  const wizardActive = transcript.some(
+    (e) => e.kind === "wizard_step" && e.status === "active",
+  );
+  const commandBarDisabled = !repositorySelected || busy || hasPendingPlan || wizardActive;
+  const visibleEntries = transcript.filter((e) => e.kind !== "wizard_menu");
 
   useEffect(() => {
     endOfTranscriptRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -295,7 +298,14 @@ export function ChatPanel({
         ) : (
           <>
             <div className="transcript-list">
-              {transcript.map((entry) => (
+              {visibleEntries.length === 0 && (
+                <section className="empty-state">
+                  <div className="empty-state-icon">⌘</div>
+                  <h2>Ready</h2>
+                  <p>Choose a command below or describe what you want in the text box.</p>
+                </section>
+              )}
+              {visibleEntries.map((entry) => (
                 <TranscriptItem
                   key={entry.id}
                   entry={entry}
@@ -303,7 +313,6 @@ export function ChatPanel({
                   pendingPlanId={pendingPlanId}
                   onApprovePlan={(planId) => void onApprovePlan(planId)}
                   onCancelPlan={(planId) => void onCancelPlan(planId)}
-                  onWizardSelect={onWizardSelect}
                   onWizardNext={onWizardNext}
                   onWizardConfirm={onWizardConfirm}
                   onWizardCancel={onWizardCancel}
@@ -323,6 +332,10 @@ export function ChatPanel({
           </>
         )}
       </div>
+
+      {repositorySelected && (
+        <CommandBar onSelect={onWizardSelect} disabled={commandBarDisabled} />
+      )}
 
       <form className="chat-composer" onSubmit={submit}>
         <span className="composer-icon" aria-hidden="true">+</span>
