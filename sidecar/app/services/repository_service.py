@@ -184,12 +184,8 @@ class RepositoryService:
             )
             return persisted_plan
 
-        # Local planner didn't match — try LLM fallback if enabled
+        # Local planner didn't match — try LLM fallback if configured
         if self._llm_router is None:
-            return plan
-
-        repository = self.store.get(repository_id)
-        if not repository.external_llm_allowed:
             return plan
 
         try:

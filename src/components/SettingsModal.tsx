@@ -70,6 +70,12 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const needsKey = selectedProviderInfo?.needsKey ?? false;
   const isOllama = provider === "ollama";
 
+  const isDirty =
+    provider !== (settings?.provider ?? "") ||
+    model.trim() !== (settings?.model ?? "") ||
+    (isOllama && baseUrl.trim() !== (settings?.baseUrl ?? "http://localhost:11434")) ||
+    apiKey !== "";
+
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
@@ -81,6 +87,10 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
         model: model.trim() || null,
         baseUrl: isOllama ? (baseUrl.trim() || null) : null,
       });
+      // Re-fetch so settings reflects saved state and isDirty resets to false
+      const updated = await desktopApi.getLlmSettings();
+      setSettings(updated);
+      setApiKey("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       if (provider) onSaved?.(provider, (model.trim() || DEFAULT_MODELS[provider as LLMProviderKind]) ?? "");
@@ -92,6 +102,10 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   }
 
   async function handleTestConnection() {
+    if (isDirty) {
+      setTestResult({ ok: false, message: "You have unsaved changes — save first, then test." });
+      return;
+    }
     setTesting(true);
     setTestResult(null);
     try {
@@ -107,6 +121,11 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   function handleProviderChange(value: string) {
     setProvider(value as LLMProviderKind | "");
     setModel(value ? DEFAULT_MODELS[value as LLMProviderKind] ?? "" : "");
+    setTestResult(null);
+  }
+
+  function markDirty() {
+    setTestResult(null);
   }
 
   return (
@@ -122,8 +141,8 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
         <div className="modal-body">
           <p className="settings-section-heading">AI ASSISTANT PROVIDER</p>
           <p className="settings-hint">
-            When the local planner does not recognise a request, it is sent to the configured AI provider.
-            Only repositories where you have enabled AI access will use this.
+            When the local planner does not recognise a request, it is automatically sent to the
+            configured AI provider. Save your settings, then use "Test connection" to verify.
           </p>
 
           <label className="settings-label" htmlFor="provider-select">
@@ -154,7 +173,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                 type="text"
                 className="settings-input"
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(e) => { setModel(e.target.value); markDirty(); }}
                 placeholder={DEFAULT_MODELS[provider as LLMProviderKind] ?? ""}
               />
 
@@ -168,7 +187,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                     type="password"
                     className="settings-input"
                     value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
+                    onChange={(e) => { setApiKey(e.target.value); markDirty(); }}
                     placeholder={settings?.apiKeySet ? "••••••••••••••••" : "Paste your API key"}
                     autoComplete="off"
                   />
@@ -189,7 +208,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                     type="text"
                     className="settings-input"
                     value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
+                    onChange={(e) => { setBaseUrl(e.target.value); markDirty(); }}
                     placeholder="http://localhost:11434"
                   />
                 </>

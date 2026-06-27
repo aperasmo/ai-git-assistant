@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ReadAction, Repository, RepositorySnapshot } from "../lib/types";
 
 interface RepositoryContextPanelProps {
@@ -5,7 +6,8 @@ interface RepositoryContextPanelProps {
   snapshot?: RepositorySnapshot | null;
   busy: boolean;
   onAction: (action: ReadAction) => void;
-  onToggleLlm?: (allowed: boolean) => void;
+  activeLlm?: { provider: string; model: string } | null;
+  onTestLlm?: () => Promise<{ ok: boolean; message: string }>;
 }
 
 function CountRow({
@@ -30,8 +32,15 @@ export function RepositoryContextPanel({
   snapshot,
   busy,
   onAction,
-  onToggleLlm,
+  activeLlm,
+  onTestLlm,
 }: RepositoryContextPanelProps) {
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    setTestResult(null);
+  }, [activeLlm?.provider, activeLlm?.model]);
   if (!repository || !snapshot) {
     return (
       <aside className="context-panel">
@@ -144,29 +153,42 @@ export function RepositoryContextPanel({
         </button>
       </div>
 
-      {onToggleLlm && (
-        <>
-          <p className="context-subheading ai-heading">AI ASSISTANT</p>
-          <div className="ai-toggle-row">
-            <label className="ai-toggle-label" htmlFor="ai-toggle">
-              <span>Allow AI for this repo</span>
-              <span className="ai-toggle-hint">
-                Sends repo context to the configured AI provider for unrecognised requests
-              </span>
-            </label>
-            <button
-              id="ai-toggle"
-              type="button"
-              role="switch"
-              aria-checked={repository.externalLlmAllowed}
-              className={`toggle-switch ${repository.externalLlmAllowed ? "on" : "off"}`}
-              onClick={() => onToggleLlm(!repository.externalLlmAllowed)}
-              disabled={busy}
-            >
-              {repository.externalLlmAllowed ? "ON" : "OFF"}
-            </button>
+      <p className="context-subheading ai-heading">AI ASSISTANT</p>
+      {activeLlm ? (
+        <div className="ai-status-panel">
+          <div className="ai-status-row">
+            <span className="ai-status-dot active" />
+            <span className="ai-status-label">
+              {activeLlm.provider}
+              <span className="ai-status-model"> · {activeLlm.model}</span>
+            </span>
           </div>
-        </>
+          {onTestLlm && (
+            <button
+              type="button"
+              className="ai-test-btn"
+              disabled={testing || busy}
+              onClick={async () => {
+                setTesting(true);
+                setTestResult(null);
+                try { setTestResult(await onTestLlm()); }
+                finally { setTesting(false); }
+              }}
+            >
+              {testing ? "Testing…" : "Test connection"}
+            </button>
+          )}
+          {testResult && (
+            <p className={testResult.ok ? "ai-test-ok" : "ai-test-fail"}>
+              {testResult.ok ? "✓ " : "✗ "}{testResult.message}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="ai-unconfigured">
+          No AI provider configured. Open <strong>Settings</strong> to add one — unrecognised
+          requests will be handled automatically.
+        </p>
       )}
     </aside>
   );

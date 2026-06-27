@@ -1118,16 +1118,6 @@ export default function App() {
     setTourStep((s) => Math.max(0, s - 1));
   }
 
-  async function toggleRepositoryLlm(allowed: boolean) {
-    const repositoryId = activeRepositoryId;
-    if (!repositoryId) return;
-    try {
-      const updated = await desktopApi.setRepositoryLlmAllowed(repositoryId, allowed);
-      setRepositories((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-    } catch {
-      // toggle fails silently; user can retry
-    }
-  }
 
   if (!bootstrap || bootstrap.sidecarStatus === "starting") {
     return (
@@ -1192,7 +1182,8 @@ export default function App() {
           snapshot={snapshot}
           busy={interactionLocked}
           onAction={(action) => void runAction(action)}
-          onToggleLlm={activeRepository ? (allowed) => void toggleRepositoryLlm(allowed) : undefined}
+          activeLlm={activeLlm}
+          onTestLlm={() => desktopApi.testLlmConnection()}
         />
       </div>
 
