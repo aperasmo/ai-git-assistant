@@ -16,6 +16,20 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ---
 
+## How it compares
+
+| | AI Git Assistant | GitKraken | gut | GitHub Copilot |
+|---|:---:|:---:|:---:|:---:|
+| Desktop GUI | ✅ | ✅ | ❌ CLI only | ❌ CLI only |
+| Plain English input | ✅ | ❌ partial | ✅ | ✅ |
+| Shows plan before running | ✅ always | ❌ | partial | ❌ |
+| Works offline (Ollama) | ✅ | ✅ | ❌ | ❌ |
+| Free — no subscription | ✅ | ❌ | ✅ | ❌ |
+| No account needed | ✅ | ❌ | ❌ | ❌ |
+| Built-in local planner (no API cost) | ✅ | ❌ | ❌ | ❌ |
+
+---
+
 ## Requirements
 
 - Windows 10 or 11 (64-bit)
@@ -27,7 +41,7 @@ That's it. No Python, no Node.js, nothing else to install.
 
 ## Installation
 
-1. Download **`AI Git Assistant_0.1.0_x64-setup.exe`** from the [Releases](../../releases) page
+1. Download **`AI Git Assistant_0.1.0_x64-setup.exe`** from the [Releases](https://github.com/aperasmo/ai-git-assistant-app/releases) page
 2. Double-click the installer and follow the prompts
 3. Launch **AI Git Assistant** from your Start menu or desktop shortcut
 
