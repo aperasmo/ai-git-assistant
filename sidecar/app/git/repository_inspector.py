@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -244,7 +245,15 @@ class RepositoryInspector:
     def _find_git_metadata(path: Path) -> Path | None:
         # A .git directory or file can indicate an existing, damaged, or
         # unusual repository state. Do not offer git init in that situation.
+        ceilings = {
+            Path(value).expanduser().resolve()
+            for value in os.environ.get("GIT_CEILING_DIRECTORIES", "").split(os.pathsep)
+            if value
+        }
+
         for candidate in (path, *path.parents):
+            if candidate.resolve() in ceilings:
+                break
             git_metadata = candidate / ".git"
             if git_metadata.exists():
                 return git_metadata

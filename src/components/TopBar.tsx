@@ -6,11 +6,20 @@ interface TopBarProps {
   gitStatus?: GitInstallationStatus | null;
   activeLlm?: { provider: string; model: string } | null;
   onOpenSettings: () => void;
+  onOpenDiagnostics: () => void;
   onOpenTour: () => void;
   onOpenHelp: () => void;
 }
 
-export function TopBar({ repository, gitStatus, activeLlm, onOpenSettings, onOpenTour, onOpenHelp }: TopBarProps) {
+export function TopBar({
+  repository,
+  gitStatus,
+  activeLlm,
+  onOpenSettings,
+  onOpenDiagnostics,
+  onOpenTour,
+  onOpenHelp,
+}: TopBarProps) {
   return (
     <header className="topbar">
       <div className="topbar-title">
@@ -52,6 +61,9 @@ export function TopBar({ repository, gitStatus, activeLlm, onOpenSettings, onOpe
         </button>
         <button type="button" className="text-button" onClick={onOpenHelp}>
           Help
+        </button>
+        <button type="button" className="text-button" onClick={onOpenDiagnostics}>
+          Diagnostics
         </button>
         <button type="button" className="text-button" onClick={onOpenSettings}>
           Settings

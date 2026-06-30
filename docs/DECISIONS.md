@@ -106,10 +106,12 @@
 
 ### API key storage
 
-- API keys are stored in plaintext in the SQLite `app_settings` table under the key `llm_api_key`.
+- Phase A stored API keys in plaintext SQLite as a documented MVP tradeoff.
+- Phase B encrypts API keys with Windows DPAPI before storing them in SQLite under `llm_api_key_dpapi`.
+- The legacy plaintext key `llm_api_key` is migrated to encrypted storage on first read or update, then deleted.
 - The settings API never returns the raw key — only `api_key_set: bool`.
-- The settings modal shows a warning: "API keys are stored in plaintext in the local application database."
-- **Rationale for SQLite over OS keychain:** Tauri 2's keychain plugin had unclear maintenance status at implementation time. Switching to the keychain is a one-method change in `SettingsService` with no API surface changes. SQLite plaintext is an acceptable tradeoff for a local developer tool where the threat model is remote attack, not physical access to the developer's own machine.
+- The settings modal tells users keys are encrypted with Windows account protection before local storage.
+- DPAPI was chosen over an additional Tauri/Rust keychain dependency so the existing offline Windows build path stays simple and repeatable.
 
 ### `source` field on `LocalActionPlan`
 

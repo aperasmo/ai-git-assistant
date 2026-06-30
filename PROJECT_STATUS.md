@@ -25,6 +25,7 @@
 - **Add an existing repo** — browse to any local Git working tree; it is registered and remembered.
 - **Add a nested folder** — the app detects the parent repository root and registers that instead.
 - **Initialise a new repo** — browse to a plain folder; the app offers to run `git init` with confirmation.
+- **Clone a remote repo** — enter a Git remote URL and choose a local parent folder; the clone is registered automatically.
 - All repositories are listed in the left sidebar and persist across sessions.
 
 ---
@@ -177,6 +178,18 @@ Runs: `git branch -d <name>` — safe delete only; fails if the branch has unmer
 
 ---
 
+### LLM fallback and settings
+
+Phase A includes the AI fallback layer. If the local planner cannot recognise a request, and the selected repository has external AI enabled, the app can call a configured provider and validate the returned structured Git plan before showing the same approval UI.
+
+- Supported provider configurations: Anthropic, Gemini, OpenAI, Groq, and Ollama.
+- LLM plans reuse the same `LocalActionPlan` schema as local plans.
+- LLM output is validated before approval: unknown actions, unsafe wildcard paths, invalid remotes, empty commits, and overlong plans are rejected.
+- Each repository has its own external AI opt-in toggle.
+- API keys are encrypted with Windows DPAPI before local storage and are never returned by the settings API.
+
+---
+
 ### Safety model
 
 - **No force push.** The app never runs `git push --force`.
@@ -202,42 +215,54 @@ Runs: `git branch -d <name>` — safe delete only; fails if the branch has unmer
 
 ---
 
-## Next tasks — planned work
+## Phase B release hardening - complete
 
-### Next · LLM fallback for natural language
+Phase A is complete and has already been published as a Windows installer. Phase B makes future releases repeatable, trustworthy, and easier to support.
 
-When the local regex planner does not recognise a request, fall back to an LLM that returns a structured plan — the same JSON shape the local planner produces — so the same approval UI works without changes.
-
-- [ ] Provider abstraction layer (`LocalPlanner → LLMRouter`)
-- [ ] **Claude (Anthropic)** integration — structured output via tool use
-- [ ] **Ollama** integration — local model, no API key required
-- [ ] **Groq** integration — fast cloud inference
-- [ ] **OpenAI** integration
-- [ ] Settings panel — pick provider, enter API key, stored via Tauri Stronghold (encrypted on disk)
-- [ ] Prompt engineering — system prompt that explains the repo context (branch, changed files, recent commits) and constrains the model to return only safe, reviewable Git plans
-- [ ] `externalLlmAllowed` toggle per repository — opt-in to sending repo context to external services
+- [x] Produce a repeatable Windows release build: sidecar binary, frontend build, Tauri NSIS installer.
+- [x] Verify clean install on a Windows machine without Python, Node.js, or Rust.
+- [x] Fix the Windows pytest temp/cache permission issue so integration tests can run reliably.
+- [x] Move API key storage from plaintext SQLite to OS keychain or another encrypted local secret store.
+- [x] Add an in-app diagnostics view: sidecar status, Git version, DB path, provider status, and recent local errors.
+- [x] Add a local sidecar log viewer/export for bug reports.
+- [x] Reconcile public docs and release notes with Phase A reality: LLM fallback is shipped, packaging exists, and remaining work is Phase B+.
+- [x] Decide whether to sign the Windows installer before the next public release.
 
 ---
 
-### Conversation history and context
+## Next product phases
 
-- [ ] Persist chat transcripts to SQLite so history survives app restarts
-- [ ] Show previous sessions in the sidebar
-- [ ] Pass recent conversation turns as context when calling an LLM
+### Phase C - Git client parity
 
----
+- [ ] Visual commit graph.
+- [ ] Full patch diff with syntax highlighting.
+- [ ] File history and blame.
+- [ ] Stash list with inspect/apply/drop actions.
+- [ ] Remote management UI.
+- [ ] Merge/conflict detection and guided conflict workflow.
 
-### UI polish and packaging
+### Phase D - AI-native Git workflows
 
-- [ ] Clickable files in the context panel — click a modified file to append it to the chat input
-- [ ] Keyboard shortcut to submit (Cmd/Ctrl + Enter)
-- [ ] Copy button on command previews
-- [ ] Full patch diff (line-by-line, not just stat summary)
-- [ ] Syntax highlighting for diff output
-- [ ] Sidecar log / diagnostic viewer (accessible from a menu)
-- [ ] Windows NSIS installer signing
-- [ ] macOS build and notarisation
-- [ ] Linux AppImage build
+- [ ] AI commit message generation from staged diff.
+- [ ] AI commit composer that splits mixed work into logical commits.
+- [ ] Branch, file, and PR-ready change summaries.
+- [ ] Risk scoring before approval.
+- [ ] Privacy receipt showing exactly what context was sent to an external provider.
+
+### Phase E - Agent worktree control plane
+
+- [ ] Create isolated worktrees for agent tasks.
+- [ ] Track agent sessions by branch, worktree, changed files, commits, tests, and status.
+- [ ] Compare agent outputs side by side.
+- [ ] Review, merge, abandon, or clean up agent work from the app.
+
+### Phase F - PR and review workflow
+
+- [ ] GitHub integration first.
+- [ ] Create PRs from current branch.
+- [ ] AI-generated PR title/body/checklist from commits and diff.
+- [ ] CI status and review comment display.
+- [ ] Review-response workflow.
 
 ---
 
@@ -247,8 +272,11 @@ When the local regex planner does not recognise a request, fall back to an LLM t
 # First time or after changing Python source
 npm run sidecar:build
 
-# Run tests
+# Run tests after dependencies are installed
 npm run sidecar:test
+
+# First-time test dependency install, if needed
+npm run sidecar:test:install
 
 # Start in development mode
 npm run tauri:dev
@@ -262,7 +290,10 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 
 | Suite | Tests | What is covered |
 |---|---|---|
-| `test_action_planner.py` | 33 | Plan creation for all write commands; all Phase 2 commands; set-upstream; no-remote/multi-remote errors; short filename resolution; "commit my changes" path |
-| `test_repository_flow.py` | 16 | Registration, classification, read actions, execute-plan end-to-end for commit+push (upstream and set-upstream), standalone push, pull, create+switch branch, plan cancel |
+| `test_action_planner.py` | 30 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths |
+| `test_settings_service.py` | 7 | LLM settings defaults, updates, API key persistence, and API key redaction |
+| `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
+| `test_health.py` | 2 | Authenticated sidecar health checks and protocol version |
+| `test_repository_flow.py` | 17 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel |
 
-Run with `npm run sidecar:test` (installs dependencies and runs pytest automatically).
+Current verified sidecar suite: 68 passing tests via `npm run sidecar:test`.

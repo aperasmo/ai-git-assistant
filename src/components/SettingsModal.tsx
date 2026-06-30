@@ -192,7 +192,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
                     autoComplete="off"
                   />
                   <p className="settings-hint warning">
-                    API keys are stored in plaintext in the local application database.
+                    API keys are encrypted with Windows account protection before they are stored locally.
                     Use a key with minimal permissions.
                   </p>
                 </>

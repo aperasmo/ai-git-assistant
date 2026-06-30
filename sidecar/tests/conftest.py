@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -8,6 +9,9 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+os.environ.setdefault("GIT_CEILING_DIRECTORIES", str(PROJECT_ROOT))
 
 
 @pytest.fixture()

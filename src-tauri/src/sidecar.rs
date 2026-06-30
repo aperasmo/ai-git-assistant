@@ -135,8 +135,13 @@ pub fn launch(app: AppHandle, state: AppState) {
                         .await;
                     return;
                 }
-                CommandEvent::Stderr(_) => {
-                    // Stderr remains local. Never forward sidecar logs to the webview.
+                CommandEvent::Stderr(bytes) => {
+                    // Keep only a small local diagnostic buffer. React can read it
+                    // through the typed diagnostics command, never directly from
+                    // the process stream.
+                    if let Ok(line) = std::str::from_utf8(&bytes) {
+                        state.record_sidecar_log(line).await;
+                    }
                 }
                 CommandEvent::Error(error) => {
                     state.failed(format!("Local service error: {error}")).await;
@@ -203,4 +208,3 @@ pub async fn stop_sidecar(state: AppState) {
 
     state.stopped().await;
 }
-

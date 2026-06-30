@@ -28,7 +28,7 @@ build = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q -p no:cacheprovider"
 
 [tool.ruff]
 line-length = 100

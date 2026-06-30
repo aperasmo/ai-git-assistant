@@ -25,7 +25,8 @@ def test_register_and_read_status(app_client, auth_headers, git_repository):
     )
     assert status.status_code == 200
     assert status.json()["title"] == "Git Status"
-    assert "Modified: 1" in status.json()["content"]
+    assert "Changes not staged for commit:" in status.json()["content"]
+    assert "modified:\tREADME.md" in status.json()["content"]
 
 
 def test_local_matcher(app_client, auth_headers, git_repository):

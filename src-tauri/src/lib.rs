@@ -29,6 +29,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::bootstrap::get_bootstrap_status,
             commands::bootstrap::get_git_installation_status,
+            commands::bootstrap::get_diagnostics_status,
             commands::repositories::list_repositories,
             commands::repositories::pick_and_classify_repository,
             commands::repositories::register_repository,

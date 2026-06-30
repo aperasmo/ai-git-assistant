@@ -4,6 +4,7 @@ import type {
   ActionPlanStep,
   BootstrapStatus,
   CancelActionPlanResponse,
+  DiagnosticsStatus,
   FolderClassification,
   GitInstallationStatus,
   LLMSettings,
@@ -20,6 +21,9 @@ export const desktopApi = {
 
   getGitInstallationStatus: () =>
     invoke<GitInstallationStatus>("get_git_installation_status"),
+
+  getDiagnosticsStatus: () =>
+    invoke<DiagnosticsStatus>("get_diagnostics_status"),
 
   listRepositories: () => invoke<Repository[]>("list_repositories"),
 

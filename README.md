@@ -6,6 +6,14 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ---
 
+## Current release
+
+**0.1.0 - Phase A** is published as a Windows installer. It includes the local planner, approval-based Git execution, repository management, command wizard, and LLM fallback for Anthropic, Gemini, OpenAI, Groq, and Ollama.
+
+See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phase B hardening notes.
+
+---
+
 ## What it does
 
 - **Understands plain English** — type what you want, not `git add -A && git commit -m "…"`

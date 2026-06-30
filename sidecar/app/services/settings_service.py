@@ -6,8 +6,11 @@ from pathlib import Path
 from typing import Iterator
 
 from app.schemas.settings import LLMProviderKind, LLMSettings, UpdateLLMSettingsRequest
+from app.services.secret_store import SecretStore
 
-_LLM_KEYS = ("llm_provider", "llm_api_key", "llm_model", "llm_base_url")
+_LEGACY_API_KEY = "llm_api_key"
+_ENCRYPTED_API_KEY = "llm_api_key_dpapi"
+_LLM_KEYS = ("llm_provider", _LEGACY_API_KEY, _ENCRYPTED_API_KEY, "llm_model", "llm_base_url")
 
 
 class SettingsService:
@@ -57,7 +60,10 @@ class SettingsService:
 
         return LLMSettings(
             provider=provider,
-            api_key_set=bool(data.get("llm_api_key", "").strip()),
+            api_key_set=bool(
+                data.get(_ENCRYPTED_API_KEY, "").strip()
+                or data.get(_LEGACY_API_KEY, "").strip()
+            ),
             model=data.get("llm_model") or None,
             base_url=data.get("llm_base_url") or None,
         )
@@ -65,10 +71,27 @@ class SettingsService:
     def get_raw_api_key(self) -> str | None:
         with self._connection() as conn:
             row = conn.execute(
-                "SELECT value FROM app_settings WHERE key = 'llm_api_key'"
+                "SELECT value FROM app_settings WHERE key = ?",
+                (_ENCRYPTED_API_KEY,),
             ).fetchone()
-        val = row["value"] if row else ""
-        return val.strip() or None
+            legacy_row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (_LEGACY_API_KEY,),
+            ).fetchone()
+
+        encrypted = (row["value"] if row else "").strip()
+        if encrypted:
+            return SecretStore.unprotect(encrypted).strip() or None
+
+        legacy_value = (legacy_row["value"] if legacy_row else "").strip()
+        if legacy_value:
+            self._store_api_key(legacy_value)
+            return legacy_value
+
+        return None
+
+    def api_key_storage_kind(self) -> str:
+        return SecretStore.storage_kind()
 
     def update_llm_settings(self, request: UpdateLLMSettingsRequest) -> LLMSettings:
         updates: list[tuple[str, str]] = []
@@ -82,9 +105,10 @@ class SettingsService:
 
         if request.api_key is not None:
             if request.api_key.strip():
-                updates.append(("llm_api_key", request.api_key.strip()))
+                updates.append((_ENCRYPTED_API_KEY, SecretStore.protect(request.api_key.strip())))
+                deletes.append(_LEGACY_API_KEY)
             else:
-                deletes.append("llm_api_key")
+                deletes.extend([_LEGACY_API_KEY, _ENCRYPTED_API_KEY])
 
         if request.model is not None:
             if request.model.strip():
@@ -108,3 +132,12 @@ class SettingsService:
                 conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
 
         return self.get_llm_settings()
+
+    def _store_api_key(self, api_key: str) -> None:
+        encrypted = SecretStore.protect(api_key)
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+                (_ENCRYPTED_API_KEY, encrypted),
+            )
+            conn.execute("DELETE FROM app_settings WHERE key = ?", (_LEGACY_API_KEY,))

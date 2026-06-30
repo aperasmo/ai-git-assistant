@@ -4,14 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "dev": "vite --configLoader runner",
+    "build": "tsc -b && vite build --configLoader runner",
+    "preview": "vite preview --configLoader runner",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "sidecar:build": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-sidecar.ps1",
     "sidecar:test": "powershell -ExecutionPolicy Bypass -File .\\scripts\\test-sidecar.ps1",
+    "sidecar:test:install": "powershell -ExecutionPolicy Bypass -File .\\scripts\\test-sidecar.ps1 -InstallDependencies",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
   },

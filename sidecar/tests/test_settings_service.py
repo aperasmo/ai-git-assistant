@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -7,15 +8,15 @@ import pytest
 from app.schemas.settings import LLMProviderKind, UpdateLLMSettingsRequest
 from app.services.settings_service import SettingsService
 
-_DB = Path(__file__).parent / ".test_settings.db"
+
+@pytest.fixture(autouse=False)
+def db_path(tmp_path: Path) -> Path:
+    return tmp_path / "settings.db"
 
 
 @pytest.fixture(autouse=False)
-def svc() -> SettingsService:
-    _DB.unlink(missing_ok=True)
-    service = SettingsService(_DB)
-    yield service
-    _DB.unlink(missing_ok=True)
+def svc(db_path: Path) -> SettingsService:
+    return SettingsService(db_path)
 
 
 def test_initial_state_is_empty(svc: SettingsService):
@@ -45,6 +46,35 @@ def test_set_anthropic_provider_and_key(svc: SettingsService):
 def test_get_raw_api_key_returns_stored_value(svc: SettingsService):
     svc.update_llm_settings(UpdateLLMSettingsRequest(api_key="my-secret-key"))
     assert svc.get_raw_api_key() == "my-secret-key"
+
+
+def test_api_key_is_not_stored_in_plaintext(svc: SettingsService, db_path: Path):
+    svc.update_llm_settings(UpdateLLMSettingsRequest(api_key="my-secret-key"))
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+
+    stored = {key: value for key, value in rows}
+    assert "llm_api_key" not in stored
+    assert stored["llm_api_key_dpapi"] != "my-secret-key"
+    assert stored["llm_api_key_dpapi"].startswith("dpapi:")
+
+
+def test_legacy_plaintext_api_key_is_migrated(svc: SettingsService, db_path: Path):
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+            ("llm_api_key", "legacy-secret"),
+        )
+
+    assert svc.get_raw_api_key() == "legacy-secret"
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+
+    stored = {key: value for key, value in rows}
+    assert "llm_api_key" not in stored
+    assert stored["llm_api_key_dpapi"].startswith("dpapi:")
 
 
 def test_clear_api_key_with_empty_string(svc: SettingsService):

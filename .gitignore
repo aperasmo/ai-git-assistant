@@ -2,6 +2,7 @@ node_modules/
 dist/
 npm-debug.log*
 *.tsbuildinfo
+tsbuildinfo/
 src-tauri/target/
 src-tauri/binaries/*.exe
 !src-tauri/binaries/.gitkeep

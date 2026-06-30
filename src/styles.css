@@ -908,6 +908,71 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 
 .settings-test-ok { font-size: 12px; color: #3fb950; margin: 6px 0 0; }
 
+.diagnostics-panel {
+  width: min(680px, calc(100vw - 48px));
+}
+
+.diagnostics-list {
+  display: grid;
+  gap: 0;
+  margin: 14px 0 0;
+  border: 1px solid #252a32;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #0f1216;
+}
+
+.diagnostics-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  border-bottom: 1px solid #252a32;
+}
+
+.diagnostics-row:last-child {
+  border-bottom: 0;
+}
+
+.diagnostics-row dt,
+.diagnostics-row dd {
+  margin: 0;
+  padding: 9px 11px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.diagnostics-row dt {
+  color: #68717d;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.diagnostics-row dd {
+  min-width: 0;
+  color: #c9ced6;
+  overflow-wrap: anywhere;
+  border-left: 1px solid #252a32;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+.diagnostics-log {
+  margin-top: 16px;
+}
+
+.diagnostics-log pre {
+  max-height: 170px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 10px 11px;
+  border: 1px solid #252a32;
+  border-radius: 8px;
+  background: #0f1216;
+  color: #c9ced6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 11px/1.55 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
 /* ── Walkthrough overlay ─────────────────────────────────── */
 .walkthrough-overlay {
   position: fixed; inset: 0; z-index: 500;

@@ -47,6 +47,23 @@ export interface GitInstallationStatus {
   message: string;
 }
 
+export interface DiagnosticsStatus {
+  appVersion: string;
+  environment: string;
+  protocolVersion: string;
+  databasePath: string;
+  databaseExists: boolean;
+  repositoryCount: number;
+  gitStatus: string;
+  gitVersion?: string | null;
+  llmProvider?: string | null;
+  llmModel?: string | null;
+  llmApiKeySet: boolean;
+  apiKeyStorage: string;
+  generatedAt: string;
+  recentSidecarMessages: string[];
+}
+
 export interface Repository {
   id: string;
   displayName: string;

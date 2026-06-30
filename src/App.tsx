@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
 import { CloneRepositoryModal } from "./components/CloneRepositoryModal";
+import { DiagnosticsModal } from "./components/DiagnosticsModal";
 import { HelpModal } from "./components/HelpModal";
 import { Walkthrough } from "./components/Walkthrough";
 import { RepositoryContextPanel } from "./components/RepositoryContextPanel";
@@ -80,6 +81,7 @@ export default function App() {
   const [pendingClassification, setPendingClassification] =
     useState<FolderClassification | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [activeLlm, setActiveLlm] = useState<{ provider: string; model: string } | null>(null);
@@ -1146,6 +1148,7 @@ export default function App() {
         gitStatus={gitStatus}
         activeLlm={activeLlm}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenDiagnostics={() => setDiagnosticsOpen(true)}
         onOpenTour={openTour}
         onOpenHelp={() => setHelpOpen(true)}
       />
@@ -1201,6 +1204,7 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         onSaved={(provider, model) => setActiveLlm({ provider, model })}
       />
+      <DiagnosticsModal open={diagnosticsOpen} onClose={() => setDiagnosticsOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <Walkthrough
