@@ -65,6 +65,8 @@ pub struct RepositorySnapshot {
     #[serde(default)]
     pub remote_names: Vec<String>,
     #[serde(default)]
+    pub remote_urls: std::collections::HashMap<String, String>,
+    #[serde(default)]
     pub local_branches: Vec<Value>,
 }
 
@@ -75,6 +77,8 @@ pub struct ReadActionResult {
     pub title: String,
     pub summary: String,
     pub content: String,
+    #[serde(default)]
+    pub content_kind: Option<String>,
     pub snapshot: RepositorySnapshot,
 }
 
@@ -89,6 +93,8 @@ pub struct ActionPlanStep {
     pub commit_message: Option<String>,
     pub remote: Option<String>,
     pub branch: Option<String>,
+    pub remote_url: Option<String>,
+    pub stash_ref: Option<String>,
     pub command_preview: Option<String>,
     pub ahead: Option<i32>,
     pub behind: Option<i32>,

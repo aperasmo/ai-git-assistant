@@ -89,6 +89,13 @@ class ReadAction(StrEnum):
     DIFF = "diff"
     BRANCHES = "branches"
     FETCH = "fetch"
+    GRAPH = "graph"
+    STASHES = "stashes"
+    STASH_SHOW = "stash_show"
+    REMOTES = "remotes"
+    FILE_HISTORY = "file_history"
+    BLAME = "blame"
+    CONFLICTS = "conflicts"
 
 
 class ReadActionRequest(ApiModel):
@@ -108,6 +115,7 @@ class ReadActionResult(ApiModel):
     title: str
     summary: str
     content: str
+    content_kind: Literal["text", "diff", "graph"] = "text"
     snapshot: RepositorySnapshot
 
 
@@ -141,6 +149,11 @@ class PlanStepKind(StrEnum):
     CREATE_BRANCH = "create_branch"
     STASH = "stash"
     STASH_POP = "stash_pop"
+    STASH_APPLY = "stash_apply"
+    STASH_DROP = "stash_drop"
+    MERGE = "merge"
+    MERGE_ABORT = "merge_abort"
+    MERGE_COMMIT = "merge_commit"
     DELETE_BRANCH = "delete_branch"
     ADD_REMOTE = "add_remote"
     RENAME_BRANCH = "rename_branch"
@@ -155,6 +168,7 @@ class ActionPlanStep(ApiModel):
     remote: str | None = None
     branch: str | None = None
     remote_url: str | None = None
+    stash_ref: str | None = None
     command_preview: str | None = None
     ahead: int | None = None
     behind: int | None = None

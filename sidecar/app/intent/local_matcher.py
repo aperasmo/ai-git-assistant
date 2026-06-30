@@ -10,7 +10,8 @@ class LocalIntentMatcher:
         # Preserve the existing narrow read-only grammar. Trailing sentence
         # punctuation is normal conversational input, so remove only that
         # punctuation after normalising case and whitespace.
-        text = " ".join(message.lower().strip().split()).rstrip("?.!,")
+        original_text = " ".join(message.strip().split()).rstrip("?.!,")
+        text = original_text.lower()
 
         _STATUS_EXACT = {
             "status", "git status",
@@ -24,6 +25,43 @@ class LocalIntentMatcher:
                 matched=True,
                 action=ReadAction.STATUS,
                 explanation="Resolved locally as Git status.",
+            )
+
+        conflicts_match = text in {
+            "conflicts", "show conflicts", "list conflicts", "conflict status",
+            "merge conflicts", "show merge conflicts",
+        }
+        if conflicts_match:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.CONFLICTS,
+                explanation="Resolved locally as conflict guidance.",
+            )
+
+        file_history_match = re.match(
+            r"^(?:file\s+history|history|show\s+history\s+for|log\s+for)\s+(?P<path>.+)$",
+            original_text,
+            re.IGNORECASE,
+        )
+        if file_history_match:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.FILE_HISTORY,
+                params={"path": file_history_match.group("path")},
+                explanation="Resolved locally as file history.",
+            )
+
+        blame_match = re.match(
+            r"^(?:blame|show\s+blame\s+for|who\s+(?:changed|touched))\s+(?P<path>.+)$",
+            original_text,
+            re.IGNORECASE,
+        )
+        if blame_match:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.BLAME,
+                params={"path": blame_match.group("path")},
+                explanation="Resolved locally as file blame.",
             )
 
         if "refresh remote" in text or "fetch" in text or "update remote status" in text:
@@ -40,11 +78,47 @@ class LocalIntentMatcher:
                 explanation="Resolved locally as branch listing.",
             )
 
+        if "remote" in text and any(token in text for token in ("show", "list", "what", "which")):
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.REMOTES,
+                explanation="Resolved locally as remote listing.",
+            )
+
+        if text in {"graph", "commit graph", "show graph", "show commit graph", "visual graph", "history graph"}:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.GRAPH,
+                explanation="Resolved locally as a visual commit graph.",
+            )
+
+        stash_show_match = re.search(r"\bstash@\{\d+\}", text)
+        if stash_show_match and any(token in text for token in ("show", "inspect", "diff")):
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.STASH_SHOW,
+                params={"stash_ref": stash_show_match.group(0)},
+                explanation="Resolved locally as stash inspection.",
+            )
+
+        if text in {"stashes", "stash list", "list stashes", "show stashes", "show stash list"}:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.STASHES,
+                explanation="Resolved locally as stash listing.",
+            )
+
         if "diff" in text or "difference" in text:
+            scope = "all"
+            if "staged" in text or "cached" in text:
+                scope = "staged"
+            elif "unstaged" in text or "working tree" in text:
+                scope = "unstaged"
             return LocalResolution(
                 matched=True,
                 action=ReadAction.DIFF,
-                explanation="Resolved locally as a bounded diff summary.",
+                params={"scope": scope},
+                explanation="Resolved locally as a full patch diff.",
             )
 
         commits_match = re.search(r"(?:last|recent)\s+(\d{1,2})\s+(?:commits?|logs?)", text)

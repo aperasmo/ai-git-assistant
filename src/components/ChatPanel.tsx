@@ -36,6 +36,41 @@ function statusLabel(status: "pending" | "executed" | "cancelled" | "failed") {
   }
 }
 
+function diffLineClass(line: string) {
+  if (line.startsWith("diff --git")) return "diff-line diff-line-file";
+  if (line.startsWith("@@")) return "diff-line diff-line-hunk";
+  if (line.startsWith("+++") || line.startsWith("---")) return "diff-line diff-line-meta";
+  if (line.startsWith("+")) return "diff-line diff-line-add";
+  if (line.startsWith("-")) return "diff-line diff-line-delete";
+  return "diff-line";
+}
+
+function ResultBody({
+  content,
+  contentKind,
+}: {
+  content: string;
+  contentKind?: "text" | "diff" | "graph";
+}) {
+  if (contentKind === "diff") {
+    return (
+      <pre className="result-diff" aria-label="Patch diff">
+        {(content || "No output returned.").split("\n").map((line, index) => (
+          <code key={`${index}-${line}`} className={diffLineClass(line)}>
+            {line || " "}
+          </code>
+        ))}
+      </pre>
+    );
+  }
+
+  if (contentKind === "graph") {
+    return <pre className="result-graph">{content || "No output returned."}</pre>;
+  }
+
+  return <pre>{content || "No output returned."}</pre>;
+}
+
 function PlanCard({
   plan,
   status,
@@ -101,6 +136,11 @@ function PlanCard({
               {step.remote && step.branch && (
                 <p className="plan-push-target">
                   Target: <code>{step.branch} → {step.remote}/{step.branch}</code>
+                </p>
+              )}
+              {step.stashRef && (
+                <p className="plan-metadata">
+                  Stash: <code>{step.stashRef}</code>
                 </p>
               )}
               {step.branch && step.kind !== "push" && (
@@ -206,7 +246,7 @@ function TranscriptItem({
           <strong>{entry.title}</strong>
         </div>
         <p>{entry.summary}</p>
-        <pre>{entry.content || "No output returned."}</pre>
+        <ResultBody content={entry.content} contentKind={entry.contentKind} />
       </section>
     );
   }

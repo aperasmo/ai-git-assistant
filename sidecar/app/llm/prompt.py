@@ -53,6 +53,11 @@ switch       — checkout an existing branch        (branch required)
 create_branch — create + checkout a new branch   (branch required)
 stash        — save staged+modified to stash      (commit_message optional)
 stash_pop    — restore most recent stash entry
+stash_apply  — apply a specific stash             (stash_ref required)
+stash_drop   — delete a specific stash            (stash_ref required)
+merge        — merge a local branch               (branch required)
+merge_abort  — abort an in-progress merge
+merge_commit — finish a resolved merge
 delete_branch — safe-delete a local branch       (branch required)
 
 ━━━ STEP FORMATTING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -82,7 +87,8 @@ PLAN_TOOL: dict = {
                             "enum": [
                                 "stage", "commit", "push", "pull",
                                 "unstage", "discard", "switch", "create_branch",
-                                "stash", "stash_pop", "delete_branch",
+                                "stash", "stash_pop", "stash_apply", "stash_drop",
+                                "merge", "merge_abort", "merge_commit", "delete_branch",
                             ],
                         },
                         "title": {
@@ -101,6 +107,7 @@ PLAN_TOOL: dict = {
                         "commit_message": {"type": "string"},
                         "remote": {"type": "string"},
                         "branch": {"type": "string"},
+                        "stash_ref": {"type": "string"},
                         "set_upstream": {"type": "boolean"},
                         "command_preview": {"type": "string"},
                     },

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
@@ -34,6 +36,13 @@ from app.services.repository_store import RepositoryStore
 _logger = logging.getLogger("aiga.sidecar")
 
 _PLAN_TTL_SECONDS = 5 * 60
+_MAX_READ_OUTPUT_CHARS = 80_000
+_STASH_REF_PATTERN = re.compile(r"^stash@\{\d{1,3}\}$")
+_CONFLICT_RESOLUTION_STEPS = {
+    PlanStepKind.STAGE,
+    PlanStepKind.MERGE_ABORT,
+    PlanStepKind.MERGE_COMMIT,
+}
 
 
 @dataclass(frozen=True)
@@ -300,7 +309,7 @@ class RepositoryService:
             raise ValidationFailure(
                 "Repository state changed after this plan was prepared. Request a new plan and review it again."
             )
-        if current_snapshot.write_blocked_reason:
+        if current_snapshot.write_blocked_reason and not self._is_conflict_resolution_plan(plan):
             raise ValidationFailure(current_snapshot.write_blocked_reason)
 
         canonical_path = self.store.canonical_path(repository_id)
@@ -310,6 +319,13 @@ class RepositoryService:
         try:
             for step in plan.steps:
                 if step.kind is PlanStepKind.STAGE:
+                    if current_snapshot.write_blocked_reason and current_snapshot.conflicts:
+                        conflict_paths = {item.path for item in current_snapshot.conflicts}
+                        invalid = [path for path in step.paths if path not in conflict_paths]
+                        if invalid:
+                            raise ValidationFailure(
+                                "During conflict resolution, only conflicted files can be staged."
+                            )
                     client.stage_paths(step.paths)
                     completed_steps.append(step.title)
                     continue
@@ -374,6 +390,44 @@ class RepositoryService:
                     completed_steps.append(step.title)
                     continue
 
+                if step.kind is PlanStepKind.STASH_APPLY:
+                    if not step.stash_ref:
+                        raise ValidationFailure("The reviewed plan has no stash reference.")
+                    self._validate_stash_ref(step.stash_ref)
+                    client.stash_apply(step.stash_ref)
+                    completed_steps.append(step.title)
+                    continue
+
+                if step.kind is PlanStepKind.STASH_DROP:
+                    if not step.stash_ref:
+                        raise ValidationFailure("The reviewed plan has no stash reference.")
+                    self._validate_stash_ref(step.stash_ref)
+                    client.stash_drop(step.stash_ref)
+                    completed_steps.append(step.title)
+                    continue
+
+                if step.kind is PlanStepKind.MERGE:
+                    if not step.branch:
+                        raise ValidationFailure("The reviewed plan has no merge branch.")
+                    client.merge_branch(step.branch)
+                    completed_steps.append(step.title)
+                    continue
+
+                if step.kind is PlanStepKind.MERGE_ABORT:
+                    client.merge_abort()
+                    completed_steps.append(step.title)
+                    continue
+
+                if step.kind is PlanStepKind.MERGE_COMMIT:
+                    latest = self.snapshot(repository_id)
+                    if latest.conflicts:
+                        raise ValidationFailure("Resolve all conflicted files before continuing the merge.")
+                    if "merge" not in (latest.write_blocked_reason or "").lower():
+                        raise ValidationFailure("No merge appears to be in progress.")
+                    client.merge_commit()
+                    completed_steps.append(step.title)
+                    continue
+
                 if step.kind is PlanStepKind.DELETE_BRANCH:
                     if not step.branch:
                         raise ValidationFailure("The reviewed plan has no branch name.")
@@ -411,6 +465,11 @@ class RepositoryService:
             if "already exists" in msg and "branch" in msg.lower():
                 raise GitCommandError(
                     f"A branch named 'main' already exists. {msg}"
+                ) from exc
+            if "automatic merge failed" in msg.lower() or "fix conflicts" in msg.lower():
+                raise GitCommandError(
+                    "Merge stopped with conflicts. Use 'show conflicts' to inspect the conflicted files, "
+                    "edit them in your workspace, stage the resolved files, then run 'continue merge' or 'abort merge'."
                 ) from exc
             if completed_steps:
                 completed = ", ".join(completed_steps)
@@ -472,12 +531,26 @@ class RepositoryService:
             if scope not in {"all", "staged", "unstaged"}:
                 raise ValidationFailure("Diff scope must be all, staged, or unstaged.")
             snapshot = self.snapshot(repository_id)
-            content = client.diff_stat(scope).strip()
+            content = self._bound_read_output(client.diff_patch(scope).strip())
             return ReadActionResult(
                 action=request.action,
-                title="Diff Summary",
-                summary="Only Git's bounded stat summary is shown in this foundation build.",
+                title="Patch Diff",
+                summary="Full patch diff was read locally with external diff tools disabled.",
                 content=content or "No differences in the selected scope.",
+                content_kind="diff",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.GRAPH:
+            limit = self._bounded_limit(request.params.get("limit", 40))
+            snapshot = self.snapshot(repository_id)
+            content = self._bound_read_output(client.commit_graph(limit).strip())
+            return ReadActionResult(
+                action=request.action,
+                title="Commit Graph",
+                summary="Commit graph was read locally across branches.",
+                content=content or "No commits found.",
+                content_kind="graph",
                 snapshot=snapshot,
             )
 
@@ -489,6 +562,79 @@ class RepositoryService:
                 title="Local Branches",
                 summary="Local branch names were read without switching branches.",
                 content=content or "No local branches found.",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.REMOTES:
+            snapshot = self.snapshot(repository_id)
+            content = self._render_remotes(client.remote_verbose())
+            return ReadActionResult(
+                action=request.action,
+                title="Remotes",
+                summary="Configured Git remotes were read locally.",
+                content=content or "No remotes configured.",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.FILE_HISTORY:
+            path = self._normalise_requested_path(str(request.params.get("path", "")))
+            limit = self._bounded_limit(request.params.get("limit", 30))
+            snapshot = self.snapshot(repository_id)
+            content = self._render_log(client.file_history(path, limit))
+            return ReadActionResult(
+                action=request.action,
+                title=f"History: {path}",
+                summary="File history was read locally with rename following enabled.",
+                content=content or f"No commits found for {path}.",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.BLAME:
+            path = self._normalise_requested_path(str(request.params.get("path", "")))
+            snapshot = self.snapshot(repository_id)
+            content = self._bound_read_output(client.blame(path).strip())
+            return ReadActionResult(
+                action=request.action,
+                title=f"Blame: {path}",
+                summary="Line authorship was read locally.",
+                content=content or f"No blame output for {path}.",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.CONFLICTS:
+            snapshot = self.snapshot(repository_id)
+            content = self._render_conflicts(canonical_path, snapshot)
+            return ReadActionResult(
+                action=request.action,
+                title="Conflict Guidance",
+                summary="Conflicted files and next steps were inspected locally.",
+                content=content,
+                content_kind="diff",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.STASHES:
+            snapshot = self.snapshot(repository_id)
+            content = self._render_stashes(client.stash_list())
+            return ReadActionResult(
+                action=request.action,
+                title="Stash List",
+                summary="Local stash entries were read without modifying the working tree.",
+                content=content or "No stash entries found.",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.STASH_SHOW:
+            stash_ref = str(request.params.get("stash_ref", "stash@{0}")).lower()
+            self._validate_stash_ref(stash_ref)
+            snapshot = self.snapshot(repository_id)
+            content = self._bound_read_output(client.stash_show_patch(stash_ref).strip())
+            return ReadActionResult(
+                action=request.action,
+                title=f"Inspect {stash_ref}",
+                summary="The selected stash was inspected locally without applying it.",
+                content=content or f"{stash_ref} has no patch output.",
+                content_kind="diff",
                 snapshot=snapshot,
             )
 
@@ -516,6 +662,12 @@ class RepositoryService:
             )
 
         raise ValidationFailure("Unsupported read action.")
+
+    @staticmethod
+    def _is_conflict_resolution_plan(plan: LocalActionPlan) -> bool:
+        if not plan.steps:
+            return False
+        return all(step.kind in _CONFLICT_RESOLUTION_STEPS for step in plan.steps)
 
     def _store_pending_plan(self, pending: PendingWritePlan) -> None:
         with self._pending_plans_lock:
@@ -623,6 +775,23 @@ class RepositoryService:
         elif step_kinds == {PlanStepKind.STASH_POP}:
             title = "Stash applied"
             summary = "The most recent stash entry was restored and removed from the stash list."
+        elif step_kinds == {PlanStepKind.STASH_APPLY}:
+            title = "Stash applied"
+            summary = "The selected stash entry was restored and kept in the stash list."
+        elif step_kinds == {PlanStepKind.STASH_DROP}:
+            title = "Stash dropped"
+            summary = "The selected stash entry was removed from the stash list."
+        elif step_kinds == {PlanStepKind.MERGE}:
+            merge_step = next((s for s in plan.steps if s.kind is PlanStepKind.MERGE), None)
+            br = merge_step.branch if merge_step else "branch"
+            title = f"Merged '{br}'"
+            summary = f"Branch '{br}' was merged into the current branch."
+        elif step_kinds == {PlanStepKind.MERGE_ABORT}:
+            title = "Merge aborted"
+            summary = "The in-progress merge was aborted and the pre-merge state was restored."
+        elif step_kinds == {PlanStepKind.MERGE_COMMIT}:
+            title = "Merge completed"
+            summary = "The resolved merge was committed with Git's prepared merge message."
         elif step_kinds == {PlanStepKind.DELETE_BRANCH}:
             br = branch_step.branch if branch_step else "branch"
             title = f"Branch '{br}' deleted"
@@ -666,6 +835,16 @@ class RepositoryService:
                 lines.append(f"Stashed changes{label}")
             elif step.kind is PlanStepKind.STASH_POP:
                 lines.append("Applied most recent stash entry")
+            elif step.kind is PlanStepKind.STASH_APPLY:
+                lines.append(f"Applied stash entry {step.stash_ref}")
+            elif step.kind is PlanStepKind.STASH_DROP:
+                lines.append(f"Dropped stash entry {step.stash_ref}")
+            elif step.kind is PlanStepKind.MERGE:
+                lines.append(f"Merged branch '{step.branch}'")
+            elif step.kind is PlanStepKind.MERGE_ABORT:
+                lines.append("Aborted in-progress merge")
+            elif step.kind is PlanStepKind.MERGE_COMMIT:
+                lines.append("Committed resolved merge")
             elif step.kind is PlanStepKind.DELETE_BRANCH:
                 lines.append(f"Deleted branch '{step.branch}'")
             elif step.kind is PlanStepKind.ADD_REMOTE:
@@ -689,6 +868,37 @@ class RepositoryService:
         except (TypeError, ValueError) as exc:
             raise ValidationFailure("Log limit must be a number.") from exc
         return max(1, min(parsed, 50))
+
+    @staticmethod
+    def _bound_read_output(value: str) -> str:
+        if len(value) <= _MAX_READ_OUTPUT_CHARS:
+            return value
+        return (
+            value[:_MAX_READ_OUTPUT_CHARS]
+            + "\n\n[Output truncated by AI Git Assistant. Narrow the request for the full output.]"
+        )
+
+    @staticmethod
+    def _validate_stash_ref(value: str) -> None:
+        if not _STASH_REF_PATTERN.fullmatch(value):
+            raise ValidationFailure("Use an explicit stash reference such as stash@{0}.")
+
+    @staticmethod
+    def _normalise_requested_path(value: str) -> str:
+        candidate = value.strip().strip("`'\"").strip().rstrip(".!?")
+        candidate = candidate.removeprefix("./").replace("\\", "/")
+
+        if (
+            not candidate
+            or candidate.startswith("/")
+            or ":" in candidate
+            or candidate == ".."
+            or candidate.startswith("../")
+            or "/../" in candidate
+        ):
+            raise ValidationFailure("Use a safe repository-relative file path without '..' or an absolute path.")
+
+        return str(PurePosixPath(candidate))
 
     @staticmethod
     def _recent_commits(canonical_path) -> list[RecentCommit]:
@@ -768,6 +978,72 @@ class RepositoryService:
         return "\n".join(lines)
 
     @staticmethod
+    def _render_conflicts(canonical_path, snapshot: RepositorySnapshot) -> str:
+        if not snapshot.write_blocked_reason:
+            return "No merge, cherry-pick, revert, rebase, or conflict workflow is in progress."
+
+        lines: list[str] = [snapshot.write_blocked_reason]
+
+        if not snapshot.conflicts:
+            lines.extend(
+                [
+                    "",
+                    "No conflicted paths are currently reported.",
+                    "If this is a resolved merge, stage the resolved files and run:",
+                    "  continue merge",
+                    "",
+                    "To abandon the merge instead, run:",
+                    "  abort merge",
+                ]
+            )
+            return "\n".join(lines)
+
+        lines.extend(
+            [
+                "",
+                "Conflicted files:",
+                *[f"- {item.path}" for item in snapshot.conflicts],
+                "",
+                "Next steps:",
+                "1. Edit each file and keep the correct content.",
+                "2. Remove the conflict markers: <<<<<<<, =======, >>>>>>>.",
+                "3. Stage each resolved file in the app.",
+                "4. Run: continue merge",
+                "",
+                "To abandon this merge, run: abort merge",
+            ]
+        )
+
+        for item in snapshot.conflicts[:5]:
+            path = RepositoryService._normalise_requested_path(item.path)
+            file_path = canonical_path / path
+            if not file_path.is_file():
+                continue
+            try:
+                raw = file_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            snippet = RepositoryService._conflict_marker_snippet(raw)
+            if snippet:
+                lines.extend(["", f"--- {path}", snippet])
+
+        return RepositoryService._bound_read_output("\n".join(lines))
+
+    @staticmethod
+    def _conflict_marker_snippet(value: str) -> str:
+        raw_lines = value.splitlines()
+        marker_indexes = [
+            index
+            for index, line in enumerate(raw_lines)
+            if line.startswith(("<<<<<<<", "=======", ">>>>>>>"))
+        ]
+        if not marker_indexes:
+            return ""
+        start = max(0, marker_indexes[0] - 4)
+        end = min(len(raw_lines), marker_indexes[-1] + 5)
+        return "\n".join(raw_lines[start:end])
+
+    @staticmethod
     def _render_log(raw: str) -> str:
         lines: list[str] = []
         for record in raw.split("\x1e"):
@@ -806,3 +1082,34 @@ class RepositoryService:
             + (f"  → {branch.upstream}" if branch.upstream else "")
             for branch in branches
         )
+
+    @staticmethod
+    def _render_remotes(raw: str) -> str:
+        entries: dict[str, dict[str, str]] = {}
+        for line in raw.splitlines():
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            name, url, kind = parts[0], parts[1], parts[2].strip("()")
+            entries.setdefault(name, {})[kind] = url
+
+        lines: list[str] = []
+        for name, urls in sorted(entries.items()):
+            fetch_url = urls.get("fetch")
+            push_url = urls.get("push")
+            if fetch_url and push_url and fetch_url != push_url:
+                lines.append(f"{name}\n  fetch: {fetch_url}\n  push:  {push_url}")
+            elif fetch_url or push_url:
+                lines.append(f"{name}\n  url:   {fetch_url or push_url}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _render_stashes(raw: str) -> str:
+        lines: list[str] = []
+        for record in raw.split("\x1e"):
+            fields = record.strip().split("\x1f")
+            if len(fields) != 3:
+                continue
+            stash_ref, relative_time, subject = fields
+            lines.append(f"{stash_ref}  {relative_time}\n  {subject}")
+        return "\n".join(lines)

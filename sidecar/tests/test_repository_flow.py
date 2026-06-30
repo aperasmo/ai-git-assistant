@@ -244,6 +244,287 @@ def test_read_action_lists_current_local_branch(
     assert any(branch.startswith("* ") for branch in branches)
 
 
+def test_phase_c_read_actions_return_rich_git_context(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    subprocess.run(
+        ["git", "stash", "push", "-m", "phase-c-stash"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (git_repository / "README.md").write_text("# Demo\n\nChanged again.\n", encoding="utf-8")
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    diff_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "diff", "params": {"scope": "all"}},
+    )
+    assert diff_response.status_code == 200, diff_response.json()
+    assert diff_response.json()["title"] == "Patch Diff"
+    assert diff_response.json()["contentKind"] == "diff"
+    assert "diff --git" in diff_response.json()["content"]
+
+    graph_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "graph"},
+    )
+    assert graph_response.status_code == 200, graph_response.json()
+    assert graph_response.json()["contentKind"] == "graph"
+    assert "Initial commit" in graph_response.json()["content"]
+
+    stash_list_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "stashes"},
+    )
+    assert stash_list_response.status_code == 200, stash_list_response.json()
+    assert "stash@{0}" in stash_list_response.json()["content"]
+    assert "phase-c-stash" in stash_list_response.json()["content"]
+
+    stash_show_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "stash_show", "params": {"stash_ref": "stash@{0}"}},
+    )
+    assert stash_show_response.status_code == 200, stash_show_response.json()
+    assert stash_show_response.json()["contentKind"] == "diff"
+    assert "README.md" in stash_show_response.json()["content"]
+
+
+def test_phase_c_remote_read_action_lists_origin(
+    app_client,
+    auth_headers,
+    git_repository_with_remote,
+):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository_with_remote)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "remotes"},
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["title"] == "Remotes"
+    assert "origin" in response.json()["content"]
+
+
+def test_phase_c_file_history_and_blame_read_actions(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    history_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "file_history", "params": {"path": "README.md"}},
+    )
+    assert history_response.status_code == 200, history_response.json()
+    assert history_response.json()["title"] == "History: README.md"
+    assert "Initial commit" in history_response.json()["content"]
+
+    blame_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "blame", "params": {"path": "README.md"}},
+    )
+    assert blame_response.status_code == 200, blame_response.json()
+    assert blame_response.json()["title"] == "Blame: README.md"
+    assert "Test User" in blame_response.json()["content"]
+
+
+def test_execute_merge_conflict_then_guided_resolution(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    repo = git_repository
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    git("restore", "README.md")
+    base_branch = git("branch", "--show-current")
+    git("checkout", "-b", "feature/conflict")
+    (repo / "README.md").write_text("# Demo\n\nFeature branch.\n", encoding="utf-8")
+    git("add", "README.md")
+    git("commit", "-m", "feature edit")
+    git("checkout", base_branch)
+    (repo / "README.md").write_text("# Demo\n\nMain branch.\n", encoding="utf-8")
+    git("add", "README.md")
+    git("commit", "-m", "main edit")
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(repo)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    merge_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "merge feature/conflict"},
+    )
+    assert merge_plan_response.status_code == 200, merge_plan_response.json()
+    merge_plan = merge_plan_response.json()
+    assert merge_plan["steps"][0]["kind"] == "merge"
+
+    merge_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": merge_plan["planId"]},
+    )
+    assert merge_response.status_code == 400, merge_response.json()
+    assert "Merge stopped with conflicts" in merge_response.json()["detail"]
+
+    conflicts_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "conflicts"},
+    )
+    assert conflicts_response.status_code == 200, conflicts_response.json()
+    assert "README.md" in conflicts_response.json()["content"]
+    assert "<<<<<<<" in conflicts_response.json()["content"]
+
+    (repo / "README.md").write_text(
+        "# Demo\n\nMain branch.\nFeature branch.\n",
+        encoding="utf-8",
+    )
+    stage_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "stage README.md"},
+    )
+    assert stage_plan_response.status_code == 200, stage_plan_response.json()
+    stage_plan = stage_plan_response.json()
+    assert stage_plan["steps"][0]["kind"] == "stage"
+
+    stage_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": stage_plan["planId"]},
+    )
+    assert stage_response.status_code == 200, stage_response.json()
+
+    continue_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "continue merge"},
+    )
+    assert continue_plan_response.status_code == 200, continue_plan_response.json()
+    continue_plan = continue_plan_response.json()
+    assert continue_plan["steps"][0]["kind"] == "merge_commit"
+
+    continue_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": continue_plan["planId"]},
+    )
+    assert continue_response.status_code == 200, continue_response.json()
+    assert continue_response.json()["title"] == "Merge completed"
+    assert continue_response.json()["snapshot"]["conflicts"] == []
+
+
+def test_execute_stash_apply_and_drop_specific_ref(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    subprocess.run(
+        ["git", "stash", "push", "-m", "phase-c-apply"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    apply_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "apply stash stash@{0}"},
+    )
+    assert apply_plan_response.status_code == 200, apply_plan_response.json()
+    apply_plan = apply_plan_response.json()
+    assert apply_plan["steps"][0]["kind"] == "stash_apply"
+    assert apply_plan["steps"][0]["stashRef"] == "stash@{0}"
+
+    apply_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": apply_plan["planId"]},
+    )
+    assert apply_response.status_code == 200, apply_response.json()
+    assert apply_response.json()["title"] == "Stash applied"
+    assert "Changed." in (git_repository / "README.md").read_text(encoding="utf-8")
+
+    drop_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "drop stash stash@{0}"},
+    )
+    assert drop_plan_response.status_code == 200, drop_plan_response.json()
+    drop_plan = drop_plan_response.json()
+    assert drop_plan["steps"][0]["kind"] == "stash_drop"
+
+    drop_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": drop_plan["planId"]},
+    )
+    assert drop_response.status_code == 200, drop_response.json()
+    assert drop_response.json()["title"] == "Stash dropped"
+
+
 # ---------------------------------------------------------------------------
 # Execute-plan: commit + push with pre-configured upstream (cloned repo)
 # ---------------------------------------------------------------------------

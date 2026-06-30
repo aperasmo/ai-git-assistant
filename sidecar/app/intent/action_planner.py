@@ -48,6 +48,27 @@ _CREATE_BRANCH_PATTERN = re.compile(
     r"^\s*(?:create|new)\s+branch\s+(?P<branch>[A-Za-z0-9._/-]+)\s*[.!?]*$",
     re.IGNORECASE,
 )
+_MERGE_ABORT_PATTERN = re.compile(
+    r"^\s*(?:abort\s+merge|merge\s+abort|cancel\s+merge)\s*[.!?]*$",
+    re.IGNORECASE,
+)
+_MERGE_COMMIT_PATTERN = re.compile(
+    r"^\s*(?:continue\s+merge|finish\s+merge|commit\s+merge)\s*[.!?]*$",
+    re.IGNORECASE,
+)
+_MERGE_PATTERN = re.compile(
+    r"^\s*merge\s+(?P<branch>[A-Za-z0-9._/-]+)(?:\s+into\s+[A-Za-z0-9._/-]+)?\s*[.!?]*$",
+    re.IGNORECASE,
+)
+_STASH_REF_PATTERN = re.compile(r"^stash@\{(?P<index>\d{1,3})\}$")
+_STASH_APPLY_PATTERN = re.compile(
+    r"^\s*(?:apply|restore)\s+stash\s+(?P<stash_ref>stash@\{\d{1,3}\})\s*[.!?]*$",
+    re.IGNORECASE,
+)
+_STASH_DROP_PATTERN = re.compile(
+    r"^\s*(?:drop|delete|remove)\s+stash\s+(?P<stash_ref>stash@\{\d{1,3}\})\s*[.!?]*$",
+    re.IGNORECASE,
+)
 _STASH_POP_PATTERN = re.compile(
     r"^\s*(?:stash\s+pop|restore\s+stash|apply\s+stash)\s*[.!?]*$",
     re.IGNORECASE,
@@ -149,8 +170,14 @@ class LocalActionPlanner:
 
         stage_match = _STAGE_PATTERN.match(raw_message)
         if stage_match:
-            self._ensure_writes_allowed(snapshot)
-            paths = self._resolve_paths(stage_match.group("paths"), snapshot, include_staged=True)
+            if snapshot.write_blocked_reason and not snapshot.conflicts:
+                self._ensure_writes_allowed(snapshot)
+            paths = self._resolve_paths(
+                stage_match.group("paths"),
+                snapshot,
+                include_staged=True,
+                include_conflicts=bool(snapshot.conflicts),
+            )
             return self._write_plan(
                 repository_id=repository_id,
                 message=raw_message,
@@ -232,6 +259,26 @@ class LocalActionPlanner:
         create_branch_match = _CREATE_BRANCH_PATTERN.match(raw_message)
         if create_branch_match:
             return self._plan_create_branch(repository_id, raw_message, snapshot, create_branch_match.group("branch"))
+
+        merge_abort_match = _MERGE_ABORT_PATTERN.match(raw_message)
+        if merge_abort_match:
+            return self._plan_merge_abort(repository_id, raw_message, snapshot)
+
+        merge_commit_match = _MERGE_COMMIT_PATTERN.match(raw_message)
+        if merge_commit_match:
+            return self._plan_merge_commit(repository_id, raw_message, snapshot)
+
+        merge_match = _MERGE_PATTERN.match(raw_message)
+        if merge_match:
+            return self._plan_merge(repository_id, raw_message, snapshot, merge_match.group("branch"))
+
+        stash_apply_match = _STASH_APPLY_PATTERN.match(raw_message)
+        if stash_apply_match:
+            return self._plan_stash_apply(repository_id, raw_message, snapshot, stash_apply_match.group("stash_ref"))
+
+        stash_drop_match = _STASH_DROP_PATTERN.match(raw_message)
+        if stash_drop_match:
+            return self._plan_stash_drop(repository_id, raw_message, snapshot, stash_drop_match.group("stash_ref"))
 
         stash_pop_match = _STASH_POP_PATTERN.match(raw_message)
         if stash_pop_match:
@@ -768,6 +815,114 @@ class LocalActionPlanner:
             ],
         )
 
+    def _plan_merge(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+        branch_name: str,
+    ) -> LocalActionPlan:
+        self._ensure_writes_allowed(snapshot)
+
+        if not _BRANCH_PATTERN.fullmatch(branch_name) or ".." in branch_name or "@{" in branch_name:
+            raise ValidationFailure(f"'{branch_name}' is not a valid branch name.")
+
+        if branch_name == snapshot.branch:
+            return LocalActionPlan(
+                matched=True,
+                repository_id=repository_id,
+                message=message,
+                plan_kind=PlanKind.INFO,
+                requires_confirmation=False,
+                steps=[
+                    ActionPlanStep(
+                        kind=PlanStepKind.MERGE,
+                        title=f"Already on '{branch_name}'",
+                        detail="A branch cannot be merged into itself.",
+                        branch=branch_name,
+                    )
+                ],
+                explanation=f"Already on '{branch_name}'.",
+            )
+
+        if snapshot.staged_changes or snapshot.modified_changes or snapshot.untracked_paths:
+            raise ValidationFailure(
+                "Merge requires a clean working tree. Commit, stash, or discard local changes first."
+            )
+
+        known_branches = {branch.name for branch in snapshot.local_branches}
+        if known_branches and branch_name not in known_branches:
+            raise ValidationFailure(
+                f"Branch '{branch_name}' is not a known local branch. Fetch or create it first."
+            )
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.MERGE,
+                    title=f"Merge '{branch_name}'",
+                    detail=(
+                        f"Merge local branch '{branch_name}' into the current branch. "
+                        "If conflicts occur, the app will show conflict guidance and block unrelated writes."
+                    ),
+                    branch=branch_name,
+                    command_preview=self._command_preview("git", "merge", "--no-edit", branch_name),
+                )
+            ],
+        )
+
+    def _plan_merge_abort(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+    ) -> LocalActionPlan:
+        if not snapshot.write_blocked_reason or (
+            "merge" not in snapshot.write_blocked_reason.lower() and not snapshot.conflicts
+        ):
+            raise ValidationFailure("No merge appears to be in progress.")
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.MERGE_ABORT,
+                    title="Abort merge",
+                    detail="Return the repository to the pre-merge state with git merge --abort.",
+                    command_preview=self._command_preview("git", "merge", "--abort"),
+                )
+            ],
+        )
+
+    def _plan_merge_commit(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+    ) -> LocalActionPlan:
+        if snapshot.conflicts:
+            raise ValidationFailure("Resolve all conflicted files before continuing the merge.")
+        if not snapshot.write_blocked_reason or "merge" not in snapshot.write_blocked_reason.lower():
+            raise ValidationFailure("No merge appears to be in progress.")
+        if not snapshot.staged_changes:
+            raise ValidationFailure("Stage the resolved merge files before continuing the merge.")
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.MERGE_COMMIT,
+                    title="Complete merge",
+                    detail="Create the merge commit using Git's prepared merge message.",
+                    command_preview=self._command_preview("git", "commit", "--no-edit"),
+                )
+            ],
+        )
+
     def _plan_stash(
         self,
         repository_id: str,
@@ -777,10 +932,10 @@ class LocalActionPlanner:
     ) -> LocalActionPlan:
         self._ensure_writes_allowed(snapshot)
 
-        if not snapshot.staged_changes and not snapshot.modified_changes:
+        if not snapshot.staged_changes and not snapshot.modified_changes and not snapshot.untracked_paths:
             raise ValidationFailure("There are no local changes to stash.")
 
-        count = len(snapshot.staged_changes) + len(snapshot.modified_changes)
+        count = len(snapshot.staged_changes) + len(snapshot.modified_changes) + len(snapshot.untracked_paths)
         cmd_args = ["git", "stash", "push"]
         if stash_message:
             cmd_args.extend(["-m", stash_message])
@@ -822,6 +977,60 @@ class LocalActionPlanner:
                         "Execution is blocked if applying the stash would cause conflicts."
                     ),
                     command_preview=self._command_preview("git", "stash", "pop"),
+                )
+            ],
+        )
+
+    def _plan_stash_apply(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+        stash_ref: str,
+    ) -> LocalActionPlan:
+        self._ensure_writes_allowed(snapshot)
+        validated_ref = self._validate_stash_ref(stash_ref)
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.STASH_APPLY,
+                    title=f"Apply {validated_ref}",
+                    detail=(
+                        "Restore this stash entry without removing it from the stash list. "
+                        "Execution is blocked if applying the stash would cause conflicts."
+                    ),
+                    stash_ref=validated_ref,
+                    command_preview=self._command_preview("git", "stash", "apply", validated_ref),
+                )
+            ],
+        )
+
+    def _plan_stash_drop(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+        stash_ref: str,
+    ) -> LocalActionPlan:
+        self._ensure_writes_allowed(snapshot)
+        validated_ref = self._validate_stash_ref(stash_ref)
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.STASH_DROP,
+                    title=f"Drop {validated_ref}",
+                    detail=(
+                        "DESTRUCTIVE - permanently remove this entry from the stash list. "
+                        "The stash contents cannot be restored from the app after this runs."
+                    ),
+                    stash_ref=validated_ref,
+                    command_preview=self._command_preview("git", "stash", "drop", validated_ref),
                 )
             ],
         )
@@ -909,6 +1118,7 @@ class LocalActionPlanner:
         include_staged: bool = True,
         staged_only: bool = False,
         modified_only: bool = False,
+        include_conflicts: bool = False,
     ) -> list[str]:
         raw_parts = re.split(r"\s*(?:,|\band\b)\s*", expression, flags=re.IGNORECASE)
         parts = [self._normalise_requested_path(part) for part in raw_parts if part.strip()]
@@ -932,6 +1142,8 @@ class LocalActionPlanner:
             candidates = [*snapshot.modified_changes, *snapshot.untracked_paths]
             if include_staged:
                 candidates.extend(snapshot.staged_changes)
+            if include_conflicts:
+                candidates.extend(snapshot.conflicts)
 
         actual_paths = list(dict.fromkeys(item.path for item in candidates))
         if not actual_paths:
@@ -986,6 +1198,13 @@ class LocalActionPlanner:
     @staticmethod
     def _normalise_snapshot_path(value: str) -> str:
         return str(PurePosixPath(value.replace("\\", "/")))
+
+    @staticmethod
+    def _validate_stash_ref(value: str) -> str:
+        candidate = value.strip().lower()
+        if not _STASH_REF_PATTERN.fullmatch(candidate):
+            raise ValidationFailure("Use an explicit stash reference such as stash@{0}.")
+        return candidate
 
     @staticmethod
     def _is_staged_target(target: str) -> bool:
@@ -1048,6 +1267,13 @@ class LocalActionPlanner:
             ReadAction.DIFF: "Read diff summary",
             ReadAction.BRANCHES: "Read local branches",
             ReadAction.FETCH: "Refresh remote status",
+            ReadAction.GRAPH: "Read commit graph",
+            ReadAction.STASHES: "Read stash list",
+            ReadAction.STASH_SHOW: "Inspect stash",
+            ReadAction.REMOTES: "Read remotes",
+            ReadAction.FILE_HISTORY: "Read file history",
+            ReadAction.BLAME: "Read file blame",
+            ReadAction.CONFLICTS: "Read conflict guidance",
         }
         return titles.get(action, "Read local repository state")
 

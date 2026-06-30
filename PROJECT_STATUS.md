@@ -39,7 +39,12 @@ Type any of these in the chat input or use the quick-action buttons in the right
 | `what changed?` / `git status` | `git status` — staged, modified, untracked, conflicts |
 | `show branches` | `git branch` — all local branches with upstream links |
 | `last 5 commits` / `show log` | `git log -n5` — hash, author, date, subject |
-| `show diff` / `show me the diff` | `git diff HEAD --stat` |
+| `show diff` / `show me the diff` | `git diff HEAD --patch` - full patch diff with line highlighting |
+| `show commit graph` | `git log --graph --decorate --oneline --all` |
+| `show stashes` / `inspect stash@{0}` | `git stash list` / `git stash show --patch` |
+| `show remotes` | `git remote -v` |
+| `history README.md` / `blame README.md` | `git log --follow` / `git blame` for one file |
+| `show conflicts` | Conflicted files, conflict marker snippets, and next-step guidance |
 | `refresh remote status` / `fetch` | `git fetch --prune` — updates ahead/behind counts |
 
 The right-hand context panel also shows live branch, ahead/behind, and recent commits at all times.
@@ -167,6 +172,17 @@ apply stash
 
 Runs: `git stash pop` — restores the most recent stash entry and removes it from the stash list. Fails clearly if the stash is empty or applying would cause conflicts.
 
+#### Inspect, apply, and drop stash entries
+
+```
+show stashes
+inspect stash@{0}
+apply stash stash@{0}
+drop stash stash@{0}
+```
+
+`show stashes` and `inspect stash@{0}` are read-only. Applying or dropping a specific stash entry uses the normal reviewed plan flow. `drop stash` is shown as **DESTRUCTIVE** before approval.
+
 #### Delete branch
 
 ```
@@ -177,6 +193,18 @@ remove branch old-feature
 Runs: `git branch -d <name>` — safe delete only; fails if the branch has unmerged commits. Blocked if the target is the currently checked-out branch.
 
 ---
+
+#### Merge and resolve conflicts
+
+```
+merge feature/auth
+show conflicts
+stage README.md
+continue merge
+abort merge
+```
+
+Runs: `git merge --no-edit <branch>` from a clean working tree. If conflicts occur, the app shows conflicted files and marker snippets, allows staging resolved conflicted files, and can either complete the merge with `git commit --no-edit` or abort with `git merge --abort`.
 
 ### LLM fallback and settings
 
@@ -205,7 +233,6 @@ Phase A includes the AI fallback layer. If the local planner cannot recognise a 
 
 | Not supported | Why deferred |
 |---|---|
-| `git merge` | Conflict resolution needs its own UI |
 | `git rebase`, `cherry-pick` | Complex multi-step operations; Phase 3 scope |
 | `git reset` | Destructive history rewrite; intentionally blocked |
 | Force push | Intentionally blocked |
@@ -232,14 +259,14 @@ Phase A is complete and has already been published as a Windows installer. Phase
 
 ## Next product phases
 
-### Phase C - Git client parity
+### Phase C - Git client parity - complete
 
-- [ ] Visual commit graph.
-- [ ] Full patch diff with syntax highlighting.
-- [ ] File history and blame.
-- [ ] Stash list with inspect/apply/drop actions.
-- [ ] Remote management UI.
-- [ ] Merge/conflict detection and guided conflict workflow.
+- [x] Visual commit graph.
+- [x] Full patch diff with syntax highlighting.
+- [x] File history and blame.
+- [x] Stash list with inspect/apply/drop actions.
+- [x] Remote management UI.
+- [x] Merge/conflict detection and guided conflict workflow.
 
 ### Phase D - AI-native Git workflows
 
@@ -290,10 +317,10 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 
 | Suite | Tests | What is covered |
 |---|---|---|
-| `test_action_planner.py` | 30 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths |
+| `test_action_planner.py` | 39 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase C stash/read/merge commands |
 | `test_settings_service.py` | 7 | LLM settings defaults, updates, API key persistence, and API key redaction |
 | `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
 | `test_health.py` | 2 | Authenticated sidecar health checks and protocol version |
-| `test_repository_flow.py` | 17 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel |
+| `test_repository_flow.py` | 22 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase C diff/graph/stash/remote/history/blame/merge flows |
 
-Current verified sidecar suite: 68 passing tests via `npm run sidecar:test`.
+Current verified sidecar suite: 85 passing tests via `npm run sidecar:test`.

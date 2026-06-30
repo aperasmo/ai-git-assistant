@@ -6,6 +6,13 @@ from app.schemas.repositories import ActionPlanStep, PlanStepKind, RepositorySna
 _WILDCARD_SENTINELS = frozenset([".", "*", "all", "**", "./", "*.*"])
 _KINDS_REQUIRING_PATHS = frozenset([PlanStepKind.STAGE, PlanStepKind.UNSTAGE, PlanStepKind.DISCARD])
 _KINDS_REQUIRING_REMOTE = frozenset([PlanStepKind.PUSH, PlanStepKind.PULL])
+_KINDS_REQUIRING_STASH_REF = frozenset([PlanStepKind.STASH_APPLY, PlanStepKind.STASH_DROP])
+_KINDS_REQUIRING_BRANCH = frozenset([
+    PlanStepKind.SWITCH,
+    PlanStepKind.CREATE_BRANCH,
+    PlanStepKind.DELETE_BRANCH,
+    PlanStepKind.MERGE,
+])
 
 
 def validate_llm_steps(
@@ -61,9 +68,20 @@ def validate_llm_steps(
         if kind in _KINDS_REQUIRING_REMOTE and remote and known_remotes and remote not in known_remotes:
             raise ValidationFailure(f"The AI suggested unknown remote '{remote}'.")
 
+        branch = raw.get("branch")
+        if kind in _KINDS_REQUIRING_BRANCH and not branch:
+            raise ValidationFailure(f"The AI suggested a '{kind_str}' step without a branch.")
+
         commit_message = raw.get("commit_message")
         if kind is PlanStepKind.COMMIT and not commit_message:
             raise ValidationFailure("The AI suggested a commit step without a commit message.")
+
+        stash_ref = raw.get("stash_ref")
+        if kind in _KINDS_REQUIRING_STASH_REF:
+            if not stash_ref or not str(stash_ref).startswith("stash@{"):
+                raise ValidationFailure(
+                    f"The AI suggested a '{kind_str}' step without an explicit stash reference."
+                )
 
         result.append(
             ActionPlanStep(
@@ -73,7 +91,8 @@ def validate_llm_steps(
                 paths=paths,
                 commit_message=commit_message,
                 remote=remote,
-                branch=raw.get("branch"),
+                branch=branch,
+                stash_ref=stash_ref,
                 set_upstream=bool(raw.get("set_upstream", False)),
                 command_preview=raw.get("command_preview"),
             )

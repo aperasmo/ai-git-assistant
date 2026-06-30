@@ -17,7 +17,19 @@ export interface UpdateLLMSettingsRequest {
 export type SidecarStatus = "starting" | "ready" | "failed" | "stopped";
 export type GitStatusKind = "checking" | "available" | "missing" | "failed";
 
-export type ReadAction = "status" | "log" | "diff" | "branches" | "fetch";
+export type ReadAction =
+  | "status"
+  | "log"
+  | "diff"
+  | "branches"
+  | "fetch"
+  | "graph"
+  | "stashes"
+  | "stash_show"
+  | "remotes"
+  | "file_history"
+  | "blame"
+  | "conflicts";
 export type PlanKind = "read" | "write" | "info";
 export type PlanStepKind =
   | "read"
@@ -31,6 +43,11 @@ export type PlanStepKind =
   | "create_branch"
   | "stash"
   | "stash_pop"
+  | "stash_apply"
+  | "stash_drop"
+  | "merge"
+  | "merge_abort"
+  | "merge_commit"
   | "delete_branch"
   | "add_remote"
   | "rename_branch";
@@ -140,6 +157,7 @@ export interface ReadActionResult {
   title: string;
   summary: string;
   content: string;
+  contentKind?: "text" | "diff" | "graph";
   snapshot: RepositorySnapshot;
 }
 
@@ -159,6 +177,7 @@ export interface ActionPlanStep {
   remote?: string | null;
   branch?: string | null;
   remoteUrl?: string | null;
+  stashRef?: string | null;
   commandPreview?: string | null;
   ahead?: number | null;
   behind?: number | null;
@@ -185,6 +204,7 @@ export interface ActionExecutionResult {
   title: string;
   summary: string;
   content: string;
+  contentKind?: "text" | "diff" | "graph";
   snapshot: RepositorySnapshot;
 }
 
@@ -204,6 +224,7 @@ export type ChatTranscriptEntry =
       title: string;
       summary: string;
       content: string;
+      contentKind?: "text" | "diff" | "graph";
     }
   | {
       id: string;

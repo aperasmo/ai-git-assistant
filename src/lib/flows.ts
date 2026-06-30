@@ -4,7 +4,11 @@ export type WizardFlowId =
   | "status"
   | "log"
   | "diff"
+  | "graph"
   | "branches"
+  | "stashes"
+  | "remotes"
+  | "conflicts"
   | "fetch"
   | "commit_push"
   | "stage_only"
@@ -23,18 +27,22 @@ export interface FlowDef {
 }
 
 export const FLOWS: FlowDef[] = [
-  { id: "status",        label: "What changed?",    icon: "◉", description: "Working tree status",      category: "read"  },
-  { id: "log",           label: "Recent commits",   icon: "⊙", description: "View commit history",      category: "read"  },
-  { id: "diff",          label: "View differences", icon: "⊟", description: "Show unstaged changes",    category: "read"  },
-  { id: "branches",      label: "All branches",     icon: "⑂", description: "List local & remote",      category: "read"  },
-  { id: "fetch",         label: "Fetch remote",     icon: "⟳", description: "Refresh remote status",    category: "read"  },
-  { id: "commit_push",   label: "Commit & push",    icon: "↑", description: "Stage, commit and push",   category: "write" },
-  { id: "stage_only",    label: "Stage & commit",   icon: "✔", description: "Stage files and commit",   category: "write" },
-  { id: "switch_branch", label: "Switch branch",    icon: "⇄", description: "Checkout another branch",  category: "write" },
-  { id: "pull",          label: "Pull latest",      icon: "↓", description: "Pull from remote",         category: "write" },
-  { id: "stash",         label: "Stash changes",    icon: "◫", description: "Save work in progress",    category: "write" },
-  { id: "discard",        label: "Discard changes",  icon: "↩", description: "Revert file changes",      category: "write" },
-  { id: "connect_remote", label: "Connect remote",   icon: "⇡", description: "Add GitHub/GitLab origin", category: "write" },
+  { id: "status", label: "What changed?", icon: "S", description: "Working tree status", category: "read" },
+  { id: "log", label: "Recent commits", icon: "L", description: "View commit history", category: "read" },
+  { id: "diff", label: "View differences", icon: "D", description: "Show patch diff", category: "read" },
+  { id: "graph", label: "Commit graph", icon: "G", description: "Visual branch history", category: "read" },
+  { id: "branches", label: "All branches", icon: "B", description: "List local branches", category: "read" },
+  { id: "stashes", label: "Stashes", icon: "T", description: "Inspect saved work", category: "read" },
+  { id: "remotes", label: "Remotes", icon: "R", description: "Show remote URLs", category: "read" },
+  { id: "conflicts", label: "Conflicts", icon: "!", description: "Guided conflict status", category: "read" },
+  { id: "fetch", label: "Fetch remote", icon: "F", description: "Refresh remote status", category: "read" },
+  { id: "commit_push", label: "Commit & push", icon: "P", description: "Stage, commit and push", category: "write" },
+  { id: "stage_only", label: "Stage & commit", icon: "C", description: "Stage files and commit", category: "write" },
+  { id: "switch_branch", label: "Switch branch", icon: "W", description: "Checkout another branch", category: "write" },
+  { id: "pull", label: "Pull latest", icon: "U", description: "Pull from remote", category: "write" },
+  { id: "stash", label: "Stash changes", icon: "H", description: "Save work in progress", category: "write" },
+  { id: "discard", label: "Discard changes", icon: "X", description: "Revert file changes", category: "write" },
+  { id: "connect_remote", label: "Connect remote", icon: "@", description: "Add GitHub/GitLab origin", category: "write" },
 ];
 
 export const FLOW_LABELS: Record<WizardFlowId, string> = Object.fromEntries(
@@ -56,9 +64,13 @@ export interface WizardState {
 }
 
 export const FLOW_READ_ACTIONS: Partial<Record<WizardFlowId, ReadAction>> = {
-  status:   "status",
-  log:      "log",
-  diff:     "diff",
+  status: "status",
+  log: "log",
+  diff: "diff",
+  graph: "graph",
   branches: "branches",
-  fetch:    "fetch",
+  stashes: "stashes",
+  remotes: "remotes",
+  conflicts: "conflicts",
+  fetch: "fetch",
 };

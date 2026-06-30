@@ -87,6 +87,41 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .result-card-heading strong { font-size: 13px; }
 .result-card > p { color: #aab2be; font-size: 12.5px; margin: 13px 13px 8px; }
 .result-card pre { margin: 0; max-height: 290px; overflow: auto; padding: 12px 13px 14px; border-top: 1px solid #252a32; white-space: pre-wrap; word-break: break-word; color: #c9ced6; font: 11.5px/1.6 ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.result-card pre.result-diff,
+.result-card pre.result-graph {
+  max-height: 460px;
+  white-space: pre;
+  word-break: normal;
+}
+.result-diff .diff-line {
+  display: block;
+  min-height: 18px;
+  padding: 0 2px;
+  color: #c9ced6;
+}
+.result-diff .diff-line-file {
+  margin-top: 8px;
+  color: #79c0ff;
+  font-weight: 700;
+}
+.result-diff .diff-line-hunk {
+  color: #d2a8ff;
+  background: rgba(210, 168, 255, 0.08);
+}
+.result-diff .diff-line-meta {
+  color: #8b949e;
+}
+.result-diff .diff-line-add {
+  color: #7ee787;
+  background: rgba(63, 185, 80, 0.08);
+}
+.result-diff .diff-line-delete {
+  color: #ff7b72;
+  background: rgba(248, 81, 73, 0.08);
+}
+.result-graph {
+  color: #c9ced6;
+}
 .error-card { padding: 13px; border-color: rgba(239,110,91,.42); background: rgba(239,110,91,.08); }
 .error-card strong { color: #ef6e5b; font-size: 12.5px; }
 .error-card p { color: #d7a59e; font-size: 12px; line-height: 1.5; margin: 5px 0 0; }

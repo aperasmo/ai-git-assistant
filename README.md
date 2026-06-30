@@ -151,6 +151,13 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `what changed?` | Show modified, staged, and untracked files |
 | `show recent commits` | Last 10 commits with hash and message |
 | `show diff` | Line-by-line changes in modified files |
+| `show commit graph` | Visual branch and commit graph |
+| `show stashes` | Local stash entries |
+| `inspect stash@{0}` | Patch for one stash entry |
+| `show remotes` | Configured remote URLs |
+| `history README.md` | File-specific commit history |
+| `blame README.md` | Line authorship for one file |
+| `show conflicts` | Conflict files and resolution guidance |
 | `list branches` | All local and remote branches |
 | `fetch` | Refresh remote status (ahead/behind counts) |
 
@@ -165,6 +172,11 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `create branch feature/name` | New branch from HEAD |
 | `stash my changes` | Save work in progress |
 | `stash pop` | Restore last stash |
+| `apply stash stash@{0}` | Apply a specific stash without dropping it |
+| `drop stash stash@{0}` | Delete a specific stash after approval |
+| `merge feature/name` | Merge a local branch with guided conflict handling |
+| `continue merge` | Commit a resolved merge |
+| `abort merge` | Abort an in-progress merge |
 | `unstage login.py` | Remove file from staging |
 | `discard changes in login.py` | Revert file to last commit |
 

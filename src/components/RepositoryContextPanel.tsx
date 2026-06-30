@@ -140,16 +140,28 @@ export function RepositoryContextPanel({
       <p className="context-subheading quick-actions-heading">QUICK ACTIONS</p>
       <div className="quick-actions">
         <button type="button" onClick={() => onAction("status")} disabled={busy}>
-          ⌁ Git Status
+          S Git Status
         </button>
         <button type="button" onClick={() => onAction("diff")} disabled={busy}>
-          ▤ View Diff
+          D View Diff
+        </button>
+        <button type="button" onClick={() => onAction("graph")} disabled={busy}>
+          G Commit graph
         </button>
         <button type="button" onClick={() => onAction("branches")} disabled={busy}>
-          ⑂ Branches
+          B Branches
+        </button>
+        <button type="button" onClick={() => onAction("stashes")} disabled={busy}>
+          T Stashes
+        </button>
+        <button type="button" onClick={() => onAction("remotes")} disabled={busy}>
+          R Remotes
+        </button>
+        <button type="button" onClick={() => onAction("conflicts")} disabled={busy}>
+          ! Conflicts
         </button>
         <button type="button" onClick={() => onAction("fetch")} disabled={busy}>
-          ⟳ Refresh remote
+          F Refresh remote
         </button>
       </div>
 

@@ -5,7 +5,7 @@ import pytest
 from app.errors import ValidationFailure
 from app.intent.action_planner import LocalActionPlanner
 from app.intent.local_matcher import LocalIntentMatcher
-from app.schemas.repositories import ChangedPath, RepositorySnapshot
+from app.schemas.repositories import BranchInfo, ChangedPath, RepositorySnapshot
 
 
 def make_snapshot(
@@ -68,6 +68,28 @@ def test_question_mark_status_request_resolves_as_read_plan():
     assert plan.plan_kind == "read"
     assert plan.requires_confirmation is False
     assert plan.read_action == "status"
+
+
+def test_phase_c_read_requests_resolve_locally():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+
+    cases = [
+        ("show commit graph", "graph"),
+        ("show stashes", "stashes"),
+        ("show remotes", "remotes"),
+        ("inspect stash@{0}", "stash_show"),
+        ("history README.md", "file_history"),
+        ("blame README.md", "blame"),
+        ("show conflicts", "conflicts"),
+        ("show staged diff", "diff"),
+    ]
+
+    for message, action in cases:
+        plan = planner.plan("repo-1", message, make_snapshot())
+        assert plan.matched is True
+        assert plan.plan_kind == "read"
+        assert plan.requires_confirmation is False
+        assert plan.read_action == action
 
 
 def test_commit_selected_paths_then_push_creates_reviewable_plan():
@@ -374,6 +396,92 @@ def test_create_branch_creates_plan():
 
 
 # ---------------------------------------------------------------------------
+# Merge
+# ---------------------------------------------------------------------------
+
+def test_merge_branch_creates_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(
+        update={
+            "staged_changes": [],
+            "modified_changes": [],
+            "untracked_paths": [],
+            "local_branches": [
+                BranchInfo(name="dev_1", is_current=True, upstream="origin/dev_1"),
+                BranchInfo(name="feature/auth", is_current=False, upstream=None),
+            ],
+        }
+    )
+
+    plan = planner.plan("repo-1", "merge feature/auth", snapshot)
+
+    assert plan.plan_kind == "write"
+    assert plan.steps[0].kind.value == "merge"
+    assert plan.steps[0].branch == "feature/auth"
+    assert "merge --no-edit" in (plan.steps[0].command_preview or "")
+
+
+def test_merge_requires_clean_working_tree():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+
+    with pytest.raises(ValidationFailure, match="clean working tree"):
+        planner.plan("repo-1", "merge feature/auth", make_snapshot())
+
+
+def test_abort_merge_allowed_when_conflicts_exist():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(
+        update={
+            "write_blocked_reason": "Unresolved conflicts detected.",
+            "conflicts": [
+                ChangedPath(path="README.md", index_status="U", worktree_status="U", kind="conflict")
+            ],
+        }
+    )
+
+    plan = planner.plan("repo-1", "abort merge", snapshot)
+
+    assert plan.plan_kind == "write"
+    assert plan.steps[0].kind.value == "merge_abort"
+
+
+def test_continue_merge_requires_staged_resolutions():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(
+        update={
+            "write_blocked_reason": "A merge is in progress.",
+            "staged_changes": [],
+            "modified_changes": [],
+            "untracked_paths": [],
+            "conflicts": [],
+        }
+    )
+
+    with pytest.raises(ValidationFailure, match="Stage the resolved"):
+        planner.plan("repo-1", "continue merge", snapshot)
+
+
+def test_continue_merge_creates_plan_after_staging():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(
+        update={
+            "write_blocked_reason": "A merge is in progress.",
+            "staged_changes": [
+                ChangedPath(path="README.md", index_status="M", worktree_status=" ", kind="staged")
+            ],
+            "modified_changes": [],
+            "untracked_paths": [],
+            "conflicts": [],
+        }
+    )
+
+    plan = planner.plan("repo-1", "continue merge", snapshot)
+
+    assert plan.plan_kind == "write"
+    assert plan.steps[0].kind.value == "merge_commit"
+
+
+# ---------------------------------------------------------------------------
 # Stash
 # ---------------------------------------------------------------------------
 
@@ -402,10 +510,21 @@ def test_stash_with_message_includes_label():
 
 def test_stash_when_nothing_to_stash_raises_error():
     planner = LocalActionPlanner(LocalIntentMatcher())
-    snapshot = make_snapshot().model_copy(update={"staged_changes": [], "modified_changes": []})
+    snapshot = make_snapshot().model_copy(update={"staged_changes": [], "modified_changes": [], "untracked_paths": []})
 
     with pytest.raises(ValidationFailure, match="no local changes"):
         planner.plan("repo-1", "stash", snapshot)
+
+
+def test_stash_with_only_untracked_files_creates_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(update={"staged_changes": [], "modified_changes": []})
+
+    plan = planner.plan("repo-1", "stash", snapshot)
+
+    assert plan.plan_kind == "write"
+    assert plan.steps[0].kind.value == "stash"
+    assert "1 change" in plan.steps[0].detail
 
 
 # ---------------------------------------------------------------------------
@@ -422,6 +541,32 @@ def test_stash_pop_creates_plan():
         step = plan.steps[0]
         assert step.kind.value == "stash_pop"
         assert "stash pop" in (step.command_preview or "")
+
+
+def test_stash_apply_specific_ref_creates_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(update={"staged_changes": [], "modified_changes": []})
+
+    plan = planner.plan("repo-1", "apply stash stash@{0}", snapshot)
+
+    assert plan.plan_kind == "write"
+    step = plan.steps[0]
+    assert step.kind.value == "stash_apply"
+    assert step.stash_ref == "stash@{0}"
+    assert "stash apply" in (step.command_preview or "")
+
+
+def test_stash_drop_specific_ref_creates_destructive_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(update={"staged_changes": [], "modified_changes": []})
+
+    plan = planner.plan("repo-1", "drop stash stash@{0}", snapshot)
+
+    assert plan.plan_kind == "write"
+    step = plan.steps[0]
+    assert step.kind.value == "stash_drop"
+    assert step.stash_ref == "stash@{0}"
+    assert "DESTRUCTIVE" in step.detail
 
 
 # ---------------------------------------------------------------------------

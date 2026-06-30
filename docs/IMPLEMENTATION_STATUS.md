@@ -101,7 +101,7 @@ Sidecar binary: built with PyInstaller at `src-tauri/binaries/ai-git-sidecar-x86
 ## Remaining work
 
 - Installer signing is deferred for early releases; see `docs/INSTALLER_SIGNING.md`.
-- Phase C Git client parity work: visual commit graph, full diff viewer, file history/blame, and richer stash/remote workflows.
+- Phase C Git client parity is implemented: visual commit graph, full patch diff, file history/blame, stash inspect/apply/drop, remote listing, and guided merge conflict workflow.
 
 ---
 

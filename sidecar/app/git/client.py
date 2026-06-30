@@ -113,6 +113,35 @@ class GitClient:
             ]
         ).stdout
 
+    def commit_graph(self, limit: int = 40) -> str:
+        bounded_limit = max(1, min(limit, 80))
+        return self.run(
+            [
+                "log",
+                "--graph",
+                "--decorate",
+                "--oneline",
+                "--all",
+                f"-n{bounded_limit}",
+            ]
+        ).stdout
+
+    def file_history(self, path: str, limit: int = 30) -> str:
+        bounded_limit = max(1, min(limit, 50))
+        return self.run(
+            [
+                "log",
+                "--follow",
+                f"-n{bounded_limit}",
+                "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1e",
+                "--",
+                path,
+            ]
+        ).stdout
+
+    def blame(self, path: str) -> str:
+        return self.run(["blame", "--date=short", "--", path]).stdout
+
     def branch_list(self) -> str:
         # Git ref-filter formatting uses %09 for a literal tab. One branch is
         # emitted per line, allowing the service to preserve the HEAD marker.
@@ -127,6 +156,15 @@ class GitClient:
             arguments = ["diff", "--no-ext-diff", "--stat"]
         else:
             arguments = ["diff", "HEAD", "--no-ext-diff", "--stat"]
+        return self.run(arguments).stdout
+
+    def diff_patch(self, scope: str = "all") -> str:
+        if scope == "staged":
+            arguments = ["diff", "--cached", "--no-ext-diff", "--find-renames", "--patch"]
+        elif scope == "unstaged":
+            arguments = ["diff", "--no-ext-diff", "--find-renames", "--patch"]
+        else:
+            arguments = ["diff", "HEAD", "--no-ext-diff", "--find-renames", "--patch"]
         return self.run(arguments).stdout
 
     def fetch_prune(self) -> GitResult:
@@ -224,6 +262,9 @@ class GitClient:
                 urls[parts[0]] = parts[1]
         return urls
 
+    def remote_verbose(self) -> str:
+        return self.run(["remote", "-v"], allow_failure=True).stdout
+
     def push_current_head(self, remote: str, branch: str) -> GitResult:
         # Intentionally non-force; pins the remote ref previewed to the user.
         return self.run(
@@ -279,8 +320,35 @@ class GitClient:
     def stash_pop(self) -> GitResult:
         return self.run(["stash", "pop"])
 
+    def stash_list(self) -> str:
+        return self.run(["stash", "list", "--format=%gd%x1f%cr%x1f%gs%x1e"], allow_failure=True).stdout
+
+    def stash_show_patch(self, stash_ref: str) -> str:
+        return self.run(["stash", "show", "--patch", "--stat", "--no-ext-diff", stash_ref]).stdout
+
+    def stash_apply(self, stash_ref: str) -> GitResult:
+        return self.run(["stash", "apply", stash_ref])
+
+    def stash_drop(self, stash_ref: str) -> GitResult:
+        return self.run(["stash", "drop", stash_ref])
+
     def delete_branch(self, name: str) -> GitResult:
         return self.run(["branch", "-d", name])
+
+    def merge_branch(self, name: str) -> GitResult:
+        result = self.run(["merge", "--no-edit", name], timeout_seconds=90, allow_failure=True)
+        if result.return_code == 0:
+            return result
+        combined = (result.stderr + "\n" + result.stdout).strip()
+        if "automatic merge failed" in combined.lower() or "conflict" in combined.lower():
+            raise GitCommandError(combined[:1000])
+        raise GitCommandError(self._safe_error(result))
+
+    def merge_abort(self) -> GitResult:
+        return self.run(["merge", "--abort"])
+
+    def merge_commit(self) -> GitResult:
+        return self.run(["commit", "--no-edit"], timeout_seconds=45)
 
     def push_with_set_upstream(self, remote: str, branch: str) -> GitResult:
         # Used for branches that have no tracking upstream yet. Sets the

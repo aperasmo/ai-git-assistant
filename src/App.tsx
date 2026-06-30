@@ -36,6 +36,13 @@ const QUICK_ACTION_MESSAGES: Record<ReadAction, string> = {
   diff: "Show me the diff",
   branches: "Show branches",
   fetch: "Refresh remote status",
+  graph: "Show commit graph",
+  stashes: "Show stashes",
+  stash_show: "Inspect stash",
+  remotes: "Show remotes",
+  file_history: "Show file history",
+  blame: "Show file blame",
+  conflicts: "Show conflicts",
 };
 
 // Windows reserved device names that git can report in status but cannot stage/read on Windows.
@@ -356,6 +363,7 @@ export default function App() {
         title: nextResult.title,
         summary: nextResult.summary,
         content: nextResult.content,
+        contentKind: nextResult.contentKind,
       });
 
       await loadRepositories();
@@ -458,6 +466,7 @@ export default function App() {
         title: nextResult.title,
         summary: nextResult.summary,
         content: nextResult.content,
+        contentKind: nextResult.contentKind,
       });
 
       await loadRepositories();
@@ -571,6 +580,7 @@ export default function App() {
           title: result.title,
           summary: result.summary,
           content: result.content,
+          contentKind: result.contentKind,
         });
         await loadRepositories();
       } catch (cause) {
