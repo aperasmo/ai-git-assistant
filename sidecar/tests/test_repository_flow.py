@@ -330,6 +330,59 @@ def test_phase_c_remote_read_action_lists_origin(
     assert "origin" in response.json()["content"]
 
 
+def test_snapshot_detects_remote_providers(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://gitlab.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "mirror", "git@github.com:example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    snapshot = app_client.get(
+        f"/v1/repositories/{repository_id}/snapshot",
+        headers=auth_headers,
+    )
+
+    assert snapshot.status_code == 200, snapshot.json()
+    providers = {item["remote"]: item for item in snapshot.json()["remoteProviders"]}
+    assert providers["mirror"] == {
+        "remote": "mirror",
+        "provider": "github",
+        "label": "GitHub",
+        "host": "github.com",
+        "url": "git@github.com:example/demo-repository.git",
+    }
+    assert providers["origin"] == {
+        "remote": "origin",
+        "provider": "gitlab",
+        "label": "GitLab",
+        "host": "gitlab.com",
+        "url": "https://gitlab.com/example/demo-repository.git",
+    }
+
+
 def test_phase_c_file_history_and_blame_read_actions(
     app_client,
     auth_headers,
@@ -360,6 +413,486 @@ def test_phase_c_file_history_and_blame_read_actions(
     assert blame_response.status_code == 200, blame_response.json()
     assert blame_response.json()["title"] == "Blame: README.md"
     assert "Test User" in blame_response.json()["content"]
+
+
+def test_phase_c_tag_read_create_push_and_delete_flow(
+    app_client,
+    auth_headers,
+    git_repository_with_remote,
+):
+    import subprocess
+
+    repo = git_repository_with_remote
+
+    subprocess.run(
+        ["git", "add", "login.py"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "bootstrap release"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "push", "origin", "main"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(repo)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    create_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": 'create tag v0.3.0 with message "Release v0.3.0"'},
+    )
+    assert create_plan_response.status_code == 200, create_plan_response.json()
+    create_plan = create_plan_response.json()
+    assert create_plan["steps"][0]["kind"] == "create_tag"
+    assert create_plan["steps"][0]["tagName"] == "v0.3.0"
+
+    create_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": create_plan["planId"]},
+    )
+    assert create_response.status_code == 200, create_response.json()
+    assert create_response.json()["title"] == "Tag 'v0.3.0' created"
+
+    tags_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "tags"},
+    )
+    assert tags_response.status_code == 200, tags_response.json()
+    assert "v0.3.0" in tags_response.json()["content"]
+
+    tag_show_response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "tag_show", "params": {"tag_name": "v0.3.0"}},
+    )
+    assert tag_show_response.status_code == 200, tag_show_response.json()
+    assert tag_show_response.json()["title"] == "Tag: v0.3.0"
+    assert "Release v0.3.0" in tag_show_response.json()["content"]
+
+    push_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "push tag v0.3.0"},
+    )
+    assert push_plan_response.status_code == 200, push_plan_response.json()
+    push_plan = push_plan_response.json()
+    assert push_plan["steps"][0]["kind"] == "push_tag"
+    assert push_plan["steps"][0]["remote"] == "origin"
+
+    push_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": push_plan["planId"]},
+    )
+    assert push_response.status_code == 200, push_response.json()
+    assert push_response.json()["title"] == "Tag 'v0.3.0' pushed"
+
+    remote_tags = subprocess.run(
+        ["git", "ls-remote", "--tags", "origin", "v0.3.0"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "refs/tags/v0.3.0" in remote_tags
+
+    delete_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "delete tag v0.3.0"},
+    )
+    assert delete_plan_response.status_code == 200, delete_plan_response.json()
+    delete_plan = delete_plan_response.json()
+    assert delete_plan["steps"][0]["kind"] == "delete_tag"
+
+    delete_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": delete_plan["planId"]},
+    )
+    assert delete_response.status_code == 200, delete_response.json()
+    assert delete_response.json()["title"] == "Tag 'v0.3.0' deleted"
+    assert subprocess.run(
+        ["git", "tag", "--list", "v0.3.0"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip() == ""
+
+
+def test_generate_commit_message_requires_repository_ai_opt_in(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/generate-commit-message",
+        headers=auth_headers,
+        json={"paths": ["README.md"]},
+    )
+
+    assert response.status_code == 422, response.json()
+    assert "disabled" in response.json()["detail"]
+
+
+def test_generate_commit_message_uses_selected_changed_files(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    class FakeLLMRouter:
+        def __init__(self) -> None:
+            self.diff_context = ""
+
+        def commit_message(self, *, branch, diff_context):
+            self.diff_context = diff_context
+            return "Update README copy"
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    allow_response = app_client.post(
+        f"/v1/repositories/{repository_id}/set-llm",
+        headers=auth_headers,
+        json={"allowed": True},
+    )
+    assert allow_response.status_code == 200, allow_response.json()
+
+    fake_router = FakeLLMRouter()
+    app_client.app.state.repository_service._llm_router = fake_router
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/generate-commit-message",
+        headers=auth_headers,
+        json={"paths": ["README.md"]},
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["message"] == "Update README copy"
+    assert response.json()["contextSummary"] == "Generated from 1 selected file."
+    assert response.json()["privacyReceipt"]["externalProvider"] is True
+    assert response.json()["privacyReceipt"]["files"] == ["README.md"]
+    assert "Tracked file patch" in response.json()["privacyReceipt"]["contextItems"]
+    assert "README.md" in fake_router.diff_context
+    assert "Changed." in fake_router.diff_context
+
+
+def test_generate_commit_message_allows_large_file_selection(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    class FakeLLMRouter:
+        def __init__(self) -> None:
+            self.diff_context = ""
+
+        def commit_message(self, *, branch, diff_context):
+            self.diff_context = diff_context
+            return "Update generated files"
+
+    paths: list[str] = []
+    for index in range(43):
+        path = f"generated/file-{index:02d}.txt"
+        file_path = git_repository / path
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(f"Generated {index}\n", encoding="utf-8")
+        paths.append(path)
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    allow_response = app_client.post(
+        f"/v1/repositories/{repository_id}/set-llm",
+        headers=auth_headers,
+        json={"allowed": True},
+    )
+    assert allow_response.status_code == 200, allow_response.json()
+
+    fake_router = FakeLLMRouter()
+    app_client.app.state.repository_service._llm_router = fake_router
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/generate-commit-message",
+        headers=auth_headers,
+        json={"paths": paths},
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["message"] == "Update generated files"
+    assert response.json()["contextSummary"] == "Generated from 43 selected files."
+    assert response.json()["privacyReceipt"]["files"] == paths
+
+
+def test_generate_change_summary_returns_pr_and_commit_suggestions(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    from app.schemas.repositories import CommitSuggestion, GenerateChangeSummaryResponse
+
+    class FakeLLMRouter:
+        def __init__(self) -> None:
+            self.diff_context = ""
+
+        def change_summary(self, *, branch, diff_context, context_summary):
+            self.diff_context = diff_context
+            return GenerateChangeSummaryResponse(
+                branch_summary="README copy was refreshed.",
+                file_summaries=["README.md: updated project copy"],
+                pr_title="Refresh README copy",
+                pr_body="Summary:\n- Updates README copy",
+                commit_suggestions=[
+                    CommitSuggestion(
+                        message="Refresh README copy",
+                        files=["README.md"],
+                        rationale="Documentation-only change.",
+                    )
+                ],
+                context_summary=context_summary,
+            )
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    allow_response = app_client.post(
+        f"/v1/repositories/{repository_id}/set-llm",
+        headers=auth_headers,
+        json={"allowed": True},
+    )
+    assert allow_response.status_code == 200, allow_response.json()
+
+    fake_router = FakeLLMRouter()
+    app_client.app.state.repository_service._llm_router = fake_router
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/generate-change-summary",
+        headers=auth_headers,
+        json={"paths": ["README.md"]},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["branchSummary"] == "README copy was refreshed."
+    assert body["prTitle"] == "Refresh README copy"
+    assert body["commitSuggestions"][0]["message"] == "Refresh README copy"
+    assert body["privacyReceipt"]["purpose"] == "Analyze changes and suggest commits"
+    assert "README.md" in fake_router.diff_context
+
+
+def test_draft_github_release_uses_configured_token_and_uploads_asset(
+    app_client,
+    auth_headers,
+    git_repository,
+    tmp_path,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+    from app.services.github_release_service import GitHubDraftReleaseResult
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+    asset = tmp_path / "AI Git Assistant_0.4.0_x64-setup.exe"
+    asset.write_bytes(b"installer")
+
+    calls: list[dict] = []
+
+    class FakeGitHubReleaseClient:
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        def create_draft_release(self, **kwargs):
+            calls.append({"token": self.token, **kwargs})
+            return GitHubDraftReleaseResult(
+                tag_name=kwargs["tag_name"],
+                release_url="https://github.com/example/demo-repository/releases/tag/v0.4.0",
+                asset_url="https://github.com/example/demo-repository/releases/download/v0.4.0/asset.exe",
+                asset_name=kwargs["asset_path"].name,
+                asset_sha256="fake-sha",
+            )
+
+    app_client.app.state.repository_service._github_release_client_factory = FakeGitHubReleaseClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/github/releases/draft",
+        headers=auth_headers,
+        json={
+            "tagName": "v0.4.0",
+            "title": "v0.4.0 - Phase D",
+            "body": "Release notes",
+            "assetPath": str(asset),
+            "prerelease": False,
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["repository"] == "example/demo-repository"
+    assert body["releaseUrl"].endswith("/releases/tag/v0.4.0")
+    assert body["assetName"] == asset.name
+    assert calls[0]["token"] == "github-token"
+    assert calls[0]["repository"].slug == "example/demo-repository"
+    assert calls[0]["tag_name"] == "v0.4.0"
+    assert calls[0]["title"] == "v0.4.0 - Phase D"
+    assert calls[0]["asset_path"] == asset
+
+
+def test_draft_github_release_explains_non_github_provider(
+    app_client,
+    auth_headers,
+    git_repository,
+    tmp_path,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://gitlab.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+    asset = tmp_path / "AI Git Assistant_0.4.3_x64-setup.exe"
+    asset.write_bytes(b"installer")
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/github/releases/draft",
+        headers=auth_headers,
+        json={
+            "tagName": "v0.4.3",
+            "title": "v0.4.3 - Phase D.3",
+            "body": "Release notes",
+            "assetPath": str(asset),
+            "prerelease": False,
+        },
+    )
+
+    assert response.status_code == 422, response.json()
+    detail = response.json()["detail"]
+    assert "GitHub draft releases are not available" in detail
+    assert "origin: GitLab (gitlab.com)" in detail
+    assert "Local Git features still work" not in detail
+
+
+def test_github_release_permission_error_is_actionable():
+    import httpx
+    import pytest
+
+    from app.errors import ValidationFailure
+    from app.services.github_release_service import GitHubReleaseClient
+
+    response = httpx.Response(
+        403,
+        json={"message": "Resource not accessible by personal access token"},
+        request=httpx.Request("POST", "https://api.github.com/repos/example/repo/releases"),
+    )
+
+    with pytest.raises(ValidationFailure) as exc:
+        GitHubReleaseClient._raise_for_github_error(response)
+
+    assert "Contents: Read and write" in exc.value.message
+    assert "Settings" in exc.value.message
+
+
+def test_write_plan_includes_risk_and_local_privacy_receipt(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": 'commit README.md with message "Update README"'},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["requiresConfirmation"] is True
+    assert body["risk"]["level"] in {"low", "medium"}
+    assert body["privacyReceipt"]["externalProvider"] is False
+    assert "No external AI provider" in body["privacyReceipt"]["exactContext"]
 
 
 def test_execute_merge_conflict_then_guided_resolution(

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.schemas.settings import LLMProviderKind, UpdateLLMSettingsRequest
+from app.schemas.settings import LLMProviderKind, UpdateGitHubSettingsRequest, UpdateLLMSettingsRequest
 from app.services.settings_service import SettingsService
 
 
@@ -82,6 +82,20 @@ def test_clear_api_key_with_empty_string(svc: SettingsService):
     svc.update_llm_settings(UpdateLLMSettingsRequest(api_key=""))
     assert svc.get_raw_api_key() is None
     assert svc.get_llm_settings().api_key_set is False
+
+
+def test_github_token_is_encrypted_and_hidden(svc: SettingsService, db_path: Path):
+    settings = svc.update_github_settings(UpdateGitHubSettingsRequest(token="ghp-test-token"))
+
+    assert settings.token_set is True
+    assert svc.get_raw_github_token() == "ghp-test-token"
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+
+    stored = {key: value for key, value in rows}
+    assert stored["github_token_dpapi"] != "ghp-test-token"
+    assert stored["github_token_dpapi"].startswith("dpapi:")
 
 
 def test_update_does_not_overwrite_unmentioned_fields(svc: SettingsService):

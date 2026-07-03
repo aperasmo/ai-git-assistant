@@ -25,6 +25,36 @@ class OllamaProvider(LLMProvider):
                 f"Could not connect to Ollama at {self._base_url}. Make sure Ollama is running."
             ) from exc
 
+    def complete_text(self, system_prompt: str, user_message: str, *, max_tokens: int = 120) -> str:
+        payload = {
+            "model": self._model,
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            "options": {"num_predict": max_tokens},
+        }
+
+        try:
+            response = httpx.post(
+                f"{self._base_url}/api/chat",
+                json=payload,
+                timeout=90.0,
+            )
+            response.raise_for_status()
+        except httpx.ConnectError as exc:
+            raise RuntimeError(
+                f"Could not connect to Ollama at {self._base_url}. "
+                "Make sure Ollama is running."
+            ) from exc
+
+        data = response.json()
+        text = str(data.get("message", {}).get("content", "")).strip()
+        if not text:
+            raise RuntimeError(f"Ollama ({self._model}) did not return text.")
+        return text
+
     def complete(self, system_prompt: str, user_message: str) -> list[dict]:
         payload = {
             "model": self._model,

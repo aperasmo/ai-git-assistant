@@ -57,6 +57,33 @@ export const HELP_COMMANDS: HelpCommand[] = [
     gitCommand: "git fetch --prune",
     gitExample: "git fetch --prune",
   },
+  {
+    id: "short_log",
+    name: "Short log view",
+    category: "read",
+    description: "Shows compact commit history. The app's commit graph uses an oneline-style history view across branches.",
+    appPhrases: ["show commit graph", "commit graph", "short log"],
+    gitCommand: "git log --oneline",
+    gitExample: "git log --oneline -n10",
+  },
+  {
+    id: "blame_terminal",
+    name: "Blame (terminal form)",
+    category: "read",
+    description: "Shows which commit and author last modified each line of a file. Useful for understanding why a line exists.",
+    appPhrases: ["blame README.md", "show blame README.md"],
+    gitCommand: "git blame <file>",
+    gitExample: "git blame README.md",
+  },
+  {
+    id: "tags",
+    name: "Release tags",
+    category: "read",
+    description: "Lists local release tags or inspects one tag with commit details and stats.",
+    appPhrases: ["show tags", "show tag v0.4.1"],
+    gitCommand: "git tag --list",
+    gitExample: "git tag --list",
+  },
 
   // ── WRITE ─────────────────────────────────────────────────────────────────
   {
@@ -178,6 +205,15 @@ export const HELP_COMMANDS: HelpCommand[] = [
     gitExample: "git branch -d feature/old-login",
   },
   {
+    id: "merge",
+    name: "Merge",
+    category: "write",
+    description: "Integrates another branch into the current branch. The app blocks unsafe states and guides conflict continue or abort when needed.",
+    appPhrases: ["merge feature/auth", "continue merge", "abort merge"],
+    gitCommand: "git merge <branch>",
+    gitExample: "git merge feature/auth",
+  },
+  {
     id: "stash",
     name: "Stash changes",
     category: "write",
@@ -200,6 +236,19 @@ export const HELP_COMMANDS: HelpCommand[] = [
     gitExample: "git stash pop",
   },
   {
+    id: "tag_write",
+    name: "Create, push, or delete tag",
+    category: "write",
+    description: "Creates annotated release tags, pushes one explicit tag, or deletes a local tag after approval.",
+    appPhrases: [
+      "create tag v0.4.1 with message \"Release v0.4.1\"",
+      "push tag v0.4.1",
+      "delete tag v0.4.1",
+    ],
+    gitCommand: "git tag -a <tag> -m \"<message>\"",
+    gitExample: "git tag -a v0.4.1 -m \"Release v0.4.1\"",
+  },
+  {
     id: "connect_remote",
     name: "Connect remote",
     category: "write",
@@ -210,14 +259,6 @@ export const HELP_COMMANDS: HelpCommand[] = [
   },
 
   // ── TERMINAL ONLY ─────────────────────────────────────────────────────────
-  {
-    id: "merge",
-    name: "Merge",
-    category: "terminal",
-    description: "Integrates changes from another branch into your current branch. Creates a merge commit if histories have diverged. Can produce conflicts that require manual resolution.",
-    gitCommand: "git merge <branch>",
-    gitExample: "git merge feature/auth",
-  },
   {
     id: "rebase",
     name: "Rebase",
@@ -244,7 +285,7 @@ export const HELP_COMMANDS: HelpCommand[] = [
   },
   {
     id: "reset_hard",
-    name: "Reset (hard)",
+    name: "Reset (hard, blocked)",
     category: "terminal",
     description: "Moves HEAD back to a previous commit and permanently discards all changes after it. This cannot be undone — use with extreme care.",
     gitCommand: "git reset --hard <commit>",
@@ -252,7 +293,7 @@ export const HELP_COMMANDS: HelpCommand[] = [
   },
   {
     id: "revert",
-    name: "Revert",
+    name: "Revert (planned)",
     category: "terminal",
     description: "Creates a new commit that undoes the changes of a previous commit. Safe for shared branches because it preserves history rather than rewriting it.",
     gitCommand: "git revert <commit-hash>",
@@ -295,5 +336,5 @@ export const HELP_COMMANDS: HelpCommand[] = [
 export const CATEGORY_LABELS: Record<HelpCategory, string> = {
   read: "READ",
   write: "WRITE",
-  terminal: "TERMINAL ONLY",
+  terminal: "TERMINAL / BLOCKED",
 };

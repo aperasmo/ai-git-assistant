@@ -29,5 +29,13 @@ class UpdateLLMSettingsRequest(ApiModel):
     base_url: str | None = None
 
 
+class GitHubSettings(ApiModel):
+    token_set: bool = False
+
+
+class UpdateGitHubSettingsRequest(ApiModel):
+    token: str | None = None
+
+
 class SetExternalLLMRequest(ApiModel):
     allowed: bool

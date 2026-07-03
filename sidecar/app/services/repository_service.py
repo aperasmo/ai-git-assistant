@@ -4,7 +4,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
@@ -20,10 +20,16 @@ from app.schemas.repositories import (
     ActionPlanStep,
     BranchInfo,
     CancelActionPlanResponse,
+    DraftGitHubReleaseRequest,
+    DraftGitHubReleaseResponse,
+    GenerateChangeSummaryResponse,
     FolderClassificationResponse,
+    GenerateCommitMessageResponse,
     LocalActionPlan,
     PlanKind,
+    PlanRisk,
     PlanStepKind,
+    PrivacyReceipt,
     ReadAction,
     ReadActionRequest,
     ReadActionResult,
@@ -32,12 +38,15 @@ from app.schemas.repositories import (
     RepositorySnapshot,
 )
 from app.services.repository_store import RepositoryStore
+from app.services.github_release_service import GitHubReleaseClient, GitHubRepositoryRef, parse_github_remote_url
 
 _logger = logging.getLogger("aiga.sidecar")
 
 _PLAN_TTL_SECONDS = 5 * 60
 _MAX_READ_OUTPUT_CHARS = 80_000
+_MAX_COMMIT_MESSAGE_CONTEXT_CHARS = 14_000
 _STASH_REF_PATTERN = re.compile(r"^stash@\{\d{1,3}\}$")
+_TAG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 _CONFLICT_RESOLUTION_STEPS = {
     PlanStepKind.STAGE,
     PlanStepKind.MERGE_ABORT,
@@ -50,6 +59,14 @@ class PendingWritePlan:
     plan: LocalActionPlan
     snapshot_fingerprint: str
     expires_at: float
+
+
+@dataclass(frozen=True)
+class AiDiffContext:
+    content: str
+    files: list[str]
+    context_items: list[str]
+    truncated: bool
 
 
 class RepositoryService:
@@ -71,6 +88,7 @@ class RepositoryService:
         if settings_service is not None:
             from app.llm.router import LLMRouter
             self._llm_router = LLMRouter(settings_service)
+        self._github_release_client_factory = GitHubReleaseClient
         self._pending_plans: dict[str, PendingWritePlan] = {}
         self._pending_plans_lock = Lock()
 
@@ -183,7 +201,11 @@ class RepositoryService:
             if not plan.requires_confirmation:
                 return plan
             plan_id = str(uuid4())
-            persisted_plan = plan.model_copy(update={"plan_id": plan_id})
+            persisted_plan = self._with_plan_metadata(
+                plan.model_copy(update={"plan_id": plan_id}),
+                snapshot=snapshot,
+                privacy_receipt=self._local_privacy_receipt("Plan Git write action"),
+            )
             self._store_pending_plan(
                 PendingWritePlan(
                     plan=persisted_plan,
@@ -212,7 +234,23 @@ class RepositoryService:
             })
 
         plan_id = str(uuid4())
-        llm_plan = LocalActionPlan(
+        llm_privacy = self._llm_privacy_receipt(
+            purpose="Generate Git action plan",
+            files=self._changed_paths(snapshot),
+            context_items=[
+                "User request",
+                "Branch, upstream, ahead/behind counts",
+                "Remote names and URLs",
+                "Changed file names",
+                "Recent commit subjects",
+            ],
+            exact_context=(
+                "The AI plan fallback receives the typed request plus repository metadata "
+                "and changed file names only. It does not receive file contents or diffs."
+            ),
+        )
+        llm_plan = self._with_plan_metadata(
+            LocalActionPlan(
             matched=True,
             repository_id=repository_id,
             message=message,
@@ -225,6 +263,9 @@ class RepositoryService:
                 "The AI interprets your request but you remain in control."
             ),
             source="llm",
+            ),
+            snapshot=snapshot,
+            privacy_receipt=llm_privacy,
         )
         self._store_pending_plan(
             PendingWritePlan(
@@ -271,7 +312,8 @@ class RepositoryService:
         """Store a pre-built wizard plan, bypassing the intent matcher."""
         snapshot = self.snapshot(repository_id)
         plan_id = str(uuid4())
-        plan = LocalActionPlan(
+        plan = self._with_plan_metadata(
+            LocalActionPlan(
             matched=True,
             repository_id=repository_id,
             message="wizard",
@@ -283,6 +325,9 @@ class RepositoryService:
             steps=steps,
             explanation="Submitted via wizard.",
             source="local",
+            ),
+            snapshot=snapshot,
+            privacy_receipt=self._local_privacy_receipt("Submit wizard Git plan"),
         )
         self._store_pending_plan(
             PendingWritePlan(
@@ -292,6 +337,155 @@ class RepositoryService:
             )
         )
         return plan_id
+
+    def generate_commit_message(
+        self,
+        repository_id: str,
+        paths: list[str],
+    ) -> GenerateCommitMessageResponse:
+        repository = self.store.get(repository_id)
+        if not repository.external_llm_allowed:
+            raise ValidationFailure(
+                "AI commit messages are disabled for this repository. Enable AI for this repo first."
+            )
+        if self._llm_router is None:
+            raise ValidationFailure("No AI provider is configured. Open Settings to add one.")
+
+        snapshot = self.snapshot(repository_id)
+        canonical_path = self.store.canonical_path(repository_id)
+        selected_paths = self._normalise_commit_message_paths(paths, snapshot)
+        diff_context = self._build_ai_diff_context(
+            canonical_path,
+            selected_paths,
+            snapshot,
+        )
+        if not diff_context.content.strip():
+            raise ValidationFailure("There is no diff context available for the selected files.")
+
+        message = self._llm_router.commit_message(
+            branch=snapshot.branch,
+            diff_context=diff_context.content,
+        )
+        receipt = self._llm_privacy_receipt(
+            purpose="Generate commit message",
+            files=diff_context.files,
+            context_items=diff_context.context_items,
+            exact_context=diff_context.content,
+            truncated=diff_context.truncated,
+        )
+        return GenerateCommitMessageResponse(
+            message=message,
+            context_summary=(
+                f"Generated from {len(selected_paths)} selected file"
+                f"{'s' if len(selected_paths) != 1 else ''}."
+            ),
+            privacy_receipt=receipt,
+        )
+
+    def generate_change_summary(
+        self,
+        repository_id: str,
+        paths: list[str],
+    ) -> GenerateChangeSummaryResponse:
+        repository = self.store.get(repository_id)
+        if not repository.external_llm_allowed:
+            raise ValidationFailure(
+                "AI change summaries are disabled for this repository. Enable AI for this repo first."
+            )
+        if self._llm_router is None:
+            raise ValidationFailure("No AI provider is configured. Open Settings to add one.")
+
+        snapshot = self.snapshot(repository_id)
+        canonical_path = self.store.canonical_path(repository_id)
+        selected_paths = self._normalise_commit_message_paths(paths, snapshot)
+        diff_context = self._build_ai_diff_context(
+            canonical_path,
+            selected_paths,
+            snapshot,
+        )
+        if not diff_context.content.strip():
+            raise ValidationFailure("There is no diff context available for the selected files.")
+
+        context_summary = (
+            f"Analyzed {len(selected_paths)} selected file"
+            f"{'s' if len(selected_paths) != 1 else ''}."
+        )
+        response = self._llm_router.change_summary(
+            branch=snapshot.branch,
+            diff_context=diff_context.content,
+            context_summary=context_summary,
+        )
+        receipt = self._llm_privacy_receipt(
+            purpose="Analyze changes and suggest commits",
+            files=diff_context.files,
+            context_items=diff_context.context_items,
+            exact_context=diff_context.content,
+            truncated=diff_context.truncated,
+        )
+        return response.model_copy(update={"privacy_receipt": receipt})
+
+    def draft_github_release(
+        self,
+        repository_id: str,
+        request: DraftGitHubReleaseRequest,
+    ) -> DraftGitHubReleaseResponse:
+        if self.settings_service is None:
+            raise ValidationFailure("GitHub settings are unavailable.")
+
+        token = self.settings_service.get_raw_github_token()
+        if not token:
+            raise ValidationFailure("No GitHub token is configured. Open Settings and add a token with Contents write access.")
+
+        snapshot = self.snapshot(repository_id)
+        repository_ref = self._github_repository_from_snapshot(snapshot)
+        self._validate_tag_name(request.tag_name)
+
+        asset_path: Path | None = None
+        if request.asset_path:
+            asset_path = Path(request.asset_path).expanduser()
+            if not asset_path.is_file():
+                raise ValidationFailure("The selected release asset does not exist or is not a file.")
+
+        client = self._github_release_client_factory(token)
+        result = client.create_draft_release(
+            repository=repository_ref,
+            tag_name=request.tag_name,
+            title=request.title.strip(),
+            body=request.body.strip(),
+            target_commitish=snapshot.head_commit or snapshot.branch,
+            prerelease=request.prerelease,
+            asset_path=asset_path,
+        )
+        latest_snapshot = self.snapshot(repository_id)
+        content_lines = [
+            f"Repository: {repository_ref.slug}",
+            f"Tag: {result.tag_name}",
+            f"Release: {result.release_url}",
+            "Draft: yes",
+            f"Prerelease: {'yes' if request.prerelease else 'no'}",
+        ]
+        if result.asset_name:
+            content_lines.extend(
+                [
+                    "",
+                    f"Asset: {result.asset_name}",
+                    f"Asset URL: {result.asset_url or '(not returned)'}",
+                    f"SHA-256: {result.asset_sha256}",
+                ]
+            )
+
+        return DraftGitHubReleaseResponse(
+            tag_name=result.tag_name,
+            repository=repository_ref.slug,
+            release_url=result.release_url,
+            asset_url=result.asset_url,
+            asset_name=result.asset_name,
+            asset_sha256=result.asset_sha256,
+            title="GitHub Draft Release Created",
+            summary="A draft GitHub release was created and the selected asset was uploaded.",
+            content="\n".join(content_lines),
+            snapshot=latest_snapshot,
+        )
 
     def execute_action_plan(
         self,
@@ -425,6 +619,35 @@ class RepositoryService:
                     if "merge" not in (latest.write_blocked_reason or "").lower():
                         raise ValidationFailure("No merge appears to be in progress.")
                     client.merge_commit()
+                    completed_steps.append(step.title)
+                    continue
+
+                if step.kind is PlanStepKind.CREATE_TAG:
+                    if not step.tag_name:
+                        raise ValidationFailure("The reviewed plan has no tag name.")
+                    if not step.commit_message:
+                        raise ValidationFailure("The reviewed plan has no tag message.")
+                    self._validate_tag_name(step.tag_name)
+                    client.create_annotated_tag(step.tag_name, step.commit_message)
+                    completed_steps.append(step.title)
+                    continue
+
+                if step.kind is PlanStepKind.DELETE_TAG:
+                    if not step.tag_name:
+                        raise ValidationFailure("The reviewed plan has no tag name.")
+                    self._validate_tag_name(step.tag_name)
+                    client.delete_tag(step.tag_name)
+                    completed_steps.append(step.title)
+                    continue
+
+                if step.kind is PlanStepKind.PUSH_TAG:
+                    if not step.tag_name:
+                        raise ValidationFailure("The reviewed plan has no tag name.")
+                    if not step.remote:
+                        raise ValidationFailure("The reviewed plan has no remote.")
+                    self._validate_tag_name(step.tag_name)
+                    self._validate_tag_push_step_against_current_repository(repository_id, step)
+                    client.push_tag(step.remote, step.tag_name)
                     completed_steps.append(step.title)
                     continue
 
@@ -576,6 +799,30 @@ class RepositoryService:
                 snapshot=snapshot,
             )
 
+        if request.action is ReadAction.TAGS:
+            snapshot = self.snapshot(repository_id)
+            content = self._render_tags(client.tag_list())
+            return ReadActionResult(
+                action=request.action,
+                title="Tags",
+                summary="Local Git tags were read without modifying the repository.",
+                content=content or "No tags found.",
+                snapshot=snapshot,
+            )
+
+        if request.action is ReadAction.TAG_SHOW:
+            tag_name = self._normalise_requested_tag(str(request.params.get("tag_name", "")))
+            snapshot = self.snapshot(repository_id)
+            content = self._bound_read_output(client.tag_show(tag_name).strip())
+            return ReadActionResult(
+                action=request.action,
+                title=f"Tag: {tag_name}",
+                summary="The selected tag was inspected locally.",
+                content=content or f"No output for tag {tag_name}.",
+                content_kind="diff",
+                snapshot=snapshot,
+            )
+
         if request.action is ReadAction.FILE_HISTORY:
             path = self._normalise_requested_path(str(request.params.get("path", "")))
             limit = self._bounded_limit(request.params.get("limit", 30))
@@ -664,6 +911,47 @@ class RepositoryService:
         raise ValidationFailure("Unsupported read action.")
 
     @staticmethod
+    def _github_repository_from_snapshot(snapshot: RepositorySnapshot) -> GitHubRepositoryRef:
+        if not snapshot.remote_urls:
+            raise ValidationFailure(
+                "GitHub draft releases are not available because this repository has no remote. "
+                "Local Git features still work."
+            )
+
+        ordered_urls: list[str] = []
+        origin_url = snapshot.remote_urls.get("origin")
+        if origin_url:
+            ordered_urls.append(origin_url)
+        ordered_urls.extend(
+            url for name, url in snapshot.remote_urls.items()
+            if name != "origin"
+        )
+
+        for remote_url in ordered_urls:
+            repository_ref = parse_github_remote_url(remote_url)
+            if repository_ref is not None:
+                return repository_ref
+
+        detected = RepositoryService._remote_provider_summary(snapshot)
+        raise ValidationFailure(
+            "GitHub draft releases are not available for this repository. "
+            f"Detected remote provider: {detected}. "
+            "You can still use status, commits, branches, push, pull, fetch, tags, stash, merge, "
+            "and AI summaries. GitLab, Bitbucket, and Azure DevOps release publishing are planned."
+        )
+
+    @staticmethod
+    def _remote_provider_summary(snapshot: RepositorySnapshot) -> str:
+        if not snapshot.remote_providers:
+            return "Local only"
+
+        parts = []
+        for provider in snapshot.remote_providers:
+            host = f" ({provider.host})" if provider.host else ""
+            parts.append(f"{provider.remote}: {provider.label}{host}")
+        return "; ".join(parts)
+
+    @staticmethod
     def _is_conflict_resolution_plan(plan: LocalActionPlan) -> bool:
         if not plan.steps:
             return False
@@ -725,6 +1013,243 @@ class RepositoryService:
                 raise ValidationFailure(
                     "The current branch upstream changed after approval. Request a new plan and review it again."
                 )
+
+    def _with_plan_metadata(
+        self,
+        plan: LocalActionPlan,
+        *,
+        snapshot: RepositorySnapshot,
+        privacy_receipt: PrivacyReceipt | None,
+    ) -> LocalActionPlan:
+        return plan.model_copy(
+            update={
+                "risk": self._score_plan(plan, snapshot),
+                "privacy_receipt": privacy_receipt,
+            }
+        )
+
+    def _score_plan(self, plan: LocalActionPlan, snapshot: RepositorySnapshot) -> PlanRisk:
+        score = 5
+        reasons: list[str] = []
+        file_count = len({path for step in plan.steps for path in step.paths})
+
+        if file_count >= 10:
+            score += 15
+            reasons.append(f"Touches {file_count} files.")
+        elif file_count >= 4:
+            score += 8
+            reasons.append(f"Touches {file_count} files.")
+
+        if snapshot.conflicts:
+            score += 25
+            reasons.append("Repository currently has conflicted paths.")
+        if snapshot.behind > 0:
+            score += 15
+            reasons.append(f"Branch is behind upstream by {snapshot.behind} commit(s).")
+
+        for step in plan.steps:
+            if step.kind is PlanStepKind.COMMIT:
+                score += 5
+                reasons.append("Creates a local commit.")
+            elif step.kind is PlanStepKind.PUSH:
+                score += 20
+                reasons.append("Publishes commits to a remote.")
+                if step.set_upstream:
+                    score += 5
+                    reasons.append("Sets upstream tracking for the branch.")
+            elif step.kind is PlanStepKind.PULL:
+                score += 15
+                reasons.append("Updates the working tree from a remote.")
+            elif step.kind is PlanStepKind.DISCARD:
+                score += 80
+                reasons.append("Discards local file changes.")
+            elif step.kind in {PlanStepKind.MERGE, PlanStepKind.MERGE_ABORT, PlanStepKind.MERGE_COMMIT}:
+                score += 40
+                reasons.append("Changes merge state.")
+            elif step.kind is PlanStepKind.DELETE_BRANCH:
+                score += 70
+                reasons.append("Deletes a local branch.")
+            elif step.kind is PlanStepKind.DELETE_TAG:
+                score += 45
+                reasons.append("Deletes a local tag.")
+            elif step.kind is PlanStepKind.PUSH_TAG:
+                score += 25
+                reasons.append("Publishes a tag to a remote.")
+            elif step.kind is PlanStepKind.CREATE_TAG:
+                score += 15
+                reasons.append("Creates a release tag.")
+            elif step.kind in {PlanStepKind.ADD_REMOTE, PlanStepKind.RENAME_BRANCH}:
+                score += 30
+                reasons.append("Changes repository configuration.")
+            elif step.kind in {PlanStepKind.STASH_DROP, PlanStepKind.STASH_POP}:
+                score += 35
+                reasons.append("Changes stash state.")
+            elif step.kind is PlanStepKind.STASH:
+                score += 15
+                reasons.append("Moves work into the stash.")
+
+        score = min(100, score)
+        if score >= 70:
+            level = "high"
+            summary = "High risk - review the plan carefully before approval."
+        elif score >= 35:
+            level = "medium"
+            summary = "Medium risk - review changed files and remote targets."
+        else:
+            level = "low"
+            summary = "Low risk - local, reversible, or routine Git operation."
+
+        if not reasons:
+            reasons.append("No destructive or remote-publishing operation detected.")
+        return PlanRisk(level=level, score=score, summary=summary, reasons=list(dict.fromkeys(reasons)))
+
+    def _local_privacy_receipt(self, purpose: str) -> PrivacyReceipt:
+        return PrivacyReceipt(
+            external_provider=False,
+            purpose=purpose,
+            context_items=["Local repository metadata only"],
+            exact_context="No external AI provider was contacted for this plan.",
+        )
+
+    def _llm_privacy_receipt(
+        self,
+        *,
+        purpose: str,
+        files: list[str],
+        context_items: list[str],
+        exact_context: str,
+        truncated: bool = False,
+    ) -> PrivacyReceipt:
+        settings = self.settings_service.get_llm_settings() if self.settings_service is not None else None
+        return PrivacyReceipt(
+            external_provider=True,
+            purpose=purpose,
+            provider=settings.provider.value if settings and settings.provider else None,
+            model=settings.model if settings else None,
+            context_items=context_items,
+            files=files,
+            character_count=len(exact_context),
+            truncated=truncated,
+            exact_context=exact_context,
+        )
+
+    @staticmethod
+    def _changed_paths(snapshot: RepositorySnapshot) -> list[str]:
+        return list(
+            dict.fromkeys(
+                [
+                    *[item.path for item in snapshot.staged_changes],
+                    *[item.path for item in snapshot.modified_changes],
+                    *[item.path for item in snapshot.untracked_paths],
+                    *[item.path for item in snapshot.conflicts],
+                ]
+            )
+        )
+
+    @staticmethod
+    def _normalise_commit_message_paths(
+        paths: list[str],
+        snapshot: RepositorySnapshot,
+    ) -> list[str]:
+        changed_paths = [
+            *[item.path for item in snapshot.staged_changes],
+            *[item.path for item in snapshot.modified_changes],
+            *[item.path for item in snapshot.untracked_paths],
+        ]
+        changed_paths = list(dict.fromkeys(changed_paths))
+        if not changed_paths:
+            raise ValidationFailure("There are no changed files to summarize.")
+
+        if not paths:
+            return changed_paths[:40]
+
+        allowed = set(changed_paths)
+        normalised: list[str] = []
+        for raw_path in paths:
+            path = RepositoryService._normalise_requested_path(raw_path)
+            if path not in allowed:
+                raise ValidationFailure(
+                    f"'{path}' is not a changed file in the selected repository."
+                )
+            normalised.append(path)
+        return list(dict.fromkeys(normalised))
+
+    @staticmethod
+    def _build_ai_diff_context(
+        canonical_path,
+        paths: list[str],
+        snapshot: RepositorySnapshot,
+    ) -> AiDiffContext:
+        client = GitClient(canonical_path)
+        lines: list[str] = ["Selected files:"]
+        lines.extend(f"- {path}" for path in paths)
+        context_items = ["Selected file paths"]
+
+        tracked_paths = {
+            item.path
+            for item in [*snapshot.staged_changes, *snapshot.modified_changes]
+            if item.path in paths
+        }
+        untracked_paths = {
+            item.path
+            for item in snapshot.untracked_paths
+            if item.path in paths
+        }
+
+        if tracked_paths:
+            patch = client.diff_patch_for_paths(sorted(tracked_paths)).strip()
+            if patch:
+                lines.extend(["", "Patch:", patch])
+                context_items.append("Tracked file patch")
+
+        for path in sorted(untracked_paths):
+            file_path = canonical_path / path
+            if not file_path.is_file():
+                continue
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            lines.extend(
+                [
+                    "",
+                    f"Untracked file: {path}",
+                    content[:3000],
+                ]
+            )
+            context_items.append("Untracked file snippets")
+
+        context = "\n".join(lines)
+        if len(context) <= _MAX_COMMIT_MESSAGE_CONTEXT_CHARS:
+            return AiDiffContext(
+                content=context,
+                files=paths,
+                context_items=list(dict.fromkeys(context_items)),
+                truncated=False,
+            )
+        truncated_context = (
+            context[:_MAX_COMMIT_MESSAGE_CONTEXT_CHARS]
+            + "\n\n[Diff context truncated by AI Git Assistant.]"
+        )
+        return AiDiffContext(
+            content=truncated_context,
+            files=paths,
+            context_items=list(dict.fromkeys(context_items)),
+            truncated=True,
+        )
+
+    def _validate_tag_push_step_against_current_repository(
+        self,
+        repository_id: str,
+        step: ActionPlanStep,
+    ) -> None:
+        snapshot = self.snapshot(repository_id)
+        if snapshot.write_blocked_reason:
+            raise ValidationFailure(snapshot.write_blocked_reason)
+        if step.remote not in snapshot.remote_names:
+            raise ValidationFailure(
+                f"Remote '{step.remote}' is no longer available. Request a new plan and review it again."
+            )
 
     @staticmethod
     def _render_execution_result(
@@ -792,6 +1317,22 @@ class RepositoryService:
         elif step_kinds == {PlanStepKind.MERGE_COMMIT}:
             title = "Merge completed"
             summary = "The resolved merge was committed with Git's prepared merge message."
+        elif step_kinds == {PlanStepKind.CREATE_TAG}:
+            tag_step = next((s for s in plan.steps if s.kind is PlanStepKind.CREATE_TAG), None)
+            tag = tag_step.tag_name if tag_step else "tag"
+            title = f"Tag '{tag}' created"
+            summary = f"Annotated local tag '{tag}' was created at the current HEAD."
+        elif step_kinds == {PlanStepKind.DELETE_TAG}:
+            tag_step = next((s for s in plan.steps if s.kind is PlanStepKind.DELETE_TAG), None)
+            tag = tag_step.tag_name if tag_step else "tag"
+            title = f"Tag '{tag}' deleted"
+            summary = f"Local tag '{tag}' was deleted."
+        elif step_kinds == {PlanStepKind.PUSH_TAG}:
+            tag_step = next((s for s in plan.steps if s.kind is PlanStepKind.PUSH_TAG), None)
+            tag = tag_step.tag_name if tag_step else "tag"
+            remote = tag_step.remote if tag_step else "remote"
+            title = f"Tag '{tag}' pushed"
+            summary = f"Tag '{tag}' was pushed to '{remote}'."
         elif step_kinds == {PlanStepKind.DELETE_BRANCH}:
             br = branch_step.branch if branch_step else "branch"
             title = f"Branch '{br}' deleted"
@@ -845,6 +1386,12 @@ class RepositoryService:
                 lines.append("Aborted in-progress merge")
             elif step.kind is PlanStepKind.MERGE_COMMIT:
                 lines.append("Committed resolved merge")
+            elif step.kind is PlanStepKind.CREATE_TAG:
+                lines.append(f"Created annotated tag '{step.tag_name}'")
+            elif step.kind is PlanStepKind.DELETE_TAG:
+                lines.append(f"Deleted local tag '{step.tag_name}'")
+            elif step.kind is PlanStepKind.PUSH_TAG:
+                lines.append(f"Pushed tag '{step.tag_name}' to '{step.remote}'")
             elif step.kind is PlanStepKind.DELETE_BRANCH:
                 lines.append(f"Deleted branch '{step.branch}'")
             elif step.kind is PlanStepKind.ADD_REMOTE:
@@ -882,6 +1429,26 @@ class RepositoryService:
     def _validate_stash_ref(value: str) -> None:
         if not _STASH_REF_PATTERN.fullmatch(value):
             raise ValidationFailure("Use an explicit stash reference such as stash@{0}.")
+
+    @staticmethod
+    def _validate_tag_name(value: str) -> None:
+        candidate = value.strip()
+        if (
+            not _TAG_PATTERN.fullmatch(candidate)
+            or ".." in candidate
+            or "@{" in candidate
+            or candidate.endswith(".")
+            or candidate.endswith("/")
+            or "//" in candidate
+            or candidate.startswith("-")
+        ):
+            raise ValidationFailure("Use a safe tag name such as v0.3.0.")
+
+    @staticmethod
+    def _normalise_requested_tag(value: str) -> str:
+        candidate = value.strip().strip("`'\"").strip().rstrip(".!?")
+        RepositoryService._validate_tag_name(candidate)
+        return candidate
 
     @staticmethod
     def _normalise_requested_path(value: str) -> str:
@@ -1112,4 +1679,18 @@ class RepositoryService:
                 continue
             stash_ref, relative_time, subject = fields
             lines.append(f"{stash_ref}  {relative_time}\n  {subject}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _render_tags(raw: str) -> str:
+        lines: list[str] = []
+        for line in raw.splitlines():
+            if not line.strip():
+                continue
+            fields = line.split("\t", 2)
+            tag_name = fields[0]
+            created_at = fields[1] if len(fields) > 1 else ""
+            subject = fields[2] if len(fields) > 2 else ""
+            meta = f"  {created_at}" if created_at else ""
+            lines.append(f"{tag_name}{meta}" + (f"\n  {subject}" if subject else ""))
         return "\n".join(lines)

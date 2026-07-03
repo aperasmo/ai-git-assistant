@@ -5,14 +5,20 @@ import type {
   BootstrapStatus,
   CancelActionPlanResponse,
   DiagnosticsStatus,
+  DraftGitHubReleaseRequest,
+  DraftGitHubReleaseResponse,
   FolderClassification,
+  GenerateChangeSummaryResponse,
+  GenerateCommitMessageResponse,
   GitInstallationStatus,
+  GitHubSettings,
   LLMSettings,
   LocalActionPlan,
   ReadActionRequest,
   ReadActionResult,
   Repository,
   RepositorySnapshot,
+  UpdateGitHubSettingsRequest,
   UpdateLLMSettingsRequest,
 } from "./types";
 
@@ -54,6 +60,15 @@ export const desktopApi = {
   submitActionPlan: (repositoryId: string, steps: ActionPlanStep[]) =>
     invoke<{ planId: string }>("submit_action_plan", { repositoryId, steps }),
 
+  generateCommitMessage: (repositoryId: string, paths: string[]) =>
+    invoke<GenerateCommitMessageResponse>("generate_commit_message", { repositoryId, paths }),
+
+  generateChangeSummary: (repositoryId: string, paths: string[]) =>
+    invoke<GenerateChangeSummaryResponse>("generate_change_summary", { repositoryId, paths }),
+
+  draftGithubRelease: (repositoryId: string, request: DraftGitHubReleaseRequest) =>
+    invoke<DraftGitHubReleaseResponse>("draft_github_release", { repositoryId, request }),
+
   addToGitignore: (repositoryId: string, paths: string[]) =>
     invoke<{ ok: boolean }>("add_to_gitignore", { repositoryId, paths }),
 
@@ -62,6 +77,8 @@ export const desktopApi = {
 
   pickCloneTarget: () => invoke<string | null>("pick_clone_target"),
 
+  pickReleaseAsset: () => invoke<string | null>("pick_release_asset"),
+
   cloneRepository: (url: string, parentPath: string, folderName?: string) =>
     invoke<Repository>("clone_repository", { url, parentPath, folderName }),
 
@@ -69,6 +86,11 @@ export const desktopApi = {
 
   updateLlmSettings: (request: UpdateLLMSettingsRequest) =>
     invoke<LLMSettings>("update_llm_settings", { request }),
+
+  getGithubSettings: () => invoke<GitHubSettings>("get_github_settings"),
+
+  updateGithubSettings: (request: UpdateGitHubSettingsRequest) =>
+    invoke<GitHubSettings>("update_github_settings", { request }),
 
   testLlmConnection: () =>
     invoke<{ ok: boolean; message: string }>("test_llm_connection"),

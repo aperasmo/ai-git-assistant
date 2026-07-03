@@ -6,7 +6,9 @@ use crate::{
     app_state::AppState,
     models::repositories::{
         ActionExecutionResult, CancelActionPlanResponse, FolderClassification, LocalActionPlan,
-        ReadActionRequest, ReadActionResult, Repository, RepositorySnapshot,
+        DraftGitHubReleaseRequest, DraftGitHubReleaseResponse, GenerateChangeSummaryResponse,
+        GenerateCommitMessageResponse, ReadActionRequest, ReadActionResult, Repository,
+        RepositorySnapshot,
     },
     sidecar_proxy::SidecarProxy,
 };
@@ -198,6 +200,15 @@ pub async fn pick_clone_target(app: AppHandle) -> Result<Option<String>, String>
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub async fn pick_release_asset(app: AppHandle) -> Result<Option<String>, String> {
+    let selected = app.dialog().file().blocking_pick_file();
+    Ok(selected.and_then(|fp| match fp {
+        FilePath::Path(path) => Some(path.to_string_lossy().into_owned()),
+        FilePath::Url(_) => None,
+    }))
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub async fn clone_repository(
     url: String,
     parent_path: String,
@@ -222,6 +233,56 @@ pub async fn submit_action_plan(
             &state,
             &format!("/v1/repositories/{repository_id}/submit-plan"),
             &payload,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn generate_commit_message(
+    repository_id: String,
+    paths: Vec<String>,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GenerateCommitMessageResponse, String> {
+    let payload = json!({ "paths": paths });
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/generate-commit-message"),
+            &payload,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn generate_change_summary(
+    repository_id: String,
+    paths: Vec<String>,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GenerateChangeSummaryResponse, String> {
+    let payload = json!({ "paths": paths });
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/generate-change-summary"),
+            &payload,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn draft_github_release(
+    repository_id: String,
+    request: DraftGitHubReleaseRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<DraftGitHubReleaseResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/github/releases/draft"),
+            &request,
         )
         .await
 }

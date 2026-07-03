@@ -20,6 +20,18 @@ pub struct UpdateLLMSettingsRequest {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitHubSettings {
+    pub token_set: bool,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateGitHubSettingsRequest {
+    pub token: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SetExternalLLMRequest {
     pub allowed: bool,
 }

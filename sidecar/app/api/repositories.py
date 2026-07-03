@@ -8,8 +8,14 @@ from app.schemas.repositories import (
     AddToGitignoreRequest,
     CancelActionPlanResponse,
     CloneRepositoryRequest,
+    DraftGitHubReleaseRequest,
+    DraftGitHubReleaseResponse,
     ExecuteActionPlanRequest,
     FolderClassificationResponse,
+    GenerateChangeSummaryRequest,
+    GenerateChangeSummaryResponse,
+    GenerateCommitMessageRequest,
+    GenerateCommitMessageResponse,
     InitialiseAndRegisterRequest,
     LocalActionPlan,
     LocalResolveRequest,
@@ -159,6 +165,45 @@ def submit_wizard_plan(
 ) -> SubmitPlanResponse:
     plan_id = _service(request).submit_wizard_plan(repository_id, payload.steps)
     return SubmitPlanResponse(plan_id=plan_id)
+
+
+@router.post(
+    "/{repository_id}/generate-commit-message",
+    response_model=GenerateCommitMessageResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def generate_commit_message(
+    repository_id: str,
+    payload: GenerateCommitMessageRequest,
+    request: Request,
+) -> GenerateCommitMessageResponse:
+    return _service(request).generate_commit_message(repository_id, payload.paths)
+
+
+@router.post(
+    "/{repository_id}/generate-change-summary",
+    response_model=GenerateChangeSummaryResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def generate_change_summary(
+    repository_id: str,
+    payload: GenerateChangeSummaryRequest,
+    request: Request,
+) -> GenerateChangeSummaryResponse:
+    return _service(request).generate_change_summary(repository_id, payload.paths)
+
+
+@router.post(
+    "/{repository_id}/github/releases/draft",
+    response_model=DraftGitHubReleaseResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def draft_github_release(
+    repository_id: str,
+    payload: DraftGitHubReleaseRequest,
+    request: Request,
+) -> DraftGitHubReleaseResponse:
+    return _service(request).draft_github_release(repository_id, payload)
 
 
 @router.post(

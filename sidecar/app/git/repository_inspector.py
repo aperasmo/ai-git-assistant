@@ -9,8 +9,9 @@ from pathlib import Path
 
 from app.errors import GitCommandError, ValidationFailure
 from app.git.client import GitClient
+from app.git.remote_provider import detect_remote_provider
 from app.git.status_parser import parse_branch_headers, parse_porcelain_v1_z
-from app.schemas.repositories import BranchInfo, RepositorySnapshot
+from app.schemas.repositories import BranchInfo, RemoteProviderInfo, RepositorySnapshot
 
 IN_PROGRESS_MARKERS = {
     "MERGE_HEAD": (
@@ -199,6 +200,7 @@ class RepositoryInspector:
 
         remote_names = client.remote_list()
         remote_urls = client.remote_url_map()
+        remote_providers = self._detect_remote_providers(remote_names, remote_urls)
         local_branches = self._parse_branch_list(client.branch_list())
 
         snapshot = RepositorySnapshot(
@@ -217,6 +219,7 @@ class RepositoryInspector:
             write_blocked_reason=write_blocked_reason,
             remote_names=remote_names,
             remote_urls=remote_urls,
+            remote_providers=remote_providers,
             local_branches=local_branches,
             fingerprint=self._fingerprint(
                 head=head,
@@ -226,6 +229,37 @@ class RepositoryInspector:
             ),
         )
         return RepositoryInspection(canonical_path=canonical_path, snapshot=snapshot)
+
+    @staticmethod
+    def _detect_remote_providers(
+        remote_names: list[str],
+        remote_urls: dict[str, str],
+    ) -> list[RemoteProviderInfo]:
+        providers: list[RemoteProviderInfo] = []
+        for remote in remote_names:
+            url = remote_urls.get(remote)
+            if url:
+                detection = detect_remote_provider(url)
+                providers.append(
+                    RemoteProviderInfo(
+                        remote=remote,
+                        provider=detection.provider,
+                        label=detection.label,
+                        host=detection.host,
+                        url=url,
+                    )
+                )
+            else:
+                providers.append(
+                    RemoteProviderInfo(
+                        remote=remote,
+                        provider="unknown",
+                        label="Unknown",
+                        host=None,
+                        url=None,
+                    )
+                )
+        return providers
 
     @staticmethod
     def _parse_branch_list(raw: str) -> list[BranchInfo]:

@@ -85,6 +85,26 @@ class LocalIntentMatcher:
                 explanation="Resolved locally as remote listing.",
             )
 
+        tag_show_match = re.match(
+            r"^(?:show|inspect)\s+tag\s+(?P<tag>[A-Za-z0-9][A-Za-z0-9._/-]{0,254})$",
+            original_text,
+            re.IGNORECASE,
+        )
+        if tag_show_match:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.TAG_SHOW,
+                params={"tag_name": tag_show_match.group("tag")},
+                explanation="Resolved locally as tag inspection.",
+            )
+
+        if text in {"tags", "tag list", "list tags", "show tags", "show tag list"}:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.TAGS,
+                explanation="Resolved locally as tag listing.",
+            )
+
         if text in {"graph", "commit graph", "show graph", "show commit graph", "visual graph", "history graph"}:
             return LocalResolution(
                 matched=True,

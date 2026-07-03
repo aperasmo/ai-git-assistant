@@ -1,6 +1,7 @@
 ﻿import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
   ChatTranscriptEntry,
+  GenerateCommitMessageResponse,
   LocalActionPlan,
 } from "../lib/types";
 import type { WizardData, WizardFlowId } from "../lib/flows";
@@ -21,6 +22,8 @@ interface ChatPanelProps {
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
   onAddToGitignore: (paths: string[]) => Promise<void>;
+  onGenerateCommitMessage: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+  onPickReleaseAsset: () => Promise<string | null>;
 }
 
 function statusLabel(status: "pending" | "executed" | "cancelled" | "failed") {
@@ -109,6 +112,51 @@ function PlanCard({
               : plan.explanation}
       </p>
 
+      {plan.risk && (
+        <div className={`plan-risk plan-risk-${plan.risk.level}`}>
+          <strong>{plan.risk.level.toUpperCase()} RISK</strong>
+          <span>{plan.risk.summary}</span>
+          <small>Score {plan.risk.score}/100</small>
+          {plan.risk.reasons.length > 0 && (
+            <ul>
+              {plan.risk.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {plan.privacyReceipt && (
+        <details className="plan-privacy-receipt">
+          <summary>
+            Privacy receipt · {plan.privacyReceipt.externalProvider ? "AI provider used" : "local only"}
+          </summary>
+          <p>{plan.privacyReceipt.purpose}</p>
+          {plan.privacyReceipt.externalProvider && (
+            <p>
+              Sent to: <code>{plan.privacyReceipt.provider ?? "AI provider"}</code>
+              {plan.privacyReceipt.model ? <> / <code>{plan.privacyReceipt.model}</code></> : null}
+            </p>
+          )}
+          <p>
+            Files: <code>{plan.privacyReceipt.files.length}</code> · Characters:{" "}
+            <code>{plan.privacyReceipt.characterCount}</code>
+            {plan.privacyReceipt.truncated ? " · truncated" : ""}
+          </p>
+          {plan.privacyReceipt.contextItems.length > 0 && (
+            <ul>
+              {plan.privacyReceipt.contextItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          )}
+          {plan.privacyReceipt.exactContext && (
+            <pre>{plan.privacyReceipt.exactContext}</pre>
+          )}
+        </details>
+      )}
+
       <ol className="plan-step-list">
         {plan.steps.map((step, index) => (
           <li key={`${step.kind}-${index}`} className="plan-step">
@@ -141,6 +189,11 @@ function PlanCard({
               {step.stashRef && (
                 <p className="plan-metadata">
                   Stash: <code>{step.stashRef}</code>
+                </p>
+              )}
+              {step.tagName && (
+                <p className="plan-metadata">
+                  Tag: <code>{step.tagName}</code>
                 </p>
               )}
               {step.branch && step.kind !== "push" && (
@@ -218,6 +271,8 @@ function TranscriptItem({
   onWizardConfirm,
   onWizardCancel,
   onAddToGitignore,
+  onGenerateCommitMessage,
+  onPickReleaseAsset,
 }: {
   entry: ChatTranscriptEntry;
   busy: boolean;
@@ -228,6 +283,8 @@ function TranscriptItem({
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
   onAddToGitignore: (paths: string[]) => Promise<void>;
+  onGenerateCommitMessage: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+  onPickReleaseAsset: () => Promise<string | null>;
 }) {
   if (entry.kind === "user") {
     return (
@@ -273,6 +330,8 @@ function TranscriptItem({
         onConfirm={onWizardConfirm}
         onCancel={onWizardCancel}
         onAddToGitignore={onAddToGitignore}
+        onGenerateCommitMessage={onGenerateCommitMessage}
+        onPickReleaseAsset={onPickReleaseAsset}
       />
     );
   }
@@ -303,6 +362,8 @@ export function ChatPanel({
   onWizardConfirm,
   onWizardCancel,
   onAddToGitignore,
+  onGenerateCommitMessage,
+  onPickReleaseAsset,
 }: ChatPanelProps) {
   const [message, setMessage] = useState("");
   const endOfTranscriptRef = useRef<HTMLDivElement | null>(null);
@@ -357,6 +418,8 @@ export function ChatPanel({
                   onWizardConfirm={onWizardConfirm}
                   onWizardCancel={onWizardCancel}
                   onAddToGitignore={onAddToGitignore}
+                  onGenerateCommitMessage={onGenerateCommitMessage}
+                  onPickReleaseAsset={onPickReleaseAsset}
                 />
               ))}
             </div>

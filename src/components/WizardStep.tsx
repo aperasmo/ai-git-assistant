@@ -1,8 +1,14 @@
 import { useState } from "react";
-import type { ChatTranscriptEntry } from "../lib/types";
+import type { ChatTranscriptEntry, GenerateCommitMessageResponse } from "../lib/types";
 import type { WizardData } from "../lib/flows";
 
 type WizardStepEntry = Extract<ChatTranscriptEntry, { kind: "wizard_step" }>;
+
+function toWizardErrorMessage(cause: unknown): string {
+  if (cause instanceof Error && cause.message.trim()) return cause.message;
+  if (typeof cause === "string" && cause.trim()) return cause;
+  return "AI message generation failed.";
+}
 
 interface WizardStepProps {
   entry: WizardStepEntry;
@@ -11,6 +17,8 @@ interface WizardStepProps {
   onConfirm: () => void;
   onCancel: () => void;
   onAddToGitignore?: (paths: string[]) => Promise<void>;
+  onGenerateCommitMessage?: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+  onPickReleaseAsset?: () => Promise<string | null>;
 }
 
 export function WizardStep({
@@ -20,6 +28,8 @@ export function WizardStep({
   onConfirm,
   onCancel,
   onAddToGitignore,
+  onGenerateCommitMessage,
+  onPickReleaseAsset,
 }: WizardStepProps) {
   if (entry.status === "done") {
     return (
@@ -44,7 +54,25 @@ export function WizardStep({
         />
       );
     case "text_input":
-      return <TextInputStep entry={entry} busy={busy} onNext={onNext} onCancel={onCancel} />;
+      return (
+        <TextInputStep
+          entry={entry}
+          busy={busy}
+          onNext={onNext}
+          onCancel={onCancel}
+          onGenerateCommitMessage={onGenerateCommitMessage}
+        />
+      );
+    case "asset_pick":
+      return (
+        <AssetPickStep
+          entry={entry}
+          busy={busy}
+          onNext={onNext}
+          onCancel={onCancel}
+          onPickReleaseAsset={onPickReleaseAsset}
+        />
+      );
     case "option_select":
       return <OptionSelectStep entry={entry} busy={busy} onNext={onNext} onCancel={onCancel} />;
     case "confirm":
@@ -152,7 +180,7 @@ function FilePickStep({
           disabled={isLocked || selected.length === 0}
           onClick={handleNext}
         >
-          Continue →
+          Continue
         </button>
         <button
           type="button"
@@ -195,23 +223,125 @@ function FilePickStep({
   );
 }
 
-function TextInputStep({
+function AssetPickStep({
   entry,
   busy,
   onNext,
   onCancel,
+  onPickReleaseAsset,
 }: {
   entry: WizardStepEntry;
   busy: boolean;
   onNext: (label: string, data: Partial<WizardData>) => void;
   onCancel: () => void;
+  onPickReleaseAsset?: () => Promise<string | null>;
 }) {
   const [value, setValue] = useState("");
+  const [picking, setPicking] = useState(false);
+
+  async function handleBrowse() {
+    if (!onPickReleaseAsset || picking) return;
+    setPicking(true);
+    try {
+      const selected = await onPickReleaseAsset();
+      if (selected) setValue(selected);
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  function handleNext() {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onNext(trimmed.split(/[\\/]/).pop() ?? trimmed, { assetPath: trimmed });
+  }
+
+  return (
+    <div className="wizard-step-card">
+      <p className="wizard-step-prompt">{entry.prompt}</p>
+      <div className="wizard-asset-row">
+        <input
+          type="text"
+          className="wizard-text-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleNext();
+          }}
+          placeholder="Select or paste the asset path..."
+          disabled={busy || picking}
+          autoFocus
+        />
+        <button
+          type="button"
+          className="wizard-browse-button"
+          disabled={busy || picking || !onPickReleaseAsset}
+          onClick={() => void handleBrowse()}
+        >
+          {picking ? "..." : "Browse"}
+        </button>
+      </div>
+      <div className="wizard-step-actions">
+        <button
+          type="button"
+          className="wizard-next-button"
+          disabled={busy || picking || !value.trim()}
+          onClick={handleNext}
+        >
+          Continue
+        </button>
+        <button
+          type="button"
+          className="wizard-cancel-button"
+          disabled={busy || picking}
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TextInputStep({
+  entry,
+  busy,
+  onNext,
+  onCancel,
+  onGenerateCommitMessage,
+}: {
+  entry: WizardStepEntry;
+  busy: boolean;
+  onNext: (label: string, data: Partial<WizardData>) => void;
+  onCancel: () => void;
+  onGenerateCommitMessage?: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+}) {
+  const [value, setValue] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<GenerateCommitMessageResponse | null>(null);
+  const selectedPaths = entry.prompt === "Commit message" ? entry.choices ?? [] : [];
+  const canGenerate = selectedPaths.length > 0 && Boolean(onGenerateCommitMessage);
 
   function handleNext() {
     const trimmed = value.trim();
     if (!trimmed) return;
     onNext(trimmed, { message: trimmed });
+  }
+
+  async function handleGenerate() {
+    if (!onGenerateCommitMessage || generating || selectedPaths.length === 0) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const generated = await onGenerateCommitMessage(selectedPaths);
+      setValue(generated.message);
+      setReceipt(generated);
+    } catch (cause) {
+      setError(toWizardErrorMessage(cause));
+    } finally {
+      setGenerating(false);
+    }
   }
 
   return (
@@ -229,6 +359,42 @@ function TextInputStep({
         disabled={busy}
         autoFocus
       />
+      {canGenerate && (
+        <div className="wizard-ai-row">
+          <button
+            type="button"
+            className="wizard-ai-button"
+            disabled={busy || generating}
+            onClick={() => void handleGenerate()}
+          >
+            {generating ? "Generating..." : "Generate with AI"}
+          </button>
+          <span>Uses the selected file diff.</span>
+        </div>
+      )}
+      {error && <p className="wizard-inline-error">{error}</p>}
+      {receipt?.privacyReceipt && (
+        <details className="wizard-privacy-receipt">
+          <summary>Privacy receipt</summary>
+          <p>{receipt.contextSummary}</p>
+          <p>
+            Sent to: <code>{receipt.privacyReceipt.provider ?? "AI provider"}</code>
+            {receipt.privacyReceipt.model ? <> / <code>{receipt.privacyReceipt.model}</code></> : null}
+          </p>
+          <p>
+            Files: <code>{receipt.privacyReceipt.files.length}</code> · Characters:{" "}
+            <code>{receipt.privacyReceipt.characterCount}</code>
+          </p>
+          <ul>
+            {receipt.privacyReceipt.contextItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          {receipt.privacyReceipt.exactContext && (
+            <pre>{receipt.privacyReceipt.exactContext}</pre>
+          )}
+        </details>
+      )}
       <div className="wizard-step-actions">
         <button
           type="button"
@@ -236,7 +402,7 @@ function TextInputStep({
           disabled={busy || !value.trim()}
           onClick={handleNext}
         >
-          Continue →
+          Continue
         </button>
         <button
           type="button"
@@ -324,7 +490,7 @@ function ConfirmStep({
           disabled={busy}
           onClick={onConfirm}
         >
-          {busy ? "Executing..." : danger ? "Discard ▶" : "Execute ▶"}
+          {busy ? "Executing..." : danger ? "Discard" : "Execute"}
         </button>
         <button
           type="button"

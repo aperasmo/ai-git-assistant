@@ -14,6 +14,14 @@ export interface UpdateLLMSettingsRequest {
   baseUrl?: string | null;
 }
 
+export interface GitHubSettings {
+  tokenSet: boolean;
+}
+
+export interface UpdateGitHubSettingsRequest {
+  token?: string | null;
+}
+
 export type SidecarStatus = "starting" | "ready" | "failed" | "stopped";
 export type GitStatusKind = "checking" | "available" | "missing" | "failed";
 
@@ -29,7 +37,9 @@ export type ReadAction =
   | "remotes"
   | "file_history"
   | "blame"
-  | "conflicts";
+  | "conflicts"
+  | "tags"
+  | "tag_show";
 export type PlanKind = "read" | "write" | "info";
 export type PlanStepKind =
   | "read"
@@ -48,6 +58,9 @@ export type PlanStepKind =
   | "merge"
   | "merge_abort"
   | "merge_commit"
+  | "create_tag"
+  | "delete_tag"
+  | "push_tag"
   | "delete_branch"
   | "add_remote"
   | "rename_branch";
@@ -126,6 +139,16 @@ export interface BranchInfo {
   upstream?: string | null;
 }
 
+export type RemoteProviderKind = "github" | "gitlab" | "bitbucket" | "azure_devops" | "unknown";
+
+export interface RemoteProviderInfo {
+  remote: string;
+  provider: RemoteProviderKind;
+  label: string;
+  host?: string | null;
+  url?: string | null;
+}
+
 export interface RepositorySnapshot {
   repositoryId: string;
   branch?: string | null;
@@ -144,6 +167,7 @@ export interface RepositorySnapshot {
   recentCommits: RecentCommit[];
   remoteNames: string[];
   remoteUrls: Record<string, string>;
+  remoteProviders: RemoteProviderInfo[];
   localBranches: BranchInfo[];
 }
 
@@ -178,11 +202,31 @@ export interface ActionPlanStep {
   branch?: string | null;
   remoteUrl?: string | null;
   stashRef?: string | null;
+  tagName?: string | null;
   commandPreview?: string | null;
   ahead?: number | null;
   behind?: number | null;
   force?: boolean | null;
   setUpstream?: boolean | null;
+}
+
+export interface PlanRisk {
+  level: "low" | "medium" | "high";
+  score: number;
+  summary: string;
+  reasons: string[];
+}
+
+export interface PrivacyReceipt {
+  externalProvider: boolean;
+  purpose: string;
+  provider?: string | null;
+  model?: string | null;
+  contextItems: string[];
+  files: string[];
+  characterCount: number;
+  truncated: boolean;
+  exactContext?: string | null;
 }
 
 export interface LocalActionPlan {
@@ -197,6 +241,8 @@ export interface LocalActionPlan {
   steps: ActionPlanStep[];
   explanation: string;
   source: "local" | "llm";
+  risk?: PlanRisk | null;
+  privacyReceipt?: PrivacyReceipt | null;
 }
 
 export interface ActionExecutionResult {
@@ -205,6 +251,51 @@ export interface ActionExecutionResult {
   summary: string;
   content: string;
   contentKind?: "text" | "diff" | "graph";
+  snapshot: RepositorySnapshot;
+}
+
+export interface GenerateCommitMessageResponse {
+  message: string;
+  source: "llm";
+  contextSummary: string;
+  privacyReceipt?: PrivacyReceipt | null;
+}
+
+export interface CommitSuggestion {
+  message: string;
+  files: string[];
+  rationale: string;
+}
+
+export interface GenerateChangeSummaryResponse {
+  branchSummary: string;
+  fileSummaries: string[];
+  prTitle: string;
+  prBody: string;
+  commitSuggestions: CommitSuggestion[];
+  source: "llm";
+  contextSummary: string;
+  privacyReceipt?: PrivacyReceipt | null;
+}
+
+export interface DraftGitHubReleaseRequest {
+  tagName: string;
+  title: string;
+  body: string;
+  assetPath?: string | null;
+  prerelease: boolean;
+}
+
+export interface DraftGitHubReleaseResponse {
+  tagName: string;
+  repository: string;
+  releaseUrl: string;
+  assetUrl?: string | null;
+  assetName?: string | null;
+  assetSha256?: string | null;
+  title: string;
+  summary: string;
+  content: string;
   snapshot: RepositorySnapshot;
 }
 
@@ -245,7 +336,7 @@ export type ChatTranscriptEntry =
   | {
       id: string;
       kind: "wizard_step";
-      stepKind: "file_pick" | "text_input" | "option_select" | "confirm";
+      stepKind: "file_pick" | "text_input" | "asset_pick" | "option_select" | "confirm";
       prompt: string;
       status: "active" | "done";
       choices?: string[];

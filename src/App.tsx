@@ -18,11 +18,14 @@ import {
   type WizardFlowId,
   type WizardState,
 } from "./lib/flows";
+import { githubRemote, providerDetailLines } from "./lib/remoteProviders";
 import type {
   ActionPlanStep,
   BootstrapStatus,
   ChatTranscriptEntry,
   FolderClassification,
+  GenerateChangeSummaryResponse,
+  GenerateCommitMessageResponse,
   GitInstallationStatus,
   LocalActionPlan,
   ReadAction,
@@ -43,6 +46,8 @@ const QUICK_ACTION_MESSAGES: Record<ReadAction, string> = {
   file_history: "Show file history",
   blame: "Show file blame",
   conflicts: "Show conflicts",
+  tags: "Show tags",
+  tag_show: "Inspect tag",
 };
 
 // Windows reserved device names that git can report in status but cannot stage/read on Windows.
@@ -73,6 +78,61 @@ function toErrorMessage(cause: unknown, fallback: string): string {
   if (cause instanceof Error) return cause.message;
   if (typeof cause === "string") return cause;
   return fallback;
+}
+
+function changedPaths(snapshot: RepositorySnapshot | null): string[] {
+  if (!snapshot) return [];
+  return Array.from(
+    new Set([
+      ...snapshot.stagedChanges.map((item) => item.path),
+      ...snapshot.modifiedChanges.map((item) => item.path),
+      ...snapshot.untrackedPaths.map((item) => item.path),
+    ]),
+  );
+}
+
+function renderChangeSummary(result: GenerateChangeSummaryResponse): string {
+  const lines: string[] = [
+    "Branch summary:",
+    result.branchSummary,
+    "",
+    "File summaries:",
+    ...(result.fileSummaries.length > 0
+      ? result.fileSummaries.map((line) => `- ${line}`)
+      : ["- No file-level summary returned."]),
+    "",
+    "Suggested logical commits:",
+  ];
+
+  if (result.commitSuggestions.length === 0) {
+    lines.push("- No split suggested.");
+  } else {
+    result.commitSuggestions.forEach((commit, index) => {
+      lines.push(`${index + 1}. ${commit.message}`);
+      if (commit.files.length > 0) lines.push(`   Files: ${commit.files.join(", ")}`);
+      if (commit.rationale) lines.push(`   Why: ${commit.rationale}`);
+    });
+  }
+
+  lines.push("", "PR title:", result.prTitle, "", "PR body:", result.prBody);
+
+  if (result.privacyReceipt) {
+    lines.push(
+      "",
+      "Privacy receipt:",
+      `Purpose: ${result.privacyReceipt.purpose}`,
+      `Provider: ${result.privacyReceipt.provider ?? "AI provider"}${result.privacyReceipt.model ? ` / ${result.privacyReceipt.model}` : ""}`,
+      `Files: ${result.privacyReceipt.files.length}`,
+      `Characters sent: ${result.privacyReceipt.characterCount}${result.privacyReceipt.truncated ? " (truncated)" : ""}`,
+      "Context items:",
+      ...result.privacyReceipt.contextItems.map((item) => `- ${item}`),
+      "",
+      "Exact context sent:",
+      result.privacyReceipt.exactContext ?? "(not available)",
+    );
+  }
+
+  return lines.join("\n");
 }
 
 export default function App() {
@@ -613,6 +673,8 @@ export default function App() {
       startStashWizard(repositoryId);
     } else if (flowId === "connect_remote") {
       startConnectRemoteWizard();
+    } else if (flowId === "draft_release") {
+      startDraftReleaseWizard(repositoryId);
     }
   }
 
@@ -809,6 +871,35 @@ export default function App() {
     });
   }
 
+  function startDraftReleaseWizard(repositoryId: string) {
+    const remote = githubRemote(snapshot);
+    if (!remote) {
+      const detected = providerDetailLines(snapshot).join("; ");
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "error",
+        message: [
+          "GitHub draft releases are not available for this repository.",
+          `Detected remote provider: ${detected}`,
+          "You can still use status, commits, branches, push, pull, fetch, tags, stash, merge, and AI summaries.",
+          "GitLab, Bitbucket, and Azure DevOps release publishing are planned.",
+        ].join(" "),
+      });
+      appendTranscriptEntry(repositoryId, { id: createTranscriptId(), kind: "wizard_menu", variant: "compact" });
+      return;
+    }
+
+    const stepId = createTranscriptId();
+    activeWizardRef.current = { flowId: "draft_release", currentStepId: stepId, currentStepKind: "text_input", data: {} };
+    appendTranscriptEntry(repositoryId, {
+      id: stepId,
+      kind: "wizard_step",
+      stepKind: "text_input",
+      prompt: "Release tag, for example v0.4.1",
+      status: "active",
+    });
+  }
+
   function onWizardNext(choiceLabel: string, choiceData: Partial<WizardData>) {
     const repositoryId = activeRepositoryId;
     const wizard = activeWizardRef.current;
@@ -843,6 +934,7 @@ export default function App() {
           stepKind: "text_input",
           prompt: "Commit message",
           status: "active",
+          choices: updatedData.files ?? [],
         });
       }
     } else if (wizard.currentStepKind === "text_input") {
@@ -880,6 +972,42 @@ export default function App() {
           status: "active",
           confirmLines,
         });
+      } else if (wizard.flowId === "draft_release") {
+        const value = (choiceData.message ?? "").trim();
+        if (!wizard.data.tagName) {
+          const releaseData: WizardData = { ...wizard.data, tagName: value };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: releaseData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "text_input",
+            prompt: "Release title",
+            status: "active",
+          });
+        } else if (!wizard.data.releaseTitle) {
+          const releaseData: WizardData = { ...wizard.data, releaseTitle: value };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: releaseData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "text_input",
+            prompt: "Release description",
+            status: "active",
+          });
+        } else {
+          const releaseData: WizardData = { ...wizard.data, releaseBody: value };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "asset_pick", data: releaseData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "asset_pick",
+            prompt: "Choose the release asset",
+            status: "active",
+          });
+        }
       } else if (wizard.flowId === "stage_only") {
         const next: WizardState = {
           ...wizard,
@@ -921,6 +1049,28 @@ export default function App() {
           prompt: "Push to which remote?",
           status: "active",
           choices: remotes,
+        });
+      }
+    } else if (wizard.currentStepKind === "asset_pick") {
+      if (wizard.flowId === "draft_release") {
+        const releaseData: WizardData = { ...updatedData, assetPath: choiceData.assetPath ?? updatedData.assetPath };
+        const remoteName = githubRemote(snapshot)?.remote ?? "origin";
+        const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: releaseData };
+        activeWizardRef.current = next;
+        appendTranscriptEntry(repositoryId, {
+          id: nextStepId,
+          kind: "wizard_step",
+          stepKind: "confirm",
+          prompt: "Draft GitHub release",
+          status: "active",
+          confirmLines: [
+            `Remote: ${remoteName} (${snapshot?.remoteUrls?.[remoteName] ?? "—"})`,
+            `Tag: ${releaseData.tagName}`,
+            `Title: ${releaseData.releaseTitle}`,
+            `Asset: ${releaseData.assetPath}`,
+            "Draft: yes",
+            ...gitCmds("GitHub API: create draft release", "GitHub API: upload selected asset"),
+          ],
         });
       }
     } else if (wizard.currentStepKind === "option_select") {
@@ -972,7 +1122,7 @@ export default function App() {
     const wizard = activeWizardRef.current;
     if (!repositoryId || !wizard) return;
 
-    markWizardStepDone(repositoryId, wizard.currentStepId, "Executing...");
+    markWizardStepDone(repositoryId, wizard.currentStepId, "Confirmed");
 
     try {
       setBusy(true);
@@ -983,6 +1133,27 @@ export default function App() {
       const targetBranch = wizard.data.branch ?? message;
 
       const steps: ActionPlanStep[] = [];
+
+      if (wizard.flowId === "draft_release") {
+        const release = await desktopApi.draftGithubRelease(repositoryId, {
+          tagName: wizard.data.tagName ?? "",
+          title: wizard.data.releaseTitle ?? "",
+          body: wizard.data.releaseBody ?? "",
+          assetPath: wizard.data.assetPath ?? null,
+          prerelease: false,
+        });
+        if (activeRepositoryIdRef.current !== repositoryId) return;
+        setSnapshot(release.snapshot);
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "result",
+          title: release.title,
+          summary: release.summary,
+          content: release.content,
+        });
+        await loadRepositories();
+        return;
+      }
 
       if (wizard.flowId === "pull") {
         steps.push({ kind: "pull", title: "Pull latest", detail: `${remote}/${currentBranch}`, paths: [], remote, branch: currentBranch });
@@ -1092,6 +1263,88 @@ export default function App() {
     }
   }
 
+  async function generateCommitMessage(paths: string[]): Promise<GenerateCommitMessageResponse> {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId) {
+      throw new Error("Select a repository before generating a message.");
+    }
+
+    const result = await desktopApi.generateCommitMessage(repositoryId, paths);
+    if (activeRepositoryIdRef.current === repositoryId) {
+      const fresh = await desktopApi.getRepositorySnapshot(repositoryId);
+      if (activeRepositoryIdRef.current === repositoryId) setSnapshot(fresh);
+    }
+    return result;
+  }
+
+  async function analyzeChanges() {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId || busy || activePendingPlan) return;
+
+    const paths = changedPaths(snapshot);
+    appendTranscriptEntry(repositoryId, {
+      id: createTranscriptId(),
+      kind: "user",
+      message: "Analyze changes with AI",
+    });
+
+    if (paths.length === 0) {
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "error",
+        message: "There are no changed files to analyze.",
+      });
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setApplicationError(null);
+      const result = await desktopApi.generateChangeSummary(repositoryId, paths);
+      if (activeRepositoryIdRef.current !== repositoryId) return;
+
+      const fresh = await desktopApi.getRepositorySnapshot(repositoryId);
+      if (activeRepositoryIdRef.current === repositoryId) setSnapshot(fresh);
+
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "result",
+        title: "AI Change Summary",
+        summary: result.contextSummary,
+        content: renderChangeSummary(result),
+      });
+    } catch (cause) {
+      if (activeRepositoryIdRef.current === repositoryId) {
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "error",
+          message: toErrorMessage(cause, "AI change analysis failed."),
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setRepositoryLlmAllowed(allowed: boolean) {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId) return;
+
+    try {
+      setApplicationError(null);
+      const updated = await desktopApi.setRepositoryLlmAllowed(repositoryId, allowed);
+      setRepositories((current) =>
+        current.map((repository) => (repository.id === repositoryId ? updated : repository)),
+      );
+      await loadRepositories();
+    } catch (cause) {
+      if (activeRepositoryIdRef.current === repositoryId) {
+        setApplicationError(toErrorMessage(cause, "Could not update repository AI setting."));
+      }
+      throw cause;
+    }
+  }
+
   function onWizardCancel() {
     const repositoryId = activeRepositoryId;
     if (!repositoryId) return;
@@ -1188,6 +1441,8 @@ export default function App() {
           onWizardConfirm={() => void onWizardConfirm()}
           onWizardCancel={onWizardCancel}
           onAddToGitignore={onAddToGitignore}
+          onGenerateCommitMessage={generateCommitMessage}
+          onPickReleaseAsset={desktopApi.pickReleaseAsset}
         />
 
         <RepositoryContextPanel
@@ -1197,6 +1452,8 @@ export default function App() {
           onAction={(action) => void runAction(action)}
           activeLlm={activeLlm}
           onTestLlm={() => desktopApi.testLlmConnection()}
+          onAnalyzeChanges={() => void analyzeChanges()}
+          onSetRepositoryLlmAllowed={setRepositoryLlmAllowed}
         />
       </div>
 

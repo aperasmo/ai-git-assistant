@@ -7,6 +7,11 @@ _WILDCARD_SENTINELS = frozenset([".", "*", "all", "**", "./", "*.*"])
 _KINDS_REQUIRING_PATHS = frozenset([PlanStepKind.STAGE, PlanStepKind.UNSTAGE, PlanStepKind.DISCARD])
 _KINDS_REQUIRING_REMOTE = frozenset([PlanStepKind.PUSH, PlanStepKind.PULL])
 _KINDS_REQUIRING_STASH_REF = frozenset([PlanStepKind.STASH_APPLY, PlanStepKind.STASH_DROP])
+_KINDS_REQUIRING_TAG = frozenset([
+    PlanStepKind.CREATE_TAG,
+    PlanStepKind.DELETE_TAG,
+    PlanStepKind.PUSH_TAG,
+])
 _KINDS_REQUIRING_BRANCH = frozenset([
     PlanStepKind.SWITCH,
     PlanStepKind.CREATE_BRANCH,
@@ -83,6 +88,13 @@ def validate_llm_steps(
                     f"The AI suggested a '{kind_str}' step without an explicit stash reference."
                 )
 
+        tag_name = raw.get("tag_name")
+        if kind in _KINDS_REQUIRING_TAG and not tag_name:
+            raise ValidationFailure(f"The AI suggested a '{kind_str}' step without a tag name.")
+
+        if kind is PlanStepKind.CREATE_TAG and not commit_message:
+            raise ValidationFailure("The AI suggested a create_tag step without a tag message.")
+
         result.append(
             ActionPlanStep(
                 kind=kind,
@@ -93,6 +105,7 @@ def validate_llm_steps(
                 remote=remote,
                 branch=branch,
                 stash_ref=stash_ref,
+                tag_name=tag_name,
                 set_upstream=bool(raw.get("set_upstream", False)),
                 command_preview=raw.get("command_preview"),
             )

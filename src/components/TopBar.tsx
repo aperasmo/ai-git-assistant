@@ -25,7 +25,7 @@ export function TopBar({
       <div className="topbar-title">
         <BrandMark />
         <strong>AI Git Assistant</strong>
-        <span className="beta-tag">PHASE A</span>
+        <span className="beta-tag">PHASE D</span>
       </div>
 
       <div className="topbar-context">

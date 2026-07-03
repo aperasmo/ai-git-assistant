@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { platformFeatureHint, providerDetailLines, providerSummary } from "../lib/remoteProviders";
 import type { ReadAction, Repository, RepositorySnapshot } from "../lib/types";
 
 interface RepositoryContextPanelProps {
@@ -8,6 +9,8 @@ interface RepositoryContextPanelProps {
   onAction: (action: ReadAction) => void;
   activeLlm?: { provider: string; model: string } | null;
   onTestLlm?: () => Promise<{ ok: boolean; message: string }>;
+  onAnalyzeChanges?: () => void;
+  onSetRepositoryLlmAllowed?: (allowed: boolean) => Promise<void>;
 }
 
 function CountRow({
@@ -34,9 +37,12 @@ export function RepositoryContextPanel({
   onAction,
   activeLlm,
   onTestLlm,
+  onAnalyzeChanges,
+  onSetRepositoryLlmAllowed,
 }: RepositoryContextPanelProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [savingAiAllowed, setSavingAiAllowed] = useState(false);
 
   useEffect(() => {
     setTestResult(null);
@@ -62,6 +68,10 @@ export function RepositoryContextPanel({
   const upstreamLabel = snapshot.upstreamBranch
     ? snapshot.upstreamBranch
     : "No upstream configured";
+  const changedFileCount =
+    snapshot.stagedChanges.length + snapshot.modifiedChanges.length + snapshot.untrackedPaths.length;
+  const remoteProviderLabel = providerSummary(snapshot);
+  const remoteProviderDetails = providerDetailLines(snapshot);
 
   return (
     <aside className="context-panel">
@@ -90,6 +100,19 @@ export function RepositoryContextPanel({
       {snapshot.writeBlockedReason && (
         <div className="blocked-banner">{snapshot.writeBlockedReason}</div>
       )}
+
+      <div className="remote-provider-card">
+        <div className="remote-provider-header">
+          <span>Remote provider</span>
+          <strong>{remoteProviderLabel}</strong>
+        </div>
+        <div className="remote-provider-list">
+          {remoteProviderDetails.map((line) => (
+            <code key={line}>{line}</code>
+          ))}
+        </div>
+        <p>{platformFeatureHint(snapshot)}</p>
+      </div>
 
       <p className="context-subheading">STATUS SUMMARY</p>
       <div className="status-list">
@@ -157,6 +180,9 @@ export function RepositoryContextPanel({
         <button type="button" onClick={() => onAction("remotes")} disabled={busy}>
           R Remotes
         </button>
+        <button type="button" onClick={() => onAction("tags")} disabled={busy}>
+          # Tags
+        </button>
         <button type="button" onClick={() => onAction("conflicts")} disabled={busy}>
           ! Conflicts
         </button>
@@ -175,6 +201,31 @@ export function RepositoryContextPanel({
               <span className="ai-status-model"> · {activeLlm.model}</span>
             </span>
           </div>
+          {onSetRepositoryLlmAllowed && (
+            <div className="ai-repo-toggle-row">
+              <span>
+                Repository AI context
+                <small>Required for Generate with AI and Analyze changes</small>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={repository.externalLlmAllowed}
+                className={`toggle-switch ${repository.externalLlmAllowed ? "on" : ""}`}
+                disabled={busy || savingAiAllowed}
+                onClick={async () => {
+                  setSavingAiAllowed(true);
+                  try {
+                    await onSetRepositoryLlmAllowed(!repository.externalLlmAllowed);
+                  } finally {
+                    setSavingAiAllowed(false);
+                  }
+                }}
+              >
+                {repository.externalLlmAllowed ? "ON" : "OFF"}
+              </button>
+            </div>
+          )}
           {onTestLlm && (
             <button
               type="button"
@@ -188,6 +239,16 @@ export function RepositoryContextPanel({
               }}
             >
               {testing ? "Testing…" : "Test connection"}
+            </button>
+          )}
+          {onAnalyzeChanges && (
+            <button
+              type="button"
+              className="ai-test-btn ai-analyze-btn"
+              disabled={busy || changedFileCount === 0 || !repository.externalLlmAllowed}
+              onClick={onAnalyzeChanges}
+            >
+              Analyze changes
             </button>
           )}
           {testResult && (

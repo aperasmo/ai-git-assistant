@@ -18,6 +18,7 @@ app/api/settings.py
 app/api/system.py
 app/git/__init__.py
 app/git/client.py
+app/git/remote_provider.py
 app/git/repository_inspector.py
 app/git/status_parser.py
 app/intent/__init__.py
@@ -37,11 +38,14 @@ app/schemas/repositories.py
 app/schemas/settings.py
 app/schemas/system.py
 app/services/__init__.py
+app/services/github_release_service.py
 app/services/repository_service.py
 app/services/repository_store.py
+app/services/secret_store.py
 app/services/settings_service.py
 tests/test_action_planner.py
 tests/test_health.py
 tests/test_llm_validator.py
+tests/test_remote_provider.py
 tests/test_repository_flow.py
 tests/test_settings_service.py

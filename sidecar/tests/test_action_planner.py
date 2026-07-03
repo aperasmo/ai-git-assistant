@@ -81,6 +81,8 @@ def test_phase_c_read_requests_resolve_locally():
         ("history README.md", "file_history"),
         ("blame README.md", "blame"),
         ("show conflicts", "conflicts"),
+        ("show tags", "tags"),
+        ("show tag v0.3.0", "tag_show"),
         ("show staged diff", "diff"),
     ]
 
@@ -610,3 +612,60 @@ def test_push_with_multiple_remotes_and_no_origin_requires_explicit_remote():
 
     with pytest.raises(ValidationFailure, match="Multiple remotes"):
         planner.plan("repo-1", "push", snapshot)
+
+
+# ---------------------------------------------------------------------------
+# Tags
+# ---------------------------------------------------------------------------
+
+def test_create_annotated_tag_creates_reviewable_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot()
+
+    plan = planner.plan(
+        "repo-1",
+        'create tag v0.3.0 with message "Release v0.3.0"',
+        snapshot,
+    )
+
+    assert plan.plan_kind == "write"
+    assert plan.requires_confirmation is True
+    step = plan.steps[0]
+    assert step.kind.value == "create_tag"
+    assert step.tag_name == "v0.3.0"
+    assert step.commit_message == "Release v0.3.0"
+    assert "tag -a v0.3.0" in (step.command_preview or "")
+
+
+def test_delete_tag_creates_destructive_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot()
+
+    plan = planner.plan("repo-1", "delete tag v0.3.0", snapshot)
+
+    assert plan.plan_kind == "write"
+    step = plan.steps[0]
+    assert step.kind.value == "delete_tag"
+    assert step.tag_name == "v0.3.0"
+    assert "DESTRUCTIVE" in step.detail
+
+
+def test_push_tag_uses_origin_by_default():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot()
+
+    plan = planner.plan("repo-1", "push tag v0.3.0", snapshot)
+
+    assert plan.plan_kind == "write"
+    step = plan.steps[0]
+    assert step.kind.value == "push_tag"
+    assert step.tag_name == "v0.3.0"
+    assert step.remote == "origin"
+
+
+def test_push_tag_with_multiple_remotes_requires_explicit_remote():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(update={"remote_names": ["upstream", "fork"]})
+
+    with pytest.raises(ValidationFailure, match="Multiple remotes"):
+        planner.plan("repo-1", "push tag v0.3.0", snapshot)

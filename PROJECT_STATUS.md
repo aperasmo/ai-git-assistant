@@ -7,6 +7,23 @@
 
 ## What the app can do today
 
+### Versioning policy
+
+Versions track the active product phase so releases are easy to understand:
+
+| Phase | Version line | Meaning |
+|---|---|---|
+| Phase A | `0.1.x` | MVP local Git assistant |
+| Phase B | `0.2.x` | Release hardening and installer reliability |
+| Phase C | `0.3.x` | Git client parity |
+| Phase D | `0.4.x` | AI-native Git workflows |
+| Phase E | `0.5.x` | Agent worktree control plane |
+| Phase F | `0.6.x` | PR and review workflow |
+| Phase G | `0.7.x` | Cross-platform release |
+| Phase H | `0.8.x` | Team context and conventions |
+
+The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase D.3 uses `0.4.3`.
+
 ### Architecture
 
 | Layer | Technology |
@@ -43,6 +60,7 @@ Type any of these in the chat input or use the quick-action buttons in the right
 | `show commit graph` | `git log --graph --decorate --oneline --all` |
 | `show stashes` / `inspect stash@{0}` | `git stash list` / `git stash show --patch` |
 | `show remotes` | `git remote -v` |
+| `show tags` / `show tag v0.3.0` | `git tag --list` / `git show --stat <tag>` |
 | `history README.md` / `blame README.md` | `git log --follow` / `git blame` for one file |
 | `show conflicts` | Conflicted files, conflict marker snippets, and next-step guidance |
 | `refresh remote status` / `fetch` | `git fetch --prune` — updates ahead/behind counts |
@@ -206,6 +224,18 @@ abort merge
 
 Runs: `git merge --no-edit <branch>` from a clean working tree. If conflicts occur, the app shows conflicted files and marker snippets, allows staging resolved conflicted files, and can either complete the merge with `git commit --no-edit` or abort with `git merge --abort`.
 
+#### Release tags
+
+```
+show tags
+show tag v0.3.0
+create tag v0.3.0 with message "Release v0.3.0"
+push tag v0.3.0
+delete tag v0.3.0
+```
+
+Tag reads run instantly. Tag writes use the normal reviewed plan flow: create annotated local tags, push one explicit tag to a known remote, or delete a local tag with a **DESTRUCTIVE** warning.
+
 ### LLM fallback and settings
 
 Phase A includes the AI fallback layer. If the local planner cannot recognise a request, and the selected repository has external AI enabled, the app can call a configured provider and validate the returned structured Git plan before showing the same approval UI.
@@ -234,6 +264,7 @@ Phase A includes the AI fallback layer. If the local planner cannot recognise a 
 | Not supported | Why deferred |
 |---|---|
 | `git rebase`, `cherry-pick` | Complex multi-step operations; Phase 3 scope |
+| `git revert <commit>` | Safe undo-by-new-commit workflow; planned for a future reviewed app flow |
 | `git reset` | Destructive history rewrite; intentionally blocked |
 | Force push | Intentionally blocked |
 | Repos with submodules | Not supported |
@@ -267,14 +298,31 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [x] Stash list with inspect/apply/drop actions.
 - [x] Remote management UI.
 - [x] Merge/conflict detection and guided conflict workflow.
+- [x] Release tag list/inspect/create/delete/push workflow.
 
-### Phase D - AI-native Git workflows
+### Phase D - AI-native Git workflows - complete
 
-- [ ] AI commit message generation from staged diff.
-- [ ] AI commit composer that splits mixed work into logical commits.
-- [ ] Branch, file, and PR-ready change summaries.
-- [ ] Risk scoring before approval.
-- [ ] Privacy receipt showing exactly what context was sent to an external provider.
+- [x] AI commit message generation from selected commit wizard diff.
+- [x] AI commit composer that splits mixed work into logical commits.
+- [x] Branch, file, and PR-ready change summaries.
+- [x] Risk scoring before approval.
+- [x] Privacy receipt showing exactly what context was sent to an external provider.
+
+### Phase D.1 - GitHub release publisher - complete
+
+- [x] Store a GitHub release token encrypted in local settings.
+- [x] Detect GitHub owner/repo from the configured remote URL.
+- [x] Guide the user through tag, title, description, asset selection, and final confirmation.
+- [x] Create a GitHub draft release and upload one installer asset after explicit approval.
+- [x] Return release URL, asset URL, and SHA-256 checksum in the transcript.
+
+### Phase D.3 - Repository provider awareness - complete
+
+- [x] Detect remote providers per selected repository from configured remote URLs.
+- [x] Label GitHub, GitLab, Bitbucket, Azure DevOps, unknown, local-only, and mixed-provider repositories in the right panel.
+- [x] Keep standard Git workflows provider-neutral for GitHub, GitLab, Bitbucket, Azure DevOps, self-hosted, and local remotes.
+- [x] Guard GitHub-only draft release publishing with a provider-specific message when the selected repo is not GitHub-backed.
+- [x] Use provider awareness as the foundation for Phase F multi-provider PR/MR work.
 
 ### Phase E - Agent worktree control plane
 
@@ -283,13 +331,31 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [ ] Compare agent outputs side by side.
 - [ ] Review, merge, abandon, or clean up agent work from the app.
 
-### Phase F - PR and review workflow
+### Phase F - Multi-provider PR/MR and review workflow
 
-- [ ] GitHub integration first.
-- [ ] Create PRs from current branch.
+- [ ] Create GitHub Pull Requests and GitLab Merge Requests from the current branch.
 - [ ] AI-generated PR title/body/checklist from commits and diff.
+- [ ] Add provider adapters for GitHub first, then GitLab, then Bitbucket.
 - [ ] CI status and review comment display.
 - [ ] Review-response workflow.
+
+### Phase G - Cross-platform release
+
+- [ ] Build and verify macOS `.app` / `.dmg` packaging.
+- [ ] Add Apple code signing and notarization path.
+- [ ] Build and verify Linux packaging, starting with AppImage or `.deb`.
+- [ ] Replace Windows-only secret assumptions with platform-specific secure storage.
+- [ ] Verify bundled sidecar startup, Git discovery, file pickers, and installer/update behavior on macOS and Linux.
+- [ ] Document platform-specific install and troubleshooting steps.
+
+### Phase H - Team context and conventions
+
+- [ ] Add repo-local team context, for example `.ai-git-assistant/team-context.md`.
+- [ ] Import team conventions from `CONTRIBUTING.md`, PR templates, changelog rules, and recent commit history.
+- [ ] Let AI commit messages, PR summaries, release notes, branch names, and logical commit splits follow team style.
+- [ ] Add shared convention profiles that can be checked into the repository without storing secrets.
+- [ ] Show a context receipt explaining which team rules influenced an AI suggestion.
+- [ ] Keep team context optional and reviewable so single-user local workflows stay lightweight.
 
 ---
 
@@ -317,10 +383,11 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 
 | Suite | Tests | What is covered |
 |---|---|---|
-| `test_action_planner.py` | 39 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase C stash/read/merge commands |
-| `test_settings_service.py` | 7 | LLM settings defaults, updates, API key persistence, and API key redaction |
+| `test_action_planner.py` | 43 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase C stash/read/merge/tag commands |
+| `test_settings_service.py` | 10 | LLM/GitHub settings defaults, updates, encrypted secret persistence, and secret redaction |
 | `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
-| `test_health.py` | 2 | Authenticated sidecar health checks and protocol version |
-| `test_repository_flow.py` | 22 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase C diff/graph/stash/remote/history/blame/merge flows |
+| `test_health.py` | 3 | Authenticated sidecar health checks, protocol version, and diagnostics metadata |
+| `test_repository_flow.py` | 31 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase C diff/graph/stash/remote/history/blame/merge/tag flows, Phase D commit-message generation, large selections, change summaries, risk, privacy receipts, Phase D.1 GitHub draft releases, and Phase D.3 provider awareness |
+| `test_remote_provider.py` | 1 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
 
-Current verified sidecar suite: 85 passing tests via `npm run sidecar:test`.
+Current verified sidecar suite: 97 passing tests via `npm run sidecar:test`.

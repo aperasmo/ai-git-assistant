@@ -5,11 +5,18 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from app.schemas.settings import LLMProviderKind, LLMSettings, UpdateLLMSettingsRequest
+from app.schemas.settings import (
+    GitHubSettings,
+    LLMProviderKind,
+    LLMSettings,
+    UpdateGitHubSettingsRequest,
+    UpdateLLMSettingsRequest,
+)
 from app.services.secret_store import SecretStore
 
 _LEGACY_API_KEY = "llm_api_key"
 _ENCRYPTED_API_KEY = "llm_api_key_dpapi"
+_ENCRYPTED_GITHUB_TOKEN = "github_token_dpapi"
 _LLM_KEYS = ("llm_provider", _LEGACY_API_KEY, _ENCRYPTED_API_KEY, "llm_model", "llm_base_url")
 
 
@@ -92,6 +99,40 @@ class SettingsService:
 
     def api_key_storage_kind(self) -> str:
         return SecretStore.storage_kind()
+
+    def get_github_settings(self) -> GitHubSettings:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (_ENCRYPTED_GITHUB_TOKEN,),
+            ).fetchone()
+
+        return GitHubSettings(token_set=bool((row["value"] if row else "").strip()))
+
+    def get_raw_github_token(self) -> str | None:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (_ENCRYPTED_GITHUB_TOKEN,),
+            ).fetchone()
+
+        encrypted = (row["value"] if row else "").strip()
+        if not encrypted:
+            return None
+        return SecretStore.unprotect(encrypted).strip() or None
+
+    def update_github_settings(self, request: UpdateGitHubSettingsRequest) -> GitHubSettings:
+        if request.token is not None:
+            with self._connection() as conn:
+                if request.token.strip():
+                    conn.execute(
+                        "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+                        (_ENCRYPTED_GITHUB_TOKEN, SecretStore.protect(request.token.strip())),
+                    )
+                else:
+                    conn.execute("DELETE FROM app_settings WHERE key = ?", (_ENCRYPTED_GITHUB_TOKEN,))
+
+        return self.get_github_settings()
 
     def update_llm_settings(self, request: UpdateLLMSettingsRequest) -> LLMSettings:
         updates: list[tuple[str, str]] = []

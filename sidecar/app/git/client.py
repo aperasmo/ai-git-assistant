@@ -167,6 +167,22 @@ class GitClient:
             arguments = ["diff", "HEAD", "--no-ext-diff", "--find-renames", "--patch"]
         return self.run(arguments).stdout
 
+    def diff_patch_for_paths(self, paths: Sequence[str]) -> str:
+        if not paths:
+            return self.diff_patch("all")
+        return self.run(
+            [
+                "diff",
+                "HEAD",
+                "--no-ext-diff",
+                "--find-renames",
+                "--patch",
+                "--",
+                *paths,
+            ],
+            allow_failure=True,
+        ).stdout
+
     def fetch_prune(self) -> GitResult:
         return self.run(["fetch", "--prune"], timeout_seconds=45)
 
@@ -264,6 +280,41 @@ class GitClient:
 
     def remote_verbose(self) -> str:
         return self.run(["remote", "-v"], allow_failure=True).stdout
+
+    def tag_list(self) -> str:
+        return self.run(
+            [
+                "tag",
+                "--list",
+                "--sort=-creatordate",
+                "--format=%(refname:short)%09%(creatordate:iso8601)%09%(subject)",
+            ],
+            allow_failure=True,
+        ).stdout
+
+    def tag_show(self, tag_name: str) -> str:
+        return self.run(
+            [
+                "show",
+                "--stat",
+                "--decorate",
+                "--no-ext-diff",
+                "--format=fuller",
+                tag_name,
+            ]
+        ).stdout
+
+    def create_annotated_tag(self, tag_name: str, message: str) -> GitResult:
+        return self.run(["tag", "-a", tag_name, "-m", message])
+
+    def delete_tag(self, tag_name: str) -> GitResult:
+        return self.run(["tag", "-d", tag_name])
+
+    def push_tag(self, remote: str, tag_name: str) -> GitResult:
+        return self.run(
+            ["push", "--porcelain", remote, f"refs/tags/{tag_name}:refs/tags/{tag_name}"],
+            timeout_seconds=90,
+        )
 
     def push_current_head(self, remote: str, branch: str) -> GitResult:
         # Intentionally non-force; pins the remote ref previewed to the user.

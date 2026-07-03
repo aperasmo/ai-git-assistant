@@ -15,7 +15,7 @@ def test_diagnostics_excludes_secrets(app_client, auth_headers):
     assert response.status_code == 200
     body = response.json()
 
-    assert body["appVersion"] == "0.1.0"
+    assert body["appVersion"] == "0.4.0"
     assert body["protocolVersion"] == "1"
     assert body["apiKeyStorage"]
     assert "session" not in str(body).lower()

@@ -15,6 +15,7 @@ from app.schemas.repositories import (
 )
 
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
+_TAG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 _PUSH_TAIL_PATTERN = re.compile(
     r"^,?\s*(?:then\s+)?push(?:\s+(?:current\s+branch|to\s+(?P<branch>[A-Za-z0-9._/-]+)))?\s*$",
     re.IGNORECASE,
@@ -79,6 +80,19 @@ _STASH_PATTERN = re.compile(
 )
 _DELETE_BRANCH_PATTERN = re.compile(
     r"^\s*(?:delete|remove)\s+branch\s+(?P<branch>[A-Za-z0-9._/-]+)\s*[.!?]*$",
+    re.IGNORECASE,
+)
+_CREATE_TAG_PATTERN = re.compile(
+    r"^\s*(?:create\s+)?(?:annotated\s+)?tag\s+(?P<tag>[A-Za-z0-9][A-Za-z0-9._/-]{0,254})\s+"
+    r"(?:with\s+)?(?:message\s+(?:is\s+)?)?(?P<quote>[\"'])(?P<tag_msg>.+?)(?P=quote)\s*[.!?]*$",
+    re.IGNORECASE | re.DOTALL,
+)
+_DELETE_TAG_PATTERN = re.compile(
+    r"^\s*(?:delete|remove)\s+tag\s+(?P<tag>[A-Za-z0-9][A-Za-z0-9._/-]{0,254})\s*[.!?]*$",
+    re.IGNORECASE,
+)
+_PUSH_TAG_PATTERN = re.compile(
+    r"^\s*push\s+tag\s+(?P<tag>[A-Za-z0-9][A-Za-z0-9._/-]{0,254})(?:\s+to\s+(?P<remote>[A-Za-z0-9._-]+))?\s*[.!?]*$",
     re.IGNORECASE,
 )
 _STAGE_ALL_THEN_COMMIT_PATTERN = re.compile(
@@ -291,6 +305,30 @@ class LocalActionPlanner:
         delete_branch_match = _DELETE_BRANCH_PATTERN.match(raw_message)
         if delete_branch_match:
             return self._plan_delete_branch(repository_id, raw_message, snapshot, delete_branch_match.group("branch"))
+
+        create_tag_match = _CREATE_TAG_PATTERN.match(raw_message)
+        if create_tag_match:
+            return self._plan_create_tag(
+                repository_id,
+                raw_message,
+                snapshot,
+                create_tag_match.group("tag"),
+                create_tag_match.group("tag_msg"),
+            )
+
+        delete_tag_match = _DELETE_TAG_PATTERN.match(raw_message)
+        if delete_tag_match:
+            return self._plan_delete_tag(repository_id, raw_message, snapshot, delete_tag_match.group("tag"))
+
+        push_tag_match = _PUSH_TAG_PATTERN.match(raw_message)
+        if push_tag_match:
+            return self._plan_push_tag(
+                repository_id,
+                raw_message,
+                snapshot,
+                push_tag_match.group("tag"),
+                push_tag_match.group("remote"),
+            )
 
         return LocalActionPlan(
             matched=False,
@@ -1070,6 +1108,95 @@ class LocalActionPlanner:
             ],
         )
 
+    def _plan_create_tag(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+        tag_name: str,
+        tag_message: str,
+    ) -> LocalActionPlan:
+        self._ensure_writes_allowed(snapshot)
+        validated_tag = self._validate_tag_name(tag_name)
+        validated_message = self._validate_tag_message(tag_message)
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.CREATE_TAG,
+                    title=f"Create tag '{validated_tag}'",
+                    detail=(
+                        f"Create annotated local tag '{validated_tag}' at the current HEAD. "
+                        "The tag is not pushed until you explicitly push it."
+                    ),
+                    commit_message=validated_message,
+                    tag_name=validated_tag,
+                    command_preview=self._command_preview(
+                        "git", "tag", "-a", validated_tag, "-m", validated_message
+                    ),
+                )
+            ],
+        )
+
+    def _plan_delete_tag(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+        tag_name: str,
+    ) -> LocalActionPlan:
+        self._ensure_writes_allowed(snapshot)
+        validated_tag = self._validate_tag_name(tag_name)
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.DELETE_TAG,
+                    title=f"Delete tag '{validated_tag}'",
+                    detail=(
+                        f"DESTRUCTIVE - delete local tag '{validated_tag}'. "
+                        "This does not delete the tag from any remote."
+                    ),
+                    tag_name=validated_tag,
+                    command_preview=self._command_preview("git", "tag", "-d", validated_tag),
+                )
+            ],
+        )
+
+    def _plan_push_tag(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+        tag_name: str,
+        requested_remote: str | None,
+    ) -> LocalActionPlan:
+        self._ensure_writes_allowed(snapshot)
+        validated_tag = self._validate_tag_name(tag_name)
+        remote = self._resolve_tag_remote(requested_remote, snapshot.remote_names)
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.PUSH_TAG,
+                    title=f"Push tag '{validated_tag}'",
+                    detail=(
+                        f"Push only tag '{validated_tag}' to remote '{remote}'. "
+                        "Other local tags are not published."
+                    ),
+                    remote=remote,
+                    tag_name=validated_tag,
+                    command_preview=self._command_preview("git", "push", remote, validated_tag),
+                )
+            ],
+        )
+
     @staticmethod
     def _command_preview(*arguments: str) -> str:
         return " ".join(
@@ -1207,6 +1334,55 @@ class LocalActionPlanner:
         return candidate
 
     @staticmethod
+    def _validate_tag_name(value: str) -> str:
+        candidate = value.strip().strip("`'\"").strip().rstrip(".!?")
+        if (
+            not _TAG_PATTERN.fullmatch(candidate)
+            or ".." in candidate
+            or "@{" in candidate
+            or candidate.endswith(".")
+            or candidate.endswith("/")
+            or "//" in candidate
+            or candidate.startswith("-")
+        ):
+            raise ValidationFailure(f"'{value}' is not a valid tag name.")
+        return candidate
+
+    @staticmethod
+    def _validate_tag_message(value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValidationFailure("Tag messages cannot be blank.")
+        if "\x00" in candidate or "\n" in candidate or "\r" in candidate:
+            raise ValidationFailure("Tag messages must be one line and cannot contain control characters.")
+        if len(candidate) > 300:
+            raise ValidationFailure("Tag messages must be 300 characters or fewer in v1.")
+        return candidate
+
+    @staticmethod
+    def _resolve_tag_remote(requested_remote: str | None, remote_names: list[str]) -> str:
+        if not remote_names:
+            raise ValidationFailure(
+                "Tag push is unavailable because no Git remote is configured."
+            )
+
+        if requested_remote:
+            candidate = requested_remote.strip()
+            if candidate not in remote_names:
+                raise ValidationFailure(f"Remote '{candidate}' is not configured for this repository.")
+            return candidate
+
+        if "origin" in remote_names:
+            return "origin"
+        if len(remote_names) == 1:
+            return remote_names[0]
+
+        names = ", ".join(remote_names)
+        raise ValidationFailure(
+            f"Multiple remotes are configured ({names}). Specify the target, e.g. 'push tag v0.3.0 to origin'."
+        )
+
+    @staticmethod
     def _is_staged_target(target: str) -> bool:
         return target.casefold().strip() in {
             "staged changes",
@@ -1274,6 +1450,8 @@ class LocalActionPlanner:
             ReadAction.FILE_HISTORY: "Read file history",
             ReadAction.BLAME: "Read file blame",
             ReadAction.CONFLICTS: "Read conflict guidance",
+            ReadAction.TAGS: "Read tags",
+            ReadAction.TAG_SHOW: "Inspect tag",
         }
         return titles.get(action, "Read local repository state")
 

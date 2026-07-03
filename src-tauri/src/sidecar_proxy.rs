@@ -14,7 +14,7 @@ impl SidecarProxy {
         // The Rust layer owns this HTTP client. React never receives either
         // the sidecar endpoint or the per-session token used below.
         let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(20))
+            .timeout(std::time::Duration::from_secs(90))
             .build()
             .map_err(|error| format!("Unable to create local HTTP client: {error}"))?;
         Ok(Self { client })
@@ -58,7 +58,6 @@ impl SidecarProxy {
             .map_err(|error| format!("The local service could not be reached: {error}"))?;
 
         if !response.status().is_success() {
-            let status = response.status();
             let body = response.text().await.unwrap_or_default();
             let detail = serde_json::from_str::<serde_json::Value>(&body)
                 .ok()
@@ -68,7 +67,7 @@ impl SidecarProxy {
                     other => other.to_string(),
                 })
                 .unwrap_or_else(|| "The local service rejected the request.".to_owned());
-            return Err(format!("{detail} ({status})"));
+            return Err(detail);
         }
         Ok(())
     }
@@ -110,7 +109,6 @@ impl SidecarProxy {
             .map_err(|error| format!("The local service could not be reached: {error}"))?;
 
         if !response.status().is_success() {
-            let status = response.status();
             let body = response.text().await.unwrap_or_default();
             let detail = serde_json::from_str::<serde_json::Value>(&body)
                 .ok()
@@ -120,7 +118,7 @@ impl SidecarProxy {
                     other => other.to_string(),
                 })
                 .unwrap_or_else(|| "The local service rejected the request.".to_owned());
-            return Err(format!("{detail} ({status})"));
+            return Err(detail);
         }
 
         response

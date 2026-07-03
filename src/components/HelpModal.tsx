@@ -10,7 +10,7 @@ const FILTERS: { value: HelpCategory | "all"; label: string }[] = [
   { value: "all",      label: "All" },
   { value: "read",     label: "Read" },
   { value: "write",    label: "Write" },
-  { value: "terminal", label: "Terminal only" },
+  { value: "terminal", label: "Terminal / blocked" },
 ];
 
 export function HelpModal({ open, onClose }: HelpModalProps) {
@@ -98,6 +98,22 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
         </div>
 
         <div className="help-body">
+          <section className="help-coverage-card">
+            <div>
+              <span className="help-section-label">COMMON GIT COVERAGE</span>
+              <h3>18 of 20 important Git functions are available in the app</h3>
+              <p>
+                The two exceptions are deliberate: <strong>revert commit</strong> is a safe next candidate,
+                while <strong>reset hard</strong> is intentionally blocked because it can permanently discard work.
+              </p>
+            </div>
+            <div className="help-coverage-stats">
+              <span><strong>18</strong> in app</span>
+              <span><strong>1</strong> planned</span>
+              <span><strong>1</strong> blocked</span>
+            </div>
+          </section>
+
           {filtered.length === 0 ? (
             <p className="help-empty">No commands match "{search}"</p>
           ) : (
@@ -106,7 +122,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                 <div className="help-section-header">
                   <span className="help-section-label">{CATEGORY_LABELS[category]}</span>
                   {category === "terminal" && (
-                    <span className="help-terminal-hint">Run these in your terminal — not yet available in app</span>
+                    <span className="help-terminal-hint">Terminal-only, planned, or intentionally blocked in app</span>
                   )}
                 </div>
                 <div className="help-grid">

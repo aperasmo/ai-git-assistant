@@ -62,6 +62,14 @@ class BranchInfo(ApiModel):
     upstream: str | None = None
 
 
+class RemoteProviderInfo(ApiModel):
+    remote: str
+    provider: Literal["github", "gitlab", "bitbucket", "azure_devops", "unknown"]
+    label: str
+    host: str | None = None
+    url: str | None = None
+
+
 class RepositorySnapshot(ApiModel):
     repository_id: str
     branch: str | None = None
@@ -80,6 +88,7 @@ class RepositorySnapshot(ApiModel):
     recent_commits: list[RecentCommit] = Field(default_factory=list)
     remote_names: list[str] = Field(default_factory=list)
     remote_urls: dict[str, str] = Field(default_factory=dict)
+    remote_providers: list[RemoteProviderInfo] = Field(default_factory=list)
     local_branches: list[BranchInfo] = Field(default_factory=list)
 
 
@@ -96,6 +105,8 @@ class ReadAction(StrEnum):
     FILE_HISTORY = "file_history"
     BLAME = "blame"
     CONFLICTS = "conflicts"
+    TAGS = "tags"
+    TAG_SHOW = "tag_show"
 
 
 class ReadActionRequest(ApiModel):
@@ -154,6 +165,9 @@ class PlanStepKind(StrEnum):
     MERGE = "merge"
     MERGE_ABORT = "merge_abort"
     MERGE_COMMIT = "merge_commit"
+    CREATE_TAG = "create_tag"
+    DELETE_TAG = "delete_tag"
+    PUSH_TAG = "push_tag"
     DELETE_BRANCH = "delete_branch"
     ADD_REMOTE = "add_remote"
     RENAME_BRANCH = "rename_branch"
@@ -169,11 +183,32 @@ class ActionPlanStep(ApiModel):
     branch: str | None = None
     remote_url: str | None = None
     stash_ref: str | None = None
+    tag_name: str | None = None
     command_preview: str | None = None
     ahead: int | None = None
     behind: int | None = None
     force: bool | None = None
     set_upstream: bool = False
+
+
+class PlanRisk(ApiModel):
+    level: Literal["low", "medium", "high"]
+    score: int = Field(ge=0, le=100)
+    summary: str
+    reasons: list[str] = Field(default_factory=list)
+
+
+class PrivacyReceipt(ApiModel):
+    external_provider: bool
+    purpose: str
+    provider: str | None = None
+    model: str | None = None
+    context_items: list[str] = Field(default_factory=list)
+    files: list[str] = Field(default_factory=list)
+    character_count: int = 0
+    truncated: bool = False
+    exact_context: str | None = None
+
 
 class LocalActionPlan(ApiModel):
     matched: bool
@@ -187,6 +222,8 @@ class LocalActionPlan(ApiModel):
     steps: list[ActionPlanStep] = Field(default_factory=list)
     explanation: str
     source: str = "local"
+    risk: PlanRisk | None = None
+    privacy_receipt: PrivacyReceipt | None = None
 
 
 class AddToGitignoreRequest(ApiModel):
@@ -200,6 +237,59 @@ class SubmitPlanRequest(ApiModel):
 
 class SubmitPlanResponse(ApiModel):
     plan_id: str
+
+
+class GenerateCommitMessageRequest(ApiModel):
+    paths: list[str] = Field(default_factory=list, max_length=100)
+
+
+class GenerateCommitMessageResponse(ApiModel):
+    message: str
+    source: str = "llm"
+    context_summary: str
+    privacy_receipt: PrivacyReceipt | None = None
+
+
+class GenerateChangeSummaryRequest(ApiModel):
+    paths: list[str] = Field(default_factory=list, max_length=100)
+
+
+class CommitSuggestion(ApiModel):
+    message: str
+    files: list[str] = Field(default_factory=list)
+    rationale: str = ""
+
+
+class GenerateChangeSummaryResponse(ApiModel):
+    branch_summary: str
+    file_summaries: list[str] = Field(default_factory=list)
+    pr_title: str
+    pr_body: str
+    commit_suggestions: list[CommitSuggestion] = Field(default_factory=list)
+    source: str = "llm"
+    context_summary: str
+    privacy_receipt: PrivacyReceipt | None = None
+
+
+class DraftGitHubReleaseRequest(ApiModel):
+    tag_name: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=255)
+    body: str = Field(default="", max_length=20_000)
+    asset_path: str | None = Field(default=None, max_length=4096)
+    prerelease: bool = False
+
+
+class DraftGitHubReleaseResponse(ApiModel):
+    tag_name: str
+    repository: str
+    release_url: str
+    asset_url: str | None = None
+    asset_name: str | None = None
+    asset_sha256: str | None = None
+    title: str
+    summary: str
+    content: str
+    snapshot: RepositorySnapshot
 
 
 class CloneRepositoryRequest(ApiModel):

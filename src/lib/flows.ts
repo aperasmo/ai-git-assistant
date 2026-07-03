@@ -8,6 +8,7 @@ export type WizardFlowId =
   | "branches"
   | "stashes"
   | "remotes"
+  | "tags"
   | "conflicts"
   | "fetch"
   | "commit_push"
@@ -16,7 +17,8 @@ export type WizardFlowId =
   | "pull"
   | "stash"
   | "discard"
-  | "connect_remote";
+  | "connect_remote"
+  | "draft_release";
 
 export interface FlowDef {
   id: WizardFlowId;
@@ -34,6 +36,7 @@ export const FLOWS: FlowDef[] = [
   { id: "branches", label: "All branches", icon: "B", description: "List local branches", category: "read" },
   { id: "stashes", label: "Stashes", icon: "T", description: "Inspect saved work", category: "read" },
   { id: "remotes", label: "Remotes", icon: "R", description: "Show remote URLs", category: "read" },
+  { id: "tags", label: "Tags", icon: "#", description: "List release tags", category: "read" },
   { id: "conflicts", label: "Conflicts", icon: "!", description: "Guided conflict status", category: "read" },
   { id: "fetch", label: "Fetch remote", icon: "F", description: "Refresh remote status", category: "read" },
   { id: "commit_push", label: "Commit & push", icon: "P", description: "Stage, commit and push", category: "write" },
@@ -43,6 +46,7 @@ export const FLOWS: FlowDef[] = [
   { id: "stash", label: "Stash changes", icon: "H", description: "Save work in progress", category: "write" },
   { id: "discard", label: "Discard changes", icon: "X", description: "Revert file changes", category: "write" },
   { id: "connect_remote", label: "Connect remote", icon: "@", description: "Add GitHub/GitLab origin", category: "write" },
+  { id: "draft_release", label: "Draft release", icon: "V", description: "Create a GitHub draft release", category: "write" },
 ];
 
 export const FLOW_LABELS: Record<WizardFlowId, string> = Object.fromEntries(
@@ -54,12 +58,17 @@ export interface WizardData {
   message?: string;
   remote?: string;
   branch?: string;
+  tagName?: string;
+  releaseTitle?: string;
+  releaseBody?: string;
+  assetPath?: string;
+  prerelease?: boolean;
 }
 
 export interface WizardState {
   flowId: WizardFlowId;
   currentStepId: string;
-  currentStepKind: "file_pick" | "text_input" | "option_select" | "confirm";
+  currentStepKind: "file_pick" | "text_input" | "asset_pick" | "option_select" | "confirm";
   data: WizardData;
 }
 
@@ -71,6 +80,7 @@ export const FLOW_READ_ACTIONS: Partial<Record<WizardFlowId, ReadAction>> = {
   branches: "branches",
   stashes: "stashes",
   remotes: "remotes",
+  tags: "tags",
   conflicts: "conflicts",
   fetch: "fetch",
 };

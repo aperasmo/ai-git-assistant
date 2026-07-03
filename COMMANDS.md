@@ -2,6 +2,8 @@
 
 Every typed request is resolved locally first. Write operations always create a reviewed plan before anything changes.
 
+Provider awareness is per selected repository. The app reads configured remotes and labels GitHub, GitLab, Bitbucket, Azure DevOps, unknown, local-only, and mixed-provider repositories in the right panel. Standard Git commands work across providers; platform-specific actions explain when the selected provider is not supported yet.
+
 ## Read Commands
 
 Read commands run immediately and never modify the repository.
@@ -18,6 +20,8 @@ Read commands run immediately and never modify the repository.
 | `show stashes`, `stash list` | `git stash list` | Lists saved stash entries. |
 | `inspect stash@{0}`, `show stash@{1}` | `git stash show --patch --stat` | Shows one stash without applying it. |
 | `show remotes`, `list remotes` | `git remote -v` | Shows configured fetch/push URLs. |
+| `show tags`, `list tags` | `git tag --list` | Lists local release tags. |
+| `show tag v0.3.0`, `inspect tag v0.3.0` | `git show --stat v0.3.0` | Shows one tag without changing the repo. |
 | `history README.md`, `file history src/App.tsx` | `git log --follow -- <path>` | File-specific commit history. |
 | `blame README.md`, `who touched src/App.tsx` | `git blame -- <path>` | Line authorship for one file. |
 | `show conflicts`, `merge conflicts` | status plus file snippets | Shows conflicted files, marker snippets, and next steps. |
@@ -128,6 +132,18 @@ abort merge
 ```
 
 Merge requires a clean working tree and runs `git merge --no-edit <branch>`. If conflicts occur, the app reports the conflicted files, shows conflict marker snippets, allows staging resolved conflicted files, and then completes the merge with `git commit --no-edit`. `abort merge` runs `git merge --abort`.
+
+### Release Tags
+
+```text
+show tags
+show tag v0.3.0
+create tag v0.3.0 with message "Release v0.3.0"
+push tag v0.3.0
+delete tag v0.3.0
+```
+
+Creates annotated local tags with `git tag -a <tag> -m <message>`. `push tag` publishes one explicit tag only, never every local tag. `delete tag` removes the local tag and is marked DESTRUCTIVE before approval.
 
 ## Always Blocked
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { desktopApi } from "../lib/api";
-import type { LLMProviderKind, LLMSettings } from "../lib/types";
+import type { GitHubSettings, LLMProviderKind, LLMSettings } from "../lib/types";
 
 interface SettingsModalProps {
   open: boolean;
@@ -26,8 +26,10 @@ const DEFAULT_MODELS: Record<LLMProviderKind, string> = {
 
 export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const [settings, setSettings] = useState<LLMSettings | null>(null);
+  const [githubSettings, setGithubSettings] = useState<GitHubSettings | null>(null);
   const [provider, setProvider] = useState<LLMProviderKind | "">("");
   const [apiKey, setApiKey] = useState("");
+  const [githubToken, setGithubToken] = useState("");
   const [model, setModel] = useState("");
   const [baseUrl, setBaseUrl] = useState("http://localhost:11434");
   const [saving, setSaving] = useState(false);
@@ -42,14 +44,15 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     setSaveError(null);
     setSaved(false);
     setTestResult(null);
-    desktopApi
-      .getLlmSettings()
-      .then((s) => {
+    Promise.all([desktopApi.getLlmSettings(), desktopApi.getGithubSettings()])
+      .then(([s, gh]) => {
         setSettings(s);
+        setGithubSettings(gh);
         setProvider(s.provider ?? "");
         setModel(s.model ?? "");
         setBaseUrl(s.baseUrl ?? "http://localhost:11434");
         setApiKey("");
+        setGithubToken("");
       })
       .catch(() => {});
 
@@ -74,7 +77,8 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     provider !== (settings?.provider ?? "") ||
     model.trim() !== (settings?.model ?? "") ||
     (isOllama && baseUrl.trim() !== (settings?.baseUrl ?? "http://localhost:11434")) ||
-    apiKey !== "";
+    apiKey !== "" ||
+    githubToken !== "";
 
   async function handleSave() {
     setSaving(true);
@@ -87,10 +91,18 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
         model: model.trim() || null,
         baseUrl: isOllama ? (baseUrl.trim() || null) : null,
       });
+      if (githubToken !== "") {
+        await desktopApi.updateGithubSettings({ token: githubToken || null });
+      }
       // Re-fetch so settings reflects saved state and isDirty resets to false
-      const updated = await desktopApi.getLlmSettings();
+      const [updated, updatedGithub] = await Promise.all([
+        desktopApi.getLlmSettings(),
+        desktopApi.getGithubSettings(),
+      ]);
       setSettings(updated);
+      setGithubSettings(updatedGithub);
       setApiKey("");
+      setGithubToken("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       if (provider) onSaved?.(provider, (model.trim() || DEFAULT_MODELS[provider as LLMProviderKind]) ?? "");
@@ -222,6 +234,27 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
               {testResult.ok ? "✓ " : "✗ "}{testResult.message}
             </p>
           )}
+          <p className="settings-section-heading">GITHUB RELEASE PUBLISHER</p>
+          <p className="settings-hint">
+            Required for drafting GitHub releases and uploading installer assets. Use a fine-grained
+            token scoped to the release repository with Contents read/write access.
+          </p>
+          <label className="settings-label" htmlFor="github-token-input">
+            GitHub token{githubSettings?.tokenSet ? " (token stored - enter a new one to replace)" : ""}
+          </label>
+          <input
+            id="github-token-input"
+            type="password"
+            className="settings-input"
+            value={githubToken}
+            onChange={(e) => setGithubToken(e.target.value)}
+            placeholder={githubSettings?.tokenSet ? "Stored token" : "Paste a fine-grained GitHub token"}
+            autoComplete="off"
+          />
+          <p className="settings-hint warning">
+            The token is encrypted locally before storage. Draft releases still require your explicit
+            wizard confirmation before anything is sent to GitHub.
+          </p>
         </div>
 
         <div className="modal-footer">

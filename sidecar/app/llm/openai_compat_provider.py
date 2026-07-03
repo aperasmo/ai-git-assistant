@@ -48,6 +48,22 @@ class OpenAICompatProvider(LLMProvider):
             messages=[{"role": "user", "content": "ping"}],
         )
 
+    def complete_text(self, system_prompt: str, user_message: str, *, max_tokens: int = 120) -> str:
+        response = self._client.chat.completions.create(
+            model=self._model,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+        )
+
+        text = response.choices[0].message.content or ""
+        text = text.strip()
+        if not text:
+            raise RuntimeError("The AI did not return text.")
+        return text
+
     def complete(self, system_prompt: str, user_message: str) -> list[dict]:
         response = self._client.chat.completions.create(
             model=self._model,

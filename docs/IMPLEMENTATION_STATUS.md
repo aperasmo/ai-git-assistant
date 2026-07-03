@@ -30,7 +30,7 @@
 
 - Plan-then-approve flow: `POST /v1/repositories/{id}/resolve-local` creates an in-memory plan keyed by UUID; `POST /v1/repositories/{id}/execute-plan` runs only after explicit user approval.
 - Local action planner (`LocalActionPlanner`) — regex-based, builds `LocalActionPlan` from intent-matched requests.
-- Eight write commands via the plan engine:
+- Reviewed write commands via the plan engine:
   - `STAGE` — stage explicit file paths
   - `UNSTAGE` — remove files from the index
   - `DISCARD` — discard worktree changes (destructive, confirmed)
@@ -42,24 +42,40 @@
   - `STASH` — stash with optional label
   - `STASH_POP` — pop the most recent stash
   - `DELETE_BRANCH` — delete a local branch
+  - `CREATE_TAG` — create an annotated release tag
+  - `PUSH_TAG` — push one explicit tag to a known remote
+  - `DELETE_TAG` — delete a local tag
 - Stale-plan recheck: the snapshot is re-read immediately before execution; the plan is rejected if the repository changed since planning.
 - `PlanCard` component in the chat transcript — shows steps, approve/cancel buttons, and step-by-step status after execution.
 - Pre-execution recheck guards against write operations on stale state.
 
 ### Phase 3 — LLM fallback layer and settings UI
 
-- **Provider abstraction:** `LLMProvider` abstract base class with five concrete provider configurations:
+- **Provider abstraction:** `LLMProvider` abstract base class with structured plan generation and plain-text completion, backed by five concrete provider configurations:
   - `AnthropicProvider` — uses the Anthropic SDK with tool use (`create_git_plan` tool); default model `claude-haiku-4-5-20251001`.
   - `OllamaProvider` — HTTP calls to a local Ollama instance; default model `llama3.2`, default base URL `http://localhost:11434`.
   - `OpenAICompatProvider` — shared implementation covering OpenAI (`gpt-4o-mini`), Groq (`llama-3.3-70b-versatile`, base URL `https://api.groq.com/openai/v1`), and Gemini (`gemini-3.5-flash`, base URL `https://generativelanguage.googleapis.com/v1beta/openai/`). Gemini uses Google's OpenAI-compatible endpoint — no additional SDK required.
 - **LLM fallback routing:** when the local planner returns `matched=False` and the repository has `external_llm_allowed=True`, `LLMRouter` calls the configured provider, validates the returned steps, and produces a `LocalActionPlan` with `source="llm"`.
 - **Structured output:** Claude uses Anthropic tool use; OpenAI/Groq/Ollama use OpenAI function calling format. The LLM returns steps in the same `LocalActionPlan` schema the local planner uses, so the approval UI is unchanged.
-- **Plan validation (`validate_llm_steps`):** rejects empty plans, plans exceeding 8 steps, unknown step kinds, wildcard paths (`.`, `*`, `all`, `**`), paths not in the repository's changed files, unknown remotes, and commits without a message.
+- **Plan validation (`validate_llm_steps`):** rejects empty plans, plans exceeding 8 steps, unknown step kinds, wildcard paths (`.`, `*`, `all`, `**`), paths not in the repository's changed files, unknown remotes, missing tag names, and commits/tags without required messages.
 - **Settings storage:** `app_settings` SQLite table (key-value); `SettingsService` manages CRUD. API keys are encrypted with Windows DPAPI before storage and never returned via the settings API — only `api_key_set: bool` is exposed.
 - **Settings API:** `GET /v1/settings/llm` and `PUT /v1/settings/llm`.
 - **Per-repository AI toggle:** `POST /v1/repositories/{id}/set-llm`; `external_llm_allowed` column in the `repositories` table.
 - **Tauri commands:** `get_llm_settings`, `update_llm_settings`, `set_repository_llm_allowed`.
 - **Settings modal:** provider selector, API key field (password), model field, Ollama base URL field, and encrypted-local-storage notice.
+
+### Phase D — AI-native Git workflows
+
+- **Version line:** Phase D builds use `0.4.x`; the first Phase D build is `0.4.0`.
+- **AI commit-message generation:** the commit wizard can request one concise commit subject from the configured provider using only the selected files.
+- **AI change summaries:** the context panel can analyze selected working-tree changes and return branch/file summaries, PR title/body, and logical commit suggestions.
+- **Risk scoring:** pending write plans include deterministic low/medium/high risk metadata before approval.
+- **Privacy receipts:** external-AI calls return provider/model, context item types, exact context sent, file count, character count, and truncation status.
+- **Repository provider awareness:** snapshots classify configured remotes as GitHub, GitLab, Bitbucket, Azure DevOps, unknown, local-only, or mixed-provider so platform-specific features can explain what is available for the selected repository.
+- **Provider-aware release guard:** GitHub draft release publishing runs only for GitHub-backed repositories. GitLab, Bitbucket, Azure DevOps, local-only, and unknown remotes receive a clear unsupported-platform message while normal Git workflows remain available.
+- **Repository AI opt-in enforced:** commit-message generation is blocked unless `external_llm_allowed=True` for that repository.
+- **Diff context bounds:** selected tracked paths use `git diff HEAD --patch -- <paths>`; selected untracked files include bounded file snippets; total context is capped before provider calls.
+- **Provider reuse:** Anthropic, OpenAI-compatible providers, and Ollama all support the same `complete_text` provider method.
 - **AI toggle in the context panel:** per-repository switch with `role="switch"` / `aria-checked`.
 - **AI badge on plan cards:** plans generated by the LLM show "AI GIT PLAN" with a purple `AI` badge.
 - **`source` field on `LocalActionPlan`:** `"local"` or `"llm"` to distinguish plan origin.
@@ -101,7 +117,8 @@ Sidecar binary: built with PyInstaller at `src-tauri/binaries/ai-git-sidecar-x86
 ## Remaining work
 
 - Installer signing is deferred for early releases; see `docs/INSTALLER_SIGNING.md`.
-- Phase C Git client parity is implemented: visual commit graph, full patch diff, file history/blame, stash inspect/apply/drop, remote listing, and guided merge conflict workflow.
+- Phase C Git client parity is implemented: visual commit graph, full patch diff, file history/blame, stash inspect/apply/drop, remote listing, release tag workflows, and guided merge conflict workflow.
+- Phase D AI-native Git workflows are implemented: commit messages, change summaries, logical commit suggestions, PR-ready summaries, risk scoring, privacy receipts, GitHub release publishing, and repository provider awareness.
 
 ---
 

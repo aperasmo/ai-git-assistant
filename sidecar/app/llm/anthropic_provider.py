@@ -26,6 +26,24 @@ class AnthropicProvider(LLMProvider):
             messages=[{"role": "user", "content": "ping"}],
         )
 
+    def complete_text(self, system_prompt: str, user_message: str, *, max_tokens: int = 120) -> str:
+        response = self._client.messages.create(
+            model=self._model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        )
+
+        parts: list[str] = []
+        for block in response.content:
+            if block.type == "text":
+                parts.append(block.text)
+
+        text = "\n".join(parts).strip()
+        if not text:
+            raise RuntimeError("The AI did not return text.")
+        return text
+
     def complete(self, system_prompt: str, user_message: str) -> list[dict]:
         response = self._client.messages.create(
             model=self._model,

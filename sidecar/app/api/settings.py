@@ -5,7 +5,12 @@ from pydantic import BaseModel
 
 from app.auth import require_session_token
 from app.llm.router import LLMNotConfiguredError, _build_provider
-from app.schemas.settings import LLMSettings, UpdateLLMSettingsRequest
+from app.schemas.settings import (
+    GitHubSettings,
+    LLMSettings,
+    UpdateGitHubSettingsRequest,
+    UpdateLLMSettingsRequest,
+)
 
 router = APIRouter(prefix="/v1/settings", tags=["settings"])
 
@@ -38,6 +43,27 @@ def update_llm_settings(
     request: Request,
 ) -> LLMSettings:
     return _settings_service(request).update_llm_settings(payload)
+
+
+@router.get(
+    "/github",
+    response_model=GitHubSettings,
+    dependencies=[Depends(require_session_token)],
+)
+def get_github_settings(request: Request) -> GitHubSettings:
+    return _settings_service(request).get_github_settings()
+
+
+@router.put(
+    "/github",
+    response_model=GitHubSettings,
+    dependencies=[Depends(require_session_token)],
+)
+def update_github_settings(
+    payload: UpdateGitHubSettingsRequest,
+    request: Request,
+) -> GitHubSettings:
+    return _settings_service(request).update_github_settings(payload)
 
 
 @router.post(

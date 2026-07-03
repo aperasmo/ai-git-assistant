@@ -5,7 +5,10 @@ use crate::{
     app_state::AppState,
     models::{
         repositories::Repository,
-        settings::{LLMSettings, SetExternalLLMRequest, UpdateLLMSettingsRequest},
+        settings::{
+            GitHubSettings, LLMSettings, SetExternalLLMRequest, UpdateGitHubSettingsRequest,
+            UpdateLLMSettingsRequest,
+        },
     },
     sidecar_proxy::SidecarProxy,
 };
@@ -31,6 +34,23 @@ pub async fn update_llm_settings(
     proxy: State<'_, SidecarProxy>,
 ) -> Result<LLMSettings, String> {
     proxy.put(&state, "/v1/settings/llm", &request).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_github_settings(
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GitHubSettings, String> {
+    proxy.get(&state, "/v1/settings/github").await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn update_github_settings(
+    request: UpdateGitHubSettingsRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GitHubSettings, String> {
+    proxy.put(&state, "/v1/settings/github", &request).await
 }
 
 #[tauri::command(rename_all = "camelCase")]

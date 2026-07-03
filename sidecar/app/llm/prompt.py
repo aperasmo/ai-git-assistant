@@ -59,6 +59,9 @@ merge        — merge a local branch               (branch required)
 merge_abort  — abort an in-progress merge
 merge_commit — finish a resolved merge
 delete_branch — safe-delete a local branch       (branch required)
+create_tag   — create an annotated local tag      (tag_name + commit_message required)
+delete_tag   — delete a local tag — DESTRUCTIVE   (tag_name required)
+push_tag     — push one tag to one remote         (remote + tag_name required)
 
 ━━━ STEP FORMATTING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -89,6 +92,7 @@ PLAN_TOOL: dict = {
                                 "unstage", "discard", "switch", "create_branch",
                                 "stash", "stash_pop", "stash_apply", "stash_drop",
                                 "merge", "merge_abort", "merge_commit", "delete_branch",
+                                "create_tag", "delete_tag", "push_tag",
                             ],
                         },
                         "title": {
@@ -108,6 +112,7 @@ PLAN_TOOL: dict = {
                         "remote": {"type": "string"},
                         "branch": {"type": "string"},
                         "stash_ref": {"type": "string"},
+                        "tag_name": {"type": "string"},
                         "set_upstream": {"type": "boolean"},
                         "command_preview": {"type": "string"},
                     },
@@ -125,6 +130,60 @@ PLAN_TOOL_OPENAI_FORMAT: dict = {
     "description": PLAN_TOOL["description"],
     "parameters": PLAN_TOOL["input_schema"],
 }
+
+
+COMMIT_MESSAGE_SYSTEM_PROMPT = """\
+You write concise Git commit messages.
+Return exactly one commit subject line.
+Use imperative mood, no trailing period, no quotes, no markdown.
+Keep it 72 characters or fewer.
+Do not mention file counts unless the change is only file movement or cleanup.
+"""
+
+
+CHANGE_SUMMARY_SYSTEM_PROMPT = """\
+You are an AI Git reviewer inside a desktop Git client.
+Summarize the selected working-tree changes for review before commit or PR creation.
+Return only valid JSON with this exact shape:
+{
+  "branch_summary": "one short paragraph",
+  "file_summaries": ["file: what changed"],
+  "pr_title": "short PR title",
+  "pr_body": "markdown body with summary and testing/checks if inferable",
+  "commit_suggestions": [
+    {"message": "imperative commit subject", "files": ["path"], "rationale": "why these files belong together"}
+  ]
+}
+Rules:
+- Use only the files and patch content provided.
+- Do not invent tests, issues, branches, or files.
+- Split mixed work into 1-5 logical commit suggestions.
+- Commit messages must be 72 characters or fewer and use imperative mood.
+"""
+
+
+def build_commit_message_user_message(*, branch: str | None, diff_context: str) -> str:
+    return "\n".join(
+        [
+            f"Current branch: {branch or 'detached HEAD'}",
+            "",
+            "Generate a commit message for this reviewed change:",
+            "",
+            diff_context,
+        ]
+    )
+
+
+def build_change_summary_user_message(*, branch: str | None, diff_context: str) -> str:
+    return "\n".join(
+        [
+            f"Current branch: {branch or 'detached HEAD'}",
+            "",
+            "Analyze these selected changes:",
+            "",
+            diff_context,
+        ]
+    )
 
 
 def build_user_message(message: str, snapshot: RepositorySnapshot) -> str:

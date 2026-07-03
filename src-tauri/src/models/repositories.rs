@@ -46,6 +46,16 @@ pub struct ReadActionRequest {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RemoteProviderInfo {
+    pub remote: String,
+    pub provider: String,
+    pub label: String,
+    pub host: Option<String>,
+    pub url: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepositorySnapshot {
     pub repository_id: String,
     pub branch: Option<String>,
@@ -66,6 +76,8 @@ pub struct RepositorySnapshot {
     pub remote_names: Vec<String>,
     #[serde(default)]
     pub remote_urls: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub remote_providers: Vec<RemoteProviderInfo>,
     #[serde(default)]
     pub local_branches: Vec<Value>,
 }
@@ -95,6 +107,7 @@ pub struct ActionPlanStep {
     pub branch: Option<String>,
     pub remote_url: Option<String>,
     pub stash_ref: Option<String>,
+    pub tag_name: Option<String>,
     pub command_preview: Option<String>,
     pub ahead: Option<i32>,
     pub behind: Option<i32>,
@@ -118,12 +131,69 @@ pub struct LocalActionPlan {
     #[serde(default)]
     pub steps: Vec<ActionPlanStep>,
     pub explanation: String,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub risk: Option<Value>,
+    #[serde(default)]
+    pub privacy_receipt: Option<Value>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionExecutionResult {
     pub plan_id: String,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+    pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateCommitMessageResponse {
+    pub message: String,
+    pub source: String,
+    pub context_summary: String,
+    #[serde(default)]
+    pub privacy_receipt: Option<Value>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateChangeSummaryResponse {
+    pub branch_summary: String,
+    #[serde(default)]
+    pub file_summaries: Vec<String>,
+    pub pr_title: String,
+    pub pr_body: String,
+    #[serde(default)]
+    pub commit_suggestions: Vec<Value>,
+    pub source: String,
+    pub context_summary: String,
+    #[serde(default)]
+    pub privacy_receipt: Option<Value>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftGitHubReleaseRequest {
+    pub tag_name: String,
+    pub title: String,
+    pub body: String,
+    pub asset_path: Option<String>,
+    pub prerelease: bool,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftGitHubReleaseResponse {
+    pub tag_name: String,
+    pub repository: String,
+    pub release_url: String,
+    pub asset_url: Option<String>,
+    pub asset_name: Option<String>,
+    pub asset_sha256: Option<String>,
     pub title: String,
     pub summary: String,
     pub content: String,
