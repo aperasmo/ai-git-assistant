@@ -183,6 +183,21 @@ class GitClient:
             allow_failure=True,
         ).stdout
 
+    def diff_numstat_for_paths(self, paths: Sequence[str]) -> str:
+        if not paths:
+            return ""
+        return self.run(
+            [
+                "diff",
+                "HEAD",
+                "--no-ext-diff",
+                "--numstat",
+                "--",
+                *paths,
+            ],
+            allow_failure=True,
+        ).stdout
+
     def fetch_prune(self) -> GitResult:
         return self.run(["fetch", "--prune"], timeout_seconds=45)
 

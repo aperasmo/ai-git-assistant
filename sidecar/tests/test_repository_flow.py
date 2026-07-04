@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.llm.router import CommitMessageDraft
+
 
 def test_register_and_read_status(app_client, auth_headers, git_repository):
     register = app_client.post(
@@ -572,10 +574,18 @@ def test_generate_commit_message_uses_selected_changed_files(
     class FakeLLMRouter:
         def __init__(self) -> None:
             self.diff_context = ""
+            self.style = ""
 
-        def commit_message(self, *, branch, diff_context):
+        def commit_message(self, *, branch, diff_context, style="detailed"):
             self.diff_context = diff_context
-            return "Update README copy"
+            self.style = style
+            return CommitMessageDraft(
+                subject="Update README copy",
+                body=["Refresh README documentation"],
+                confidence="high",
+                detected_scope=["docs"],
+                alternatives=["Refresh README content"],
+            )
 
     register = app_client.post(
         "/v1/repositories/register",
@@ -598,15 +608,28 @@ def test_generate_commit_message_uses_selected_changed_files(
     response = app_client.post(
         f"/v1/repositories/{repository_id}/generate-commit-message",
         headers=auth_headers,
-        json={"paths": ["README.md"]},
+        json={"paths": ["README.md"], "style": "conventional"},
     )
 
     assert response.status_code == 200, response.json()
-    assert response.json()["message"] == "Update README copy"
-    assert response.json()["contextSummary"] == "Generated from 1 selected file."
+    assert response.json()["subject"] == "Update README copy"
+    assert response.json()["body"] == ["Refresh README documentation"]
+    assert response.json()["style"] == "conventional"
+    assert response.json()["confidence"] == "high"
+    assert response.json()["detectedScope"] == ["docs"]
+    assert response.json()["alternatives"] == ["Refresh README content"]
+    assert response.json()["message"] == "Update README copy\n\n- Refresh README documentation"
+    assert response.json()["contextSummary"] == "Generated one conventional message from 1 selected file."
     assert response.json()["privacyReceipt"]["externalProvider"] is True
     assert response.json()["privacyReceipt"]["files"] == ["README.md"]
+    assert "Organized change map" in response.json()["privacyReceipt"]["contextItems"]
+    assert "Diff stats" in response.json()["privacyReceipt"]["contextItems"]
+    assert "Recent commit subjects" in response.json()["privacyReceipt"]["contextItems"]
     assert "Tracked file patch" in response.json()["privacyReceipt"]["contextItems"]
+    assert fake_router.style == "conventional"
+    assert "Group: README.md" in fake_router.diff_context
+    assert "+2/-0" in fake_router.diff_context
+    assert "Recent commit style examples:" in fake_router.diff_context
     assert "README.md" in fake_router.diff_context
     assert "Changed." in fake_router.diff_context
 
@@ -620,9 +643,12 @@ def test_generate_commit_message_allows_large_file_selection(
         def __init__(self) -> None:
             self.diff_context = ""
 
-        def commit_message(self, *, branch, diff_context):
+        def commit_message(self, *, branch, diff_context, style="detailed"):
             self.diff_context = diff_context
-            return "Update generated files"
+            return CommitMessageDraft(
+                subject="Update generated files",
+                body=["Refresh generated text artifacts"],
+            )
 
     paths: list[str] = []
     for index in range(43):
@@ -657,8 +683,10 @@ def test_generate_commit_message_allows_large_file_selection(
     )
 
     assert response.status_code == 200, response.json()
-    assert response.json()["message"] == "Update generated files"
-    assert response.json()["contextSummary"] == "Generated from 43 selected files."
+    assert response.json()["message"] == "Update generated files\n\n- Refresh generated text artifacts"
+    assert response.json()["contextSummary"] == "Generated one detailed message from 43 selected files."
+    assert "Organized change map" in fake_router.diff_context
+    assert "Group: generated" in fake_router.diff_context
     assert response.json()["privacyReceipt"]["files"] == paths
 
 

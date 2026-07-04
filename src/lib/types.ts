@@ -254,8 +254,17 @@ export interface ActionExecutionResult {
   snapshot: RepositorySnapshot;
 }
 
+export type CommitMessageStyle = "concise" | "detailed" | "conventional" | "release_ready";
+
 export interface GenerateCommitMessageResponse {
   message: string;
+  subject: string;
+  body: string[];
+  warning?: string | null;
+  style: CommitMessageStyle;
+  confidence: "low" | "medium" | "high";
+  detectedScope: string[];
+  alternatives: string[];
   source: "llm";
   contextSummary: string;
   privacyReceipt?: PrivacyReceipt | null;

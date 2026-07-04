@@ -60,8 +60,8 @@ export const desktopApi = {
   submitActionPlan: (repositoryId: string, steps: ActionPlanStep[]) =>
     invoke<{ planId: string }>("submit_action_plan", { repositoryId, steps }),
 
-  generateCommitMessage: (repositoryId: string, paths: string[]) =>
-    invoke<GenerateCommitMessageResponse>("generate_commit_message", { repositoryId, paths }),
+  generateCommitMessage: (repositoryId: string, paths: string[], style = "detailed") =>
+    invoke<GenerateCommitMessageResponse>("generate_commit_message", { repositoryId, paths, style }),
 
   generateChangeSummary: (repositoryId: string, paths: string[]) =>
     invoke<GenerateChangeSummaryResponse>("generate_change_summary", { repositoryId, paths }),

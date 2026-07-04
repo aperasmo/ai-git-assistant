@@ -36,6 +36,14 @@ fn default_read_action_params() -> Value {
     Value::Object(Default::default())
 }
 
+fn default_commit_style() -> String {
+    "detailed".to_string()
+}
+
+fn default_commit_confidence() -> String {
+    "medium".to_string()
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadActionRequest {
@@ -153,6 +161,20 @@ pub struct ActionExecutionResult {
 #[serde(rename_all = "camelCase")]
 pub struct GenerateCommitMessageResponse {
     pub message: String,
+    #[serde(default)]
+    pub subject: String,
+    #[serde(default)]
+    pub body: Vec<String>,
+    #[serde(default)]
+    pub warning: Option<String>,
+    #[serde(default = "default_commit_style")]
+    pub style: String,
+    #[serde(default = "default_commit_confidence")]
+    pub confidence: String,
+    #[serde(default)]
+    pub detected_scope: Vec<String>,
+    #[serde(default)]
+    pub alternatives: Vec<String>,
     pub source: String,
     pub context_summary: String,
     #[serde(default)]

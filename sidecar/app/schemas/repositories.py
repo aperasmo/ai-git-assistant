@@ -239,12 +239,23 @@ class SubmitPlanResponse(ApiModel):
     plan_id: str
 
 
+CommitMessageStyle = Literal["concise", "detailed", "conventional", "release_ready"]
+
+
 class GenerateCommitMessageRequest(ApiModel):
     paths: list[str] = Field(default_factory=list, max_length=100)
+    style: CommitMessageStyle = "detailed"
 
 
 class GenerateCommitMessageResponse(ApiModel):
     message: str
+    subject: str
+    body: list[str] = Field(default_factory=list)
+    warning: str | None = None
+    style: CommitMessageStyle = "detailed"
+    confidence: Literal["low", "medium", "high"] = "medium"
+    detected_scope: list[str] = Field(default_factory=list)
+    alternatives: list[str] = Field(default_factory=list)
     source: str = "llm"
     context_summary: str
     privacy_receipt: PrivacyReceipt | None = None

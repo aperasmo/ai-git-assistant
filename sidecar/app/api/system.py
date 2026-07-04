@@ -53,7 +53,7 @@ def diagnostics(request: Request) -> DiagnosticsResponse:
         repository_count = 0
 
     return DiagnosticsResponse(
-        app_version="0.4.0",
+        app_version="0.4.4",
         environment=settings.environment,
         protocol_version="1",
         database_path=str(settings.database_path),

@@ -177,7 +177,7 @@ def generate_commit_message(
     payload: GenerateCommitMessageRequest,
     request: Request,
 ) -> GenerateCommitMessageResponse:
-    return _service(request).generate_commit_message(repository_id, payload.paths)
+    return _service(request).generate_commit_message(repository_id, payload.paths, payload.style)
 
 
 @router.post(

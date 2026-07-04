@@ -23,6 +23,7 @@ import type {
   ActionPlanStep,
   BootstrapStatus,
   ChatTranscriptEntry,
+  CommitMessageStyle,
   FolderClassification,
   GenerateChangeSummaryResponse,
   GenerateCommitMessageResponse,
@@ -82,12 +83,21 @@ function toErrorMessage(cause: unknown, fallback: string): string {
 
 function changedPaths(snapshot: RepositorySnapshot | null): string[] {
   if (!snapshot) return [];
-  return Array.from(
+  return sortRepositoryPaths(Array.from(
     new Set([
       ...snapshot.stagedChanges.map((item) => item.path),
       ...snapshot.modifiedChanges.map((item) => item.path),
       ...snapshot.untrackedPaths.map((item) => item.path),
     ]),
+  ));
+}
+
+function sortRepositoryPaths(paths: string[]): string[] {
+  return [...paths].sort((left, right) =>
+    left.localeCompare(right, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
   );
 }
 
@@ -688,8 +698,9 @@ export default function App() {
       .filter((f, i, arr) => arr.indexOf(f) === i)
       .filter((f) => !ignored.has(f))
       .filter((f) => !isWindowsReservedPath(f));
+    const sortedFiles = sortRepositoryPaths(allFiles);
 
-    if (allFiles.length === 0) {
+    if (sortedFiles.length === 0) {
       // Clean tree + commit_push + remote configured → offer push-only (no stage/commit needed).
       if (flowId === "commit_push" && (snapshot?.remoteNames ?? []).length > 0) {
         const remote = snapshot?.remoteNames?.[0] ?? "origin";
@@ -742,7 +753,7 @@ export default function App() {
       stepKind: "file_pick",
       prompt: "Which files do you want to include?",
       status: "active",
-      choices: allFiles,
+      choices: sortedFiles,
     });
   }
 
@@ -751,8 +762,9 @@ export default function App() {
       ...(snapshot?.modifiedChanges ?? []).map((c) => c.path),
       ...(snapshot?.untrackedPaths ?? []).map((c) => c.path),
     ].filter((f, i, arr) => arr.indexOf(f) === i).filter((f) => !isWindowsReservedPath(f));
+    const sortedFiles = sortRepositoryPaths(allFiles);
 
-    if (allFiles.length === 0) {
+    if (sortedFiles.length === 0) {
       appendTranscriptEntry(repositoryId, {
         id: createTranscriptId(),
         kind: "error",
@@ -770,7 +782,7 @@ export default function App() {
       stepKind: "file_pick",
       prompt: "Which files do you want to discard changes in?",
       status: "active",
-      choices: allFiles,
+      choices: sortedFiles,
     });
   }
 
@@ -1263,13 +1275,16 @@ export default function App() {
     }
   }
 
-  async function generateCommitMessage(paths: string[]): Promise<GenerateCommitMessageResponse> {
+  async function generateCommitMessage(
+    paths: string[],
+    style: CommitMessageStyle = "detailed",
+  ): Promise<GenerateCommitMessageResponse> {
     const repositoryId = activeRepositoryId;
     if (!repositoryId) {
       throw new Error("Select a repository before generating a message.");
     }
 
-    const result = await desktopApi.generateCommitMessage(repositoryId, paths);
+    const result = await desktopApi.generateCommitMessage(repositoryId, paths, style);
     if (activeRepositoryIdRef.current === repositoryId) {
       const fresh = await desktopApi.getRepositorySnapshot(repositoryId);
       if (activeRepositoryIdRef.current === repositoryId) setSnapshot(fresh);

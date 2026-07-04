@@ -133,11 +133,29 @@ PLAN_TOOL_OPENAI_FORMAT: dict = {
 
 
 COMMIT_MESSAGE_SYSTEM_PROMPT = """\
-You write concise Git commit messages.
-Return exactly one commit subject line.
-Use imperative mood, no trailing period, no quotes, no markdown.
-Keep it 72 characters or fewer.
-Do not mention file counts unless the change is only file movement or cleanup.
+You write Git commit messages for a desktop Git client.
+Return only valid JSON with this exact shape:
+{
+  "subject": "one concise imperative commit subject",
+  "body": ["optional bullet without leading dash"],
+  "warning": "optional warning if the subject may be too narrow",
+  "confidence": "low | medium | high",
+  "detected_scope": ["backend", "frontend", "docs", "tests", "config", "data"],
+  "alternatives": ["optional alternative subject"]
+}
+Rules:
+- Produce one consolidated commit message for all selected files.
+- Do not split into multiple commits unless the user explicitly asks.
+- The subject must cover the whole selected change set, not just one visible file.
+- Use imperative mood, no trailing period, no quotes, no markdown in the subject.
+- Keep the subject 72 characters or fewer.
+- Use 0-5 body bullets only when they add useful context for multi-file changes.
+- For concise style, prefer subject only unless a body is truly needed.
+- For detailed style, include useful body bullets when multiple domains or files changed.
+- For conventional style, prefix the subject with a fitting type such as feat, fix, docs, test, refactor, chore, or build.
+- For release-ready style, write a clear subject and body that could also seed release notes.
+- Return 0-3 alternative subjects that fit the requested style.
+- Do not invent tests, issues, branches, files, or intent that is not supported by context.
 """
 
 
@@ -162,12 +180,13 @@ Rules:
 """
 
 
-def build_commit_message_user_message(*, branch: str | None, diff_context: str) -> str:
+def build_commit_message_user_message(*, branch: str | None, diff_context: str, style: str) -> str:
     return "\n".join(
         [
             f"Current branch: {branch or 'detached HEAD'}",
+            f"Requested commit style: {style}",
             "",
-            "Generate a commit message for this reviewed change:",
+            "Generate one consolidated commit message for this reviewed change:",
             "",
             diff_context,
         ]

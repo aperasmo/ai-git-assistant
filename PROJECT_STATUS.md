@@ -22,7 +22,7 @@ Versions track the active product phase so releases are easy to understand:
 | Phase G | `0.7.x` | Cross-platform release |
 | Phase H | `0.8.x` | Team context and conventions |
 
-The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase D.3 uses `0.4.3`.
+The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase D.4 uses `0.4.4`.
 
 ### Architecture
 
@@ -302,7 +302,7 @@ Phase A is complete and has already been published as a Windows installer. Phase
 
 ### Phase D - AI-native Git workflows - complete
 
-- [x] AI commit message generation from selected commit wizard diff.
+- [x] AI commit message generation from selected commit wizard diff, including consolidated subject/body drafts for multi-file changes.
 - [x] AI commit composer that splits mixed work into logical commits.
 - [x] Branch, file, and PR-ready change summaries.
 - [x] Risk scoring before approval.
@@ -323,6 +323,13 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [x] Keep standard Git workflows provider-neutral for GitHub, GitLab, Bitbucket, Azure DevOps, self-hosted, and local remotes.
 - [x] Guard GitHub-only draft release publishing with a provider-specific message when the selected repo is not GitHub-backed.
 - [x] Use provider awareness as the foundation for Phase F multi-provider PR/MR work.
+
+### Phase D.4 - Premium commit message composer - complete
+
+- [x] Add commit-message style modes: Detailed, Concise, Conventional, and Release.
+- [x] Enrich AI commit context with grouped paths, file status, diff stats, detected domains, and recent commit subjects.
+- [x] Return confidence, detected scope, and alternate subjects with the generated commit draft.
+- [x] Show richer commit draft controls in the wizard while keeping the final commit message editable.
 
 ### Phase E - Agent worktree control plane
 
@@ -387,7 +394,7 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 | `test_settings_service.py` | 10 | LLM/GitHub settings defaults, updates, encrypted secret persistence, and secret redaction |
 | `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
 | `test_health.py` | 3 | Authenticated sidecar health checks, protocol version, and diagnostics metadata |
-| `test_repository_flow.py` | 31 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase C diff/graph/stash/remote/history/blame/merge/tag flows, Phase D commit-message generation, large selections, change summaries, risk, privacy receipts, Phase D.1 GitHub draft releases, and Phase D.3 provider awareness |
-| `test_remote_provider.py` | 1 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
+| `test_repository_flow.py` | 32 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase C diff/graph/stash/remote/history/blame/merge/tag flows, Phase D premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase D.1 GitHub draft releases, Phase D.3 provider awareness, and Phase D.4 commit style modes |
+| `test_remote_provider.py` | 9 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
 
-Current verified sidecar suite: 97 passing tests via `npm run sidecar:test`.
+Current verified sidecar suite: 109 passing tests via `npm run sidecar:test`.

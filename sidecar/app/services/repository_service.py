@@ -20,6 +20,7 @@ from app.schemas.repositories import (
     ActionPlanStep,
     BranchInfo,
     CancelActionPlanResponse,
+    CommitMessageStyle,
     DraftGitHubReleaseRequest,
     DraftGitHubReleaseResponse,
     GenerateChangeSummaryResponse,
@@ -342,6 +343,7 @@ class RepositoryService:
         self,
         repository_id: str,
         paths: list[str],
+        style: CommitMessageStyle = "detailed",
     ) -> GenerateCommitMessageResponse:
         repository = self.store.get(repository_id)
         if not repository.external_llm_allowed:
@@ -362,9 +364,10 @@ class RepositoryService:
         if not diff_context.content.strip():
             raise ValidationFailure("There is no diff context available for the selected files.")
 
-        message = self._llm_router.commit_message(
+        draft = self._llm_router.commit_message(
             branch=snapshot.branch,
             diff_context=diff_context.content,
+            style=style,
         )
         receipt = self._llm_privacy_receipt(
             purpose="Generate commit message",
@@ -374,9 +377,16 @@ class RepositoryService:
             truncated=diff_context.truncated,
         )
         return GenerateCommitMessageResponse(
-            message=message,
+            message=draft.message,
+            subject=draft.subject,
+            body=draft.body,
+            warning=draft.warning,
+            style=style,
+            confidence=draft.confidence,
+            detected_scope=draft.detected_scope or [],
+            alternatives=draft.alternatives or [],
             context_summary=(
-                f"Generated from {len(selected_paths)} selected file"
+                f"Generated one {style.replace('_', ' ')} message from {len(selected_paths)} selected file"
                 f"{'s' if len(selected_paths) != 1 else ''}."
             ),
             privacy_receipt=receipt,
@@ -1181,9 +1191,29 @@ class RepositoryService:
         snapshot: RepositorySnapshot,
     ) -> AiDiffContext:
         client = GitClient(canonical_path)
-        lines: list[str] = ["Selected files:"]
-        lines.extend(f"- {path}" for path in paths)
-        context_items = ["Selected file paths"]
+        status_map = RepositoryService._ai_change_status_map(snapshot)
+        stat_map = RepositoryService._ai_diff_stat_map(client, canonical_path, paths, snapshot)
+        lines: list[str] = [f"Selected files: {len(paths)}"]
+        lines.extend(
+            [
+                "",
+                "Instruction: Generate one consolidated commit message for all selected files.",
+                "",
+                "Organized change map:",
+            ]
+        )
+        lines.extend(RepositoryService._render_ai_change_map(paths, status_map, stat_map))
+        if snapshot.recent_commits:
+            lines.extend(
+                [
+                    "",
+                    "Recent commit style examples:",
+                    *[f"- {commit.subject}" for commit in snapshot.recent_commits[:5]],
+                ]
+            )
+        context_items = ["Selected file paths", "Organized change map", "Diff stats"]
+        if snapshot.recent_commits:
+            context_items.append("Recent commit subjects")
 
         tracked_paths = {
             item.path
@@ -1237,6 +1267,140 @@ class RepositoryService:
             context_items=list(dict.fromkeys(context_items)),
             truncated=True,
         )
+
+    @staticmethod
+    def _ai_change_status_map(snapshot: RepositorySnapshot) -> dict[str, str]:
+        statuses: dict[str, str] = {}
+        for item in snapshot.staged_changes:
+            statuses[item.path] = RepositoryService._ai_change_label(item.index_status, fallback="staged")
+        for item in snapshot.modified_changes:
+            existing = statuses.get(item.path)
+            label = RepositoryService._ai_change_label(item.worktree_status, fallback="modified")
+            statuses[item.path] = f"{existing}, {label}" if existing else label
+        for item in snapshot.untracked_paths:
+            statuses[item.path] = "untracked"
+        for item in snapshot.conflicts:
+            statuses[item.path] = "conflict"
+        return statuses
+
+    @staticmethod
+    def _render_ai_change_map(
+        paths: list[str],
+        status_map: dict[str, str],
+        stat_map: dict[str, tuple[str, str]],
+    ) -> list[str]:
+        grouped: dict[str, list[str]] = {}
+        for path in paths:
+            group = RepositoryService._ai_change_group(path)
+            grouped.setdefault(group, []).append(path)
+
+        lines: list[str] = []
+        for group in sorted(grouped):
+            lines.append(f"Group: {group}")
+            for path in sorted(grouped[group]):
+                status = status_map.get(path, "changed")
+                added, removed = stat_map.get(path, ("?", "?"))
+                domain = RepositoryService._ai_change_domain(path)
+                lines.append(f"- {path} [{status}; +{added}/-{removed}; {domain}]")
+                lines.append(f"  Summary: {RepositoryService._ai_change_hint(path, status)}")
+            lines.append("")
+        if lines and lines[-1] == "":
+            lines.pop()
+        return lines
+
+    @staticmethod
+    def _ai_change_group(path: str) -> str:
+        parts = PurePosixPath(path).parts
+        if len(parts) >= 2:
+            return "/".join(parts[:2])
+        if parts:
+            return parts[0]
+        return "."
+
+    @staticmethod
+    def _ai_change_hint(path: str, status: str) -> str:
+        if "deleted" in status:
+            return "removed stale or replaced file content"
+        if "untracked" in status:
+            return "new file added to the change set"
+
+        suffix = PurePosixPath(path).suffix.lower()
+        if suffix == ".py":
+            return "updated Python application logic"
+        if suffix in {".tsx", ".ts", ".jsx", ".js"}:
+            return "updated frontend or TypeScript behavior"
+        if suffix in {".css", ".scss"}:
+            return "updated interface styling"
+        if suffix in {".md", ".mdx"}:
+            return "updated documentation"
+        if suffix in {".json", ".toml", ".yaml", ".yml"}:
+            return "updated project configuration or structured data"
+        if suffix in {".csv", ".tsv"}:
+            return "updated generated or tabular data"
+        return "updated file content"
+
+    @staticmethod
+    def _ai_change_domain(path: str) -> str:
+        lower = path.lower()
+        parts = PurePosixPath(lower).parts
+        suffix = PurePosixPath(lower).suffix
+        if (
+            any(part in {"test", "tests", "__tests__", "spec"} for part in parts)
+            or lower.endswith((".spec.ts", ".test.ts", ".spec.tsx", ".test.tsx", ".spec.js", ".test.js"))
+        ):
+            return "tests"
+        if any(part in {"docs", "documentation"} for part in parts) or suffix in {".md", ".mdx"}:
+            return "docs"
+        if any(part in {"frontend", "src", "components", "pages", "ui"} for part in parts) and suffix in {".tsx", ".ts", ".jsx", ".js", ".css", ".scss"}:
+            return "frontend"
+        if any(part in {"backend", "sidecar", "api", "services", "app"} for part in parts) or suffix == ".py":
+            return "backend"
+        if suffix in {".json", ".toml", ".yaml", ".yml", ".lock"}:
+            return "config"
+        if suffix in {".csv", ".tsv", ".parquet", ".xlsx"} or "output" in parts or "generated" in parts:
+            return "data"
+        return "other"
+
+    @staticmethod
+    def _ai_diff_stat_map(
+        client: GitClient,
+        canonical_path,
+        paths: list[str],
+        snapshot: RepositorySnapshot,
+    ) -> dict[str, tuple[str, str]]:
+        stats: dict[str, tuple[str, str]] = {}
+        raw = client.diff_numstat_for_paths(paths)
+        for line in raw.splitlines():
+            fields = line.split("\t")
+            if len(fields) < 3:
+                continue
+            added, removed, path = fields[0], fields[1], fields[-1]
+            stats[path] = (added, removed)
+
+        for item in snapshot.untracked_paths:
+            if item.path not in paths or item.path in stats:
+                continue
+            file_path = canonical_path / item.path
+            if not file_path.is_file():
+                continue
+            try:
+                line_count = len(file_path.read_text(encoding="utf-8", errors="replace").splitlines())
+            except OSError:
+                line_count = 0
+            stats[item.path] = (str(line_count), "0")
+        return stats
+
+    @staticmethod
+    def _ai_change_label(code: str, *, fallback: str) -> str:
+        labels = {
+            "M": "modified",
+            "A": "added",
+            "D": "deleted",
+            "R": "renamed",
+            "C": "copied",
+            "U": "unmerged",
+        }
+        return labels.get(code.strip(), fallback)
 
     def _validate_tag_push_step_against_current_repository(
         self,

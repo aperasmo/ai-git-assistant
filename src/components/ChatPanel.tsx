@@ -2,6 +2,7 @@
 import type {
   ChatTranscriptEntry,
   GenerateCommitMessageResponse,
+  CommitMessageStyle,
   LocalActionPlan,
 } from "../lib/types";
 import type { WizardData, WizardFlowId } from "../lib/flows";
@@ -22,7 +23,7 @@ interface ChatPanelProps {
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
   onAddToGitignore: (paths: string[]) => Promise<void>;
-  onGenerateCommitMessage: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+  onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onPickReleaseAsset: () => Promise<string | null>;
 }
 
@@ -283,7 +284,7 @@ function TranscriptItem({
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
   onAddToGitignore: (paths: string[]) => Promise<void>;
-  onGenerateCommitMessage: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+  onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onPickReleaseAsset: () => Promise<string | null>;
 }) {
   if (entry.kind === "user") {

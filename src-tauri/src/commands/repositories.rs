@@ -241,10 +241,11 @@ pub async fn submit_action_plan(
 pub async fn generate_commit_message(
     repository_id: String,
     paths: Vec<String>,
+    style: Option<String>,
     state: State<'_, AppState>,
     proxy: State<'_, SidecarProxy>,
 ) -> Result<GenerateCommitMessageResponse, String> {
-    let payload = json!({ "paths": paths });
+    let payload = json!({ "paths": paths, "style": style.unwrap_or_else(|| "detailed".to_string()) });
     proxy
         .post(
             &state,

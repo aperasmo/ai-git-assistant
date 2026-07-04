@@ -1,13 +1,27 @@
 import { useState } from "react";
-import type { ChatTranscriptEntry, GenerateCommitMessageResponse } from "../lib/types";
+import type { ChatTranscriptEntry, CommitMessageStyle, GenerateCommitMessageResponse } from "../lib/types";
 import type { WizardData } from "../lib/flows";
 
 type WizardStepEntry = Extract<ChatTranscriptEntry, { kind: "wizard_step" }>;
+
+const COMMIT_MESSAGE_STYLES: { value: CommitMessageStyle; label: string }[] = [
+  { value: "detailed", label: "Detailed" },
+  { value: "concise", label: "Concise" },
+  { value: "conventional", label: "Conventional" },
+  { value: "release_ready", label: "Release" },
+];
 
 function toWizardErrorMessage(cause: unknown): string {
   if (cause instanceof Error && cause.message.trim()) return cause.message;
   if (typeof cause === "string" && cause.trim()) return cause;
   return "AI message generation failed.";
+}
+
+function composeCommitMessage(subject: string, body: string[]): string {
+  const cleanSubject = subject.trim();
+  const cleanBody = body.map((line) => line.trim()).filter(Boolean);
+  if (cleanBody.length === 0) return cleanSubject;
+  return `${cleanSubject}\n\n${cleanBody.map((line) => `- ${line}`).join("\n")}`;
 }
 
 interface WizardStepProps {
@@ -17,7 +31,7 @@ interface WizardStepProps {
   onConfirm: () => void;
   onCancel: () => void;
   onAddToGitignore?: (paths: string[]) => Promise<void>;
-  onGenerateCommitMessage?: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+  onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onPickReleaseAsset?: () => Promise<string | null>;
 }
 
@@ -314,13 +328,15 @@ function TextInputStep({
   busy: boolean;
   onNext: (label: string, data: Partial<WizardData>) => void;
   onCancel: () => void;
-  onGenerateCommitMessage?: (paths: string[]) => Promise<GenerateCommitMessageResponse>;
+  onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
 }) {
   const [value, setValue] = useState("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<GenerateCommitMessageResponse | null>(null);
-  const selectedPaths = entry.prompt === "Commit message" ? entry.choices ?? [] : [];
+  const [style, setStyle] = useState<CommitMessageStyle>("detailed");
+  const isCommitMessage = entry.prompt === "Commit message";
+  const selectedPaths = isCommitMessage ? entry.choices ?? [] : [];
   const canGenerate = selectedPaths.length > 0 && Boolean(onGenerateCommitMessage);
 
   function handleNext() {
@@ -329,12 +345,13 @@ function TextInputStep({
     onNext(trimmed, { message: trimmed });
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(nextStyle = style) {
     if (!onGenerateCommitMessage || generating || selectedPaths.length === 0) return;
+    setStyle(nextStyle);
     setGenerating(true);
     setError(null);
     try {
-      const generated = await onGenerateCommitMessage(selectedPaths);
+      const generated = await onGenerateCommitMessage(selectedPaths, nextStyle);
       setValue(generated.message);
       setReceipt(generated);
     } catch (cause) {
@@ -347,31 +364,80 @@ function TextInputStep({
   return (
     <div className="wizard-step-card">
       <p className="wizard-step-prompt">{entry.prompt}</p>
-      <input
-        type="text"
-        className="wizard-text-input"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") handleNext();
-        }}
-        placeholder="Type here..."
-        disabled={busy}
-        autoFocus
-      />
+      {isCommitMessage ? (
+        <textarea
+          className="wizard-text-input wizard-textarea-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Type here..."
+          disabled={busy}
+          autoFocus
+          rows={receipt?.body.length ? 6 : 3}
+        />
+      ) : (
+        <input
+          type="text"
+          className="wizard-text-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleNext();
+          }}
+          placeholder="Type here..."
+          disabled={busy}
+          autoFocus
+        />
+      )}
       {canGenerate && (
-        <div className="wizard-ai-row">
-          <button
-            type="button"
-            className="wizard-ai-button"
-            disabled={busy || generating}
-            onClick={() => void handleGenerate()}
-          >
-            {generating ? "Generating..." : "Generate with AI"}
-          </button>
-          <span>Uses the selected file diff.</span>
+        <div className="wizard-ai-tools">
+          <div className="wizard-ai-style-row">
+            {COMMIT_MESSAGE_STYLES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={style === option.value ? "wizard-ai-style-button wizard-ai-style-button-active" : "wizard-ai-style-button"}
+                disabled={busy || generating}
+                onClick={() => setStyle(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div className="wizard-ai-row">
+            <button
+              type="button"
+              className="wizard-ai-button"
+              disabled={busy || generating}
+              onClick={() => void handleGenerate()}
+            >
+              {generating ? "Generating..." : "Generate with AI"}
+            </button>
+            <span>Uses selected diffs, stats, and recent commit style.</span>
+          </div>
         </div>
       )}
+      {receipt && (
+        <div className="wizard-ai-draft-meta">
+          <span>Confidence: {receipt.confidence}</span>
+          {receipt.detectedScope.length > 0 && <span>Scope: {receipt.detectedScope.join(", ")}</span>}
+        </div>
+      )}
+      {receipt?.alternatives.length ? (
+        <div className="wizard-ai-alternatives">
+          {receipt.alternatives.map((alternative) => (
+            <button
+              key={alternative}
+              type="button"
+              className="wizard-ai-alternative-button"
+              disabled={busy}
+              onClick={() => setValue(composeCommitMessage(alternative, receipt.body))}
+            >
+              {alternative}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {receipt?.warning && <p className="wizard-ai-warning">{receipt.warning}</p>}
       {error && <p className="wizard-inline-error">{error}</p>}
       {receipt?.privacyReceipt && (
         <details className="wizard-privacy-receipt">
@@ -490,7 +556,16 @@ function ConfirmStep({
           disabled={busy}
           onClick={onConfirm}
         >
-          {busy ? "Executing..." : danger ? "Discard" : "Execute"}
+          {busy ? (
+            <>
+              <span className="wizard-button-spinner" aria-hidden="true" />
+              Executing...
+            </>
+          ) : danger ? (
+            "Discard"
+          ) : (
+            "Execute"
+          )}
         </button>
         <button
           type="button"
