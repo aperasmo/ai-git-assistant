@@ -5,10 +5,11 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 use crate::{
     app_state::AppState,
     models::repositories::{
-        ActionExecutionResult, CancelActionPlanResponse, FolderClassification, LocalActionPlan,
-        DraftGitHubReleaseRequest, DraftGitHubReleaseResponse, GenerateChangeSummaryResponse,
-        GenerateCommitMessageResponse, ReadActionRequest, ReadActionResult, Repository,
-        RepositorySnapshot,
+        ActionExecutionResult, AgentSession, AgentSessionActionResponse,
+        AgentSessionComparisonResponse, CancelActionPlanResponse, CreateAgentSessionRequest,
+        DraftGitHubReleaseRequest, DraftGitHubReleaseResponse, FolderClassification,
+        GenerateChangeSummaryResponse, GenerateCommitMessageResponse, LocalActionPlan,
+        ReadActionRequest, ReadActionResult, Repository, RepositorySnapshot,
     },
     sidecar_proxy::SidecarProxy,
 };
@@ -92,6 +93,103 @@ pub async fn get_repository_snapshot(
 ) -> Result<RepositorySnapshot, String> {
     proxy
         .get(&state, &format!("/v1/repositories/{repository_id}/snapshot"))
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_agent_sessions(
+    repository_id: String,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<Vec<AgentSession>, String> {
+    proxy
+        .get(&state, &format!("/v1/repositories/{repository_id}/agent-sessions"))
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn create_agent_session(
+    repository_id: String,
+    task: String,
+    branch_name: Option<String>,
+    base_branch: Option<String>,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<AgentSession, String> {
+    let request = CreateAgentSessionRequest {
+        task,
+        branch_name,
+        base_branch,
+    };
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/agent-sessions"),
+            &request,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn compare_agent_session(
+    repository_id: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<AgentSessionComparisonResponse, String> {
+    proxy
+        .get(
+            &state,
+            &format!("/v1/repositories/{repository_id}/agent-sessions/{session_id}/compare"),
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn merge_agent_session(
+    repository_id: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<AgentSessionActionResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/agent-sessions/{session_id}/merge"),
+            &json!({}),
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn abandon_agent_session(
+    repository_id: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<AgentSessionActionResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/agent-sessions/{session_id}/abandon"),
+            &json!({}),
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn cleanup_agent_session(
+    repository_id: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<AgentSessionActionResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/agent-sessions/{session_id}/cleanup"),
+            &json!({}),
+        )
         .await
 }
 

@@ -169,6 +169,50 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .quick-actions button { border: 1px solid #2e343d; background: #171b20; color: #aab2be; border-radius: 8px; padding: 8px; font-size: 10.5px; text-align: left; }
 .quick-actions button:hover { border-color: #46505d; color: #e8eaed; }
+.agent-heading { margin-top: 19px; }
+.agent-panel { display: grid; gap: 9px; }
+.agent-create-form { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
+.agent-create-form input {
+  min-width: 0; border: 1px solid #2e343d; border-radius: 8px;
+  background: #0f1216; color: #e8eaed; padding: 8px 9px;
+  font-size: 11px;
+}
+.agent-create-form input::placeholder { color: #626b77; }
+.agent-create-form button,
+.agent-session-actions button {
+  border: 1px solid #2e343d; border-radius: 8px; background: #171b20;
+  color: #aab2be; padding: 8px 9px; font-size: 10.5px; font-weight: 700;
+}
+.agent-create-form button:not(:disabled) {
+  border-color: rgba(52,211,153,.34); background: rgba(52,211,153,.12); color: #7ee7be;
+}
+.agent-panel-header { display: flex; align-items: center; justify-content: space-between; color: #68717d; font-size: 10.5px; }
+.agent-session-list { display: grid; gap: 8px; }
+.agent-session-card {
+  display: grid; gap: 6px; padding: 9px; border: 1px solid #252a32;
+  border-radius: 8px; background: #15191f;
+}
+.agent-session-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.agent-session-title strong { color: #d7dce4; font-size: 11.5px; line-height: 1.35; }
+.agent-session-status {
+  flex: 0 0 auto; padding: 2px 6px; border-radius: 999px;
+  background: #222832; color: #8b949e; font-size: 9px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .055em;
+}
+.agent-session-status.active { background: rgba(52,211,153,.12); color: #34d399; }
+.agent-session-status.merged { background: rgba(109,163,250,.12); color: #6da3fa; }
+.agent-session-status.abandoned,
+.agent-session-status.error { background: rgba(239,110,91,.12); color: #ef9d90; }
+.agent-session-status.cleaned { background: rgba(139,148,158,.1); color: #8b949e; }
+.agent-session-card code {
+  color: #86efc8; font: 10.5px ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+.agent-session-card small { color: #737d8a; font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+.agent-session-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.agent-session-actions button { padding: 6px 8px; }
+.agent-session-actions button:not(:disabled):hover,
+.agent-create-form button:not(:disabled):hover { border-color: #46505d; color: #e8eaed; }
 
 .startup-screen { height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at 50% 20%, #151a21 0, #0b0d10 48%); }
 .startup-card { width: min(410px, calc(100vw - 44px)); text-align: center; padding: 34px; border: 1px solid #252a32; border-radius: 15px; background: rgba(20,23,28,.88); }
@@ -845,7 +889,20 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   padding: 8px 12px; border-radius: 8px;
   background: rgba(52,211,153,.06); border: 1px solid rgba(52,211,153,.18);
 }
+.wizard-step-executing {
+  background: rgba(96,165,250,.08);
+  border-color: rgba(96,165,250,.24);
+}
 .wizard-done-icon { color: #34d399; font-size: 13px; flex: 0 0 auto; }
+.wizard-done-spinner {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 2px solid #60a5fa;
+  border-right-color: transparent;
+  animation: wizard-spin .7s linear infinite;
+}
 .wizard-done-text { color: #8a9199; font-size: 12px; }
 .wizard-done-text strong { color: #c3cad4; font-weight: 600; }
 
@@ -1295,7 +1352,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 
 /* ── Help Modal ──────────────────────────────────────────── */
 .modal-panel-help {
-  max-width: 820px; width: 90vw;
+  max-width: 980px; width: 92vw;
   max-height: 88vh; display: flex; flex-direction: column;
 }
 .help-toolbar {
@@ -1361,24 +1418,41 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 
 .help-section { display: flex; flex-direction: column; gap: 10px; }
 .help-section-header {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+  padding-bottom: 2px;
 }
 .help-section-label {
   font-size: 10px; font-weight: 800; letter-spacing: .07em;
   color: #3a4050; text-transform: uppercase;
+}
+.help-section-summary {
+  margin: 5px 0 0; color: #8b949e; font-size: 12.5px; line-height: 1.45;
+}
+.help-flow-chip {
+  max-width: 340px; flex-shrink: 0;
+  padding: 6px 9px; border-radius: 7px;
+  background: rgba(56,139,253,.07); border: 1px solid rgba(56,139,253,.16);
+  color: #79c0ff; font-size: 11px; line-height: 1.35;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 .help-terminal-hint {
   font-size: 11px; color: #59616e;
 }
 
 .help-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
 }
-@media (max-width: 640px) { .help-grid { grid-template-columns: 1fr; } }
+@media (max-width: 940px) { .help-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) {
+  .help-grid { grid-template-columns: 1fr; }
+  .help-section-header { flex-direction: column; }
+  .help-flow-chip { max-width: none; width: 100%; box-sizing: border-box; }
+}
 
 .help-card {
-  background: #0f1318; border: 1px solid #1e2329; border-radius: 10px;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  background: #0f1318; border: 1px solid #1e2329; border-radius: 8px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+  min-width: 0;
 }
 .help-card-terminal { opacity: .75; }
 .help-card:hover { border-color: #2a3240; }
@@ -1406,6 +1480,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   font-size: 11.5px; color: #79c0ff; background: rgba(56,139,253,.08);
   border: 1px solid rgba(56,139,253,.15); border-radius: 5px;
   padding: 3px 8px; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
 }
 .help-git-example {
   margin: 0; padding: 7px 10px; border-radius: 6px;

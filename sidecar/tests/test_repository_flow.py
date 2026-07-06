@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.llm.router import CommitMessageDraft
+from app.schemas.repositories import ActionPlanStep, PlanStepKind
 
 
 def test_register_and_read_status(app_client, auth_headers, git_repository):
@@ -54,6 +55,76 @@ def test_local_matcher(app_client, auth_headers, git_repository):
     assert body["readAction"] == "log"
     assert body["readParams"]["limit"] == 5
     assert body["steps"][0]["kind"] == "read"
+
+
+def test_git_logs_last_count_resolves_as_read_plan(app_client, auth_headers, git_repository):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "git logs last 5"},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["matched"] is True
+    assert body["planKind"] == "read"
+    assert body["requiresConfirmation"] is False
+    assert body["readAction"] == "log"
+    assert body["readParams"]["limit"] == 5
+    assert body["source"] == "local"
+
+
+def test_read_shaped_unmatched_request_does_not_use_ai_write_fallback(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    class FakeLLMRouter:
+        def __init__(self):
+            self.calls = 0
+
+        def plan(self, message, snapshot):
+            self.calls += 1
+            return [
+                ActionPlanStep(
+                    kind=PlanStepKind.STAGE,
+                    title="Stage all files",
+                    detail="Should not be used for read-only text.",
+                    paths=["README.md"],
+                )
+            ]
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    repository_id = register.json()["id"]
+    app_client.app.state.repository_service.set_external_llm_allowed(repository_id, True)
+    fake_router = FakeLLMRouter()
+    app_client.app.state.repository_service._llm_router = fake_router
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "git history"},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["matched"] is False
+    assert body["planKind"] != "write"
+    assert body["requiresConfirmation"] is False
+    assert "read-only Git request" in body["explanation"]
+    assert fake_router.calls == 0
+
 
 def test_register_nested_folder_uses_repository_root(app_client, auth_headers, git_repository):
     nested_folder = git_repository / "backend"
@@ -1385,3 +1456,108 @@ def test_cancel_plan_removes_pending_plan(
         json={"planId": plan_id},
     )
     assert exec_resp.status_code == 422
+
+
+def test_create_compare_and_abandon_agent_session(app_client, auth_headers, git_repository):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repo_id = register.json()["id"]
+
+    create = app_client.post(
+        f"/v1/repositories/{repo_id}/agent-sessions",
+        headers=auth_headers,
+        json={"task": "try isolated docs change"},
+    )
+
+    assert create.status_code == 200, create.json()
+    session = create.json()
+    assert session["status"] == "active"
+    assert session["branchName"].startswith("agent/")
+    assert session["baseBranch"]
+
+    from pathlib import Path
+
+    worktree_path = Path(session["worktreePath"])
+    assert worktree_path.exists()
+
+    listed = app_client.get(
+        f"/v1/repositories/{repo_id}/agent-sessions",
+        headers=auth_headers,
+    )
+    assert listed.status_code == 200, listed.json()
+    assert listed.json()[0]["id"] == session["id"]
+
+    compare = app_client.get(
+        f"/v1/repositories/{repo_id}/agent-sessions/{session['id']}/compare",
+        headers=auth_headers,
+    )
+    assert compare.status_code == 200, compare.json()
+    assert "try isolated docs change" in compare.json()["content"]
+
+    abandon = app_client.post(
+        f"/v1/repositories/{repo_id}/agent-sessions/{session['id']}/abandon",
+        headers=auth_headers,
+    )
+    assert abandon.status_code == 200, abandon.json()
+    assert abandon.json()["session"]["status"] == "abandoned"
+    assert not worktree_path.exists()
+
+
+def test_merge_agent_session_into_repository(app_client, auth_headers, git_repository):
+    import subprocess
+    from pathlib import Path
+
+    repo = git_repository
+    subprocess.run(["git", "add", "README.md"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Prepare clean main"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(repo)},
+    )
+    assert register.status_code == 200, register.json()
+    repo_id = register.json()["id"]
+
+    create = app_client.post(
+        f"/v1/repositories/{repo_id}/agent-sessions",
+        headers=auth_headers,
+        json={"task": "add isolated agent note"},
+    )
+    assert create.status_code == 200, create.json()
+    session = create.json()
+    worktree = Path(session["worktreePath"])
+
+    (worktree / "agent-note.txt").write_text("agent note\n", encoding="utf-8")
+    subprocess.run(["git", "add", "agent-note.txt"], cwd=worktree, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add agent note"],
+        cwd=worktree,
+        check=True,
+        capture_output=True,
+    )
+
+    compare = app_client.get(
+        f"/v1/repositories/{repo_id}/agent-sessions/{session['id']}/compare",
+        headers=auth_headers,
+    )
+    assert compare.status_code == 200, compare.json()
+    assert compare.json()["session"]["commitsAhead"] == 1
+    assert "agent-note.txt" in compare.json()["content"]
+
+    merge = app_client.post(
+        f"/v1/repositories/{repo_id}/agent-sessions/{session['id']}/merge",
+        headers=auth_headers,
+    )
+    assert merge.status_code == 200, merge.json()
+    assert merge.json()["session"]["status"] == "merged"
+    assert (repo / "agent-note.txt").read_text(encoding="utf-8") == "agent note\n"

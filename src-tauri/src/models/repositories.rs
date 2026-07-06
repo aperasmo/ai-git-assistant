@@ -14,6 +14,49 @@ pub struct Repository {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAgentSessionRequest {
+    pub task: String,
+    pub branch_name: Option<String>,
+    pub base_branch: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSession {
+    pub id: String,
+    pub repository_id: String,
+    pub task: String,
+    pub branch_name: String,
+    pub base_branch: String,
+    pub worktree_path: String,
+    pub status: String,
+    pub changed_file_count: i64,
+    pub commits_ahead: i64,
+    pub last_commit: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionComparisonResponse {
+    pub session: AgentSession,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionActionResponse {
+    pub session: AgentSession,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FolderClassificationKind {
     ExistingRepository,

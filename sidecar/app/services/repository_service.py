@@ -18,6 +18,9 @@ from app.intent.local_matcher import LocalIntentMatcher
 from app.schemas.repositories import (
     ActionExecutionResult,
     ActionPlanStep,
+    AgentSessionActionResponse,
+    AgentSessionComparisonResponse,
+    AgentSessionResponse,
     BranchInfo,
     CancelActionPlanResponse,
     CommitMessageStyle,
@@ -53,6 +56,13 @@ _CONFLICT_RESOLUTION_STEPS = {
     PlanStepKind.MERGE_ABORT,
     PlanStepKind.MERGE_COMMIT,
 }
+_READ_ONLY_REQUEST_PATTERN = re.compile(
+    r"^\s*(?:git\s+)?(?:"
+    r"status|diff|log|logs|history|blame|graph|branches?|remotes?|stashes?|tags?|conflicts?"
+    r")\b",
+    re.IGNORECASE,
+)
+_AGENT_BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
 
 
 @dataclass(frozen=True)
@@ -171,6 +181,158 @@ class RepositoryService:
 
         return self.register(str(target))
 
+    def create_agent_session(
+        self,
+        repository_id: str,
+        *,
+        task: str,
+        branch_name: str | None = None,
+        base_branch: str | None = None,
+    ) -> AgentSessionResponse:
+        repository = self.store.get(repository_id)
+        canonical_path = self.store.canonical_path(repository_id)
+        snapshot = self.snapshot(repository_id)
+        if snapshot.write_blocked_reason:
+            raise ValidationFailure(snapshot.write_blocked_reason)
+        if snapshot.conflicts:
+            raise ValidationFailure("Resolve merge conflicts before creating an agent worktree.")
+        base_ref = base_branch or snapshot.branch
+        if not base_ref:
+            raise ValidationFailure("A named branch is required before creating an agent worktree.")
+
+        session_id = str(uuid4())
+        suffix = session_id.split("-", 1)[0]
+        slug = self._agent_slug(task)
+        branch = branch_name or f"agent/{slug}-{suffix}"
+        self._validate_agent_branch(branch)
+
+        worktree_root = self._agent_worktree_root(repository_id)
+        worktree_root.mkdir(parents=True, exist_ok=True)
+        worktree_path = worktree_root / f"{slug}-{suffix}"
+        if worktree_path.exists():
+            raise ValidationFailure("The generated agent worktree path already exists. Try again.")
+
+        GitClient(canonical_path).worktree_add(worktree_path, branch, base_ref)
+        stored = self.store.create_agent_session(
+            repository_id=repository.id,
+            task=task.strip(),
+            branch_name=branch,
+            base_branch=base_ref,
+            worktree_path=worktree_path,
+        )
+        return self._with_agent_runtime(stored)
+
+    def list_agent_sessions(self, repository_id: str) -> list[AgentSessionResponse]:
+        self.store.get(repository_id)
+        return [self._with_agent_runtime(session) for session in self.store.list_agent_sessions(repository_id)]
+
+    def compare_agent_session(self, repository_id: str, session_id: str) -> AgentSessionComparisonResponse:
+        session = self._with_agent_runtime(self.store.get_agent_session(repository_id, session_id))
+        if session.status == "cleaned" or not Path(session.worktree_path).exists():
+            return AgentSessionComparisonResponse(
+                session=session,
+                title=f"Agent session: {session.task}",
+                summary="Worktree files are no longer available.",
+                content=(
+                    f"Task: {session.task}\n"
+                    f"Branch: {session.branch_name}\n"
+                    f"Base: {session.base_branch}\n"
+                    f"Worktree: {session.worktree_path}\n\n"
+                    "This session record is retained, but the worktree files have been cleaned up."
+                ),
+            )
+        client = GitClient(Path(session.worktree_path))
+        commits = client.log_range_oneline(f"{session.base_branch}..HEAD").strip()
+        stat = client.compare_stat(session.base_branch, session.branch_name).strip()
+        files = client.compare_name_status(session.base_branch, session.branch_name).strip()
+        status = client.short_status().strip()
+        sections = [
+            f"Task: {session.task}",
+            f"Branch: {session.branch_name}",
+            f"Base: {session.base_branch}",
+            f"Worktree: {session.worktree_path}",
+            "",
+            "Commits ahead:",
+            commits or "(no commits yet)",
+            "",
+            "Changed files:",
+            files or "(no committed file changes yet)",
+            "",
+            "Diff stat:",
+            stat or "(no committed diff yet)",
+            "",
+            "Working tree status:",
+            status or "(clean)",
+        ]
+        return AgentSessionComparisonResponse(
+            session=session,
+            title=f"Agent session: {session.task}",
+            summary=f"{session.commits_ahead} commit(s), {session.changed_file_count} working-tree change(s)",
+            content="\n".join(sections),
+        )
+
+    def merge_agent_session(self, repository_id: str, session_id: str) -> AgentSessionActionResponse:
+        session = self._with_agent_runtime(self.store.get_agent_session(repository_id, session_id))
+        if session.status != "active":
+            raise ValidationFailure("Only active agent sessions can be merged.")
+        if session.commits_ahead <= 0:
+            raise ValidationFailure("The agent branch has no commits to merge.")
+
+        snapshot = self.snapshot(repository_id)
+        changed_count = len(snapshot.staged_changes) + len(snapshot.modified_changes) + len(snapshot.untracked_paths)
+        if changed_count or snapshot.conflicts:
+            raise ValidationFailure("The main repository must be clean before merging an agent session.")
+
+        client = GitClient(self.store.canonical_path(repository_id))
+        result = client.merge_branch_no_ff(
+            session.branch_name,
+            f"Merge agent session: {session.task}",
+        )
+        updated = self._with_agent_runtime(
+            self.store.update_agent_session_status(repository_id, session_id, "merged")
+        )
+        return AgentSessionActionResponse(
+            session=updated,
+            title="Agent session merged",
+            summary=f"Merged {session.branch_name} into the selected repository.",
+            content=(result.stdout or result.stderr or "Merge completed.").strip(),
+        )
+
+    def abandon_agent_session(self, repository_id: str, session_id: str) -> AgentSessionActionResponse:
+        session = self._with_agent_runtime(self.store.get_agent_session(repository_id, session_id))
+        if session.status not in {"active", "error"}:
+            raise ValidationFailure("Only active or errored agent sessions can be abandoned.")
+        root_client = GitClient(self.store.canonical_path(repository_id))
+        if Path(session.worktree_path).exists():
+            root_client.worktree_remove(Path(session.worktree_path), force=True)
+        root_client.branch_delete_force(session.branch_name)
+        updated = self._with_agent_runtime(
+            self.store.update_agent_session_status(repository_id, session_id, "abandoned")
+        )
+        return AgentSessionActionResponse(
+            session=updated,
+            title="Agent session abandoned",
+            summary=f"Removed worktree and branch {session.branch_name}.",
+            content="The isolated agent worktree was removed and its branch was deleted.",
+        )
+
+    def cleanup_agent_session(self, repository_id: str, session_id: str) -> AgentSessionActionResponse:
+        session = self._with_agent_runtime(self.store.get_agent_session(repository_id, session_id))
+        if session.status == "active":
+            raise ValidationFailure("Active sessions must be merged or abandoned before cleanup.")
+        path = Path(session.worktree_path)
+        if path.exists():
+            GitClient(self.store.canonical_path(repository_id)).worktree_remove(path, force=True)
+        updated = self._with_agent_runtime(
+            self.store.update_agent_session_status(repository_id, session_id, "cleaned")
+        )
+        return AgentSessionActionResponse(
+            session=updated,
+            title="Agent session cleaned up",
+            summary=f"Removed stored worktree files for {session.branch_name}.",
+            content="The session record is retained, but its worktree files are cleaned up.",
+        )
+
     def register(self, selected_path: str) -> RepositoryResponse:
         canonical_path = self.inspector.canonicalise_and_validate(selected_path)
         provisional = self.store.upsert(canonical_path, current_branch=None)
@@ -217,7 +379,17 @@ class RepositoryService:
             return persisted_plan
 
         # Local planner didn't match — try LLM fallback if configured
-        if self._llm_router is None:
+        if self._looks_like_read_only_request(message):
+            return plan.model_copy(update={
+                "explanation": (
+                    "This looks like a read-only Git request, but it did not match a supported local "
+                    "read command. Rephrase it as 'show log', 'last 5 commits', 'show diff', or "
+                    "'what changed?' so the app can run a safe read action."
+                )
+            })
+
+        repository = self.store.get(repository_id)
+        if self._llm_router is None or not repository.external_llm_allowed:
             return plan
 
         try:
@@ -276,6 +448,57 @@ class RepositoryService:
             )
         )
         return llm_plan
+
+    @staticmethod
+    def _looks_like_read_only_request(message: str) -> bool:
+        text = " ".join(message.strip().split()).lower()
+        if not text:
+            return False
+        if _READ_ONLY_REQUEST_PATTERN.search(text):
+            return True
+        return bool(
+            re.search(
+                r"\b(?:show|list|view|inspect|read)\s+(?:the\s+)?"
+                r"(?:log|logs|commits|status|diff|branches|remotes|stashes|tags|conflicts)\b",
+                text,
+            )
+        )
+
+    def _agent_worktree_root(self, repository_id: str) -> Path:
+        return self.settings.database_path.parent / "agent-worktrees" / repository_id
+
+    @staticmethod
+    def _agent_slug(value: str) -> str:
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", value.strip().lower()).strip("-")
+        return (slug or "task")[:48].strip("-") or "task"
+
+    @staticmethod
+    def _validate_agent_branch(branch_name: str) -> None:
+        if not _AGENT_BRANCH_PATTERN.match(branch_name):
+            raise ValidationFailure(
+                "Agent branch names may contain letters, numbers, dots, underscores, slashes, and hyphens."
+            )
+        if branch_name.startswith("/") or branch_name.endswith("/") or ".." in branch_name:
+            raise ValidationFailure("Agent branch name is not valid.")
+
+    @staticmethod
+    def _with_agent_runtime(session: AgentSessionResponse) -> AgentSessionResponse:
+        path = Path(session.worktree_path)
+        if not path.exists() or session.status in {"abandoned", "cleaned"}:
+            return session.model_copy(update={
+                "changed_file_count": 0,
+                "commits_ahead": 0,
+                "last_commit": None,
+            })
+        client = GitClient(path)
+        status_lines = [line for line in client.short_status().splitlines() if line.strip()]
+        commits_ahead = client.rev_list_count(f"{session.base_branch}..HEAD")
+        last_commit = client.last_commit_oneline() or None
+        return session.model_copy(update={
+            "changed_file_count": len(status_lines),
+            "commits_ahead": commits_ahead,
+            "last_commit": last_commit,
+        })
 
     def set_external_llm_allowed(self, repository_id: str, allowed: bool) -> RepositoryResponse:
         self.store.update_external_llm_allowed(repository_id, allowed)

@@ -13,16 +13,16 @@ Versions track the active product phase so releases are easy to understand:
 
 | Phase | Version line | Meaning |
 |---|---|---|
-| Phase A | `0.1.x` | MVP local Git assistant |
-| Phase B | `0.2.x` | Release hardening and installer reliability |
-| Phase C | `0.3.x` | Git client parity |
-| Phase D | `0.4.x` | AI-native Git workflows |
-| Phase E | `0.5.x` | Agent worktree control plane |
-| Phase F | `0.6.x` | PR and review workflow |
-| Phase G | `0.7.x` | Cross-platform release |
-| Phase H | `0.8.x` | Team context and conventions |
+| Phase 1 | `0.1.x` | MVP local Git assistant |
+| Phase 2 | `0.2.x` | Release hardening and installer reliability |
+| Phase 3 | `0.3.x` | Git client parity |
+| Phase 4 | `0.4.x` | AI-native Git workflows |
+| Phase 5 | `0.5.x` | Workflow polish and agent worktree control plane |
+| Phase 6 | `0.6.x` | PR and review workflow |
+| Phase 7 | `0.7.x` | Cross-platform release |
+| Phase 8 | `0.8.x` | Team context and conventions |
 
-The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase D.4 uses `0.4.4`.
+The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase 5 starts at `0.5.0`.
 
 ### Architecture
 
@@ -238,7 +238,7 @@ Tag reads run instantly. Tag writes use the normal reviewed plan flow: create an
 
 ### LLM fallback and settings
 
-Phase A includes the AI fallback layer. If the local planner cannot recognise a request, and the selected repository has external AI enabled, the app can call a configured provider and validate the returned structured Git plan before showing the same approval UI.
+Phase 1 includes the AI fallback layer. If the local planner cannot recognise a request, and the selected repository has external AI enabled, the app can call a configured provider and validate the returned structured Git plan before showing the same approval UI.
 
 - Supported provider configurations: Anthropic, Gemini, OpenAI, Groq, and Ollama.
 - LLM plans reuse the same `LocalActionPlan` schema as local plans.
@@ -273,9 +273,9 @@ Phase A includes the AI fallback layer. If the local planner cannot recognise a 
 
 ---
 
-## Phase B release hardening - complete
+## Phase 2 release hardening - complete
 
-Phase A is complete and has already been published as a Windows installer. Phase B makes future releases repeatable, trustworthy, and easier to support.
+Phase 1 is complete and has already been published as a Windows installer. Phase 2 makes future releases repeatable, trustworthy, and easier to support.
 
 - [x] Produce a repeatable Windows release build: sidecar binary, frontend build, Tauri NSIS installer.
 - [x] Verify clean install on a Windows machine without Python, Node.js, or Rust.
@@ -283,14 +283,14 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [x] Move API key storage from plaintext SQLite to OS keychain or another encrypted local secret store.
 - [x] Add an in-app diagnostics view: sidecar status, Git version, DB path, provider status, and recent local errors.
 - [x] Add a local sidecar log viewer/export for bug reports.
-- [x] Reconcile public docs and release notes with Phase A reality: LLM fallback is shipped, packaging exists, and remaining work is Phase B+.
+- [x] Reconcile public docs and release notes with Phase 1 reality: LLM fallback is shipped, packaging exists, and remaining work is Phase 2+.
 - [x] Decide whether to sign the Windows installer before the next public release.
 
 ---
 
 ## Next product phases
 
-### Phase C - Git client parity - complete
+### Phase 3 - Git client parity - complete
 
 - [x] Visual commit graph.
 - [x] Full patch diff with syntax highlighting.
@@ -300,7 +300,7 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [x] Merge/conflict detection and guided conflict workflow.
 - [x] Release tag list/inspect/create/delete/push workflow.
 
-### Phase D - AI-native Git workflows - complete
+### Phase 4 - AI-native Git workflows - complete
 
 - [x] AI commit message generation from selected commit wizard diff, including consolidated subject/body drafts for multi-file changes.
 - [x] AI commit composer that splits mixed work into logical commits.
@@ -308,7 +308,7 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [x] Risk scoring before approval.
 - [x] Privacy receipt showing exactly what context was sent to an external provider.
 
-### Phase D.1 - GitHub release publisher - complete
+### Phase 4.1 - GitHub release publisher - complete
 
 - [x] Store a GitHub release token encrypted in local settings.
 - [x] Detect GitHub owner/repo from the configured remote URL.
@@ -316,29 +316,32 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [x] Create a GitHub draft release and upload one installer asset after explicit approval.
 - [x] Return release URL, asset URL, and SHA-256 checksum in the transcript.
 
-### Phase D.3 - Repository provider awareness - complete
+### Phase 4.3 - Repository provider awareness - complete
 
 - [x] Detect remote providers per selected repository from configured remote URLs.
 - [x] Label GitHub, GitLab, Bitbucket, Azure DevOps, unknown, local-only, and mixed-provider repositories in the right panel.
 - [x] Keep standard Git workflows provider-neutral for GitHub, GitLab, Bitbucket, Azure DevOps, self-hosted, and local remotes.
 - [x] Guard GitHub-only draft release publishing with a provider-specific message when the selected repo is not GitHub-backed.
-- [x] Use provider awareness as the foundation for Phase F multi-provider PR/MR work.
+- [x] Use provider awareness as the foundation for Phase 6 multi-provider PR/MR work.
 
-### Phase D.4 - Premium commit message composer - complete
+### Phase 4.4 - Premium commit message composer - complete
 
 - [x] Add commit-message style modes: Detailed, Concise, Conventional, and Release.
 - [x] Enrich AI commit context with grouped paths, file status, diff stats, detected domains, and recent commit subjects.
 - [x] Return confidence, detected scope, and alternate subjects with the generated commit draft.
 - [x] Show richer commit draft controls in the wizard while keeping the final commit message editable.
 
-### Phase E - Agent worktree control plane
+### Phase 5 - Agent worktree control plane
 
-- [ ] Create isolated worktrees for agent tasks.
-- [ ] Track agent sessions by branch, worktree, changed files, commits, tests, and status.
-- [ ] Compare agent outputs side by side.
-- [ ] Review, merge, abandon, or clean up agent work from the app.
+- [x] Show execution feedback while approved plans are running.
+- [x] Replace the flat command reference with a workflow-style Git cheat sheet grouped by setup, snapshot, branch, sharing, inspect, and advanced safety workflows.
+- [x] Prevent read-shaped requests such as `git logs last 5` from falling through into AI-generated write plans.
+- [x] Create isolated worktrees for agent tasks.
+- [x] Track agent sessions by branch, worktree, changed files, commits ahead, latest commit, and status.
+- [x] Compare agent outputs against the base branch with commits, changed files, diff stat, and worktree status.
+- [x] Review, merge, abandon, or clean up agent work from the app.
 
-### Phase F - Multi-provider PR/MR and review workflow
+### Phase 6 - Multi-provider PR/MR and review workflow
 
 - [ ] Create GitHub Pull Requests and GitLab Merge Requests from the current branch.
 - [ ] AI-generated PR title/body/checklist from commits and diff.
@@ -346,7 +349,7 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [ ] CI status and review comment display.
 - [ ] Review-response workflow.
 
-### Phase G - Cross-platform release
+### Phase 7 - Cross-platform release
 
 - [ ] Build and verify macOS `.app` / `.dmg` packaging.
 - [ ] Add Apple code signing and notarization path.
@@ -355,7 +358,7 @@ Phase A is complete and has already been published as a Windows installer. Phase
 - [ ] Verify bundled sidecar startup, Git discovery, file pickers, and installer/update behavior on macOS and Linux.
 - [ ] Document platform-specific install and troubleshooting steps.
 
-### Phase H - Team context and conventions
+### Phase 8 - Team context and conventions
 
 - [ ] Add repo-local team context, for example `.ai-git-assistant/team-context.md`.
 - [ ] Import team conventions from `CONTRIBUTING.md`, PR templates, changelog rules, and recent commit history.
@@ -390,11 +393,11 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 
 | Suite | Tests | What is covered |
 |---|---|---|
-| `test_action_planner.py` | 43 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase C stash/read/merge/tag commands |
+| `test_action_planner.py` | 43 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase 3 stash/read/merge/tag commands |
 | `test_settings_service.py` | 10 | LLM/GitHub settings defaults, updates, encrypted secret persistence, and secret redaction |
 | `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
 | `test_health.py` | 3 | Authenticated sidecar health checks, protocol version, and diagnostics metadata |
-| `test_repository_flow.py` | 32 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase C diff/graph/stash/remote/history/blame/merge/tag flows, Phase D premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase D.1 GitHub draft releases, Phase D.3 provider awareness, and Phase D.4 commit style modes |
+| `test_repository_flow.py` | 34 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, and agent worktree session lifecycle |
 | `test_remote_provider.py` | 9 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
 
-Current verified sidecar suite: 109 passing tests via `npm run sidecar:test`.
+Current verified sidecar suite: 114 passing tests via `python -m pytest sidecar/tests --basetemp=.pytest-tmp-phase5-full`.

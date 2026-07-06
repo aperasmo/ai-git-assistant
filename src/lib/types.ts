@@ -104,6 +104,32 @@ export interface Repository {
   lastRemoteRefreshAt?: string | null;
 }
 
+export type AgentSessionStatus = "active" | "merged" | "abandoned" | "cleaned" | "error";
+
+export interface AgentSession {
+  id: string;
+  repositoryId: string;
+  task: string;
+  branchName: string;
+  baseBranch: string;
+  worktreePath: string;
+  status: AgentSessionStatus;
+  changedFileCount: number;
+  commitsAhead: number;
+  lastCommit?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentSessionComparisonResponse {
+  session: AgentSession;
+  title: string;
+  summary: string;
+  content: string;
+}
+
+export type AgentSessionActionResponse = AgentSessionComparisonResponse;
+
 export type FolderClassificationKind =
   | "existing_repository"
   | "nested_repository"

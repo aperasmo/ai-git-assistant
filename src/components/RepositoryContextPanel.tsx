@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { platformFeatureHint, providerDetailLines, providerSummary } from "../lib/remoteProviders";
-import type { ReadAction, Repository, RepositorySnapshot } from "../lib/types";
+import type { AgentSession, ReadAction, Repository, RepositorySnapshot } from "../lib/types";
 
 interface RepositoryContextPanelProps {
   repository?: Repository | null;
   snapshot?: RepositorySnapshot | null;
+  agentSessions?: AgentSession[];
   busy: boolean;
   onAction: (action: ReadAction) => void;
+  onCreateAgentSession?: (task: string) => Promise<void>;
+  onRefreshAgentSessions?: () => Promise<AgentSession[] | void>;
+  onCompareAgentSession?: (sessionId: string) => Promise<void>;
+  onMergeAgentSession?: (sessionId: string) => Promise<void>;
+  onAbandonAgentSession?: (sessionId: string) => Promise<void>;
+  onCleanupAgentSession?: (sessionId: string) => Promise<void>;
   activeLlm?: { provider: string; model: string } | null;
   onTestLlm?: () => Promise<{ ok: boolean; message: string }>;
   onAnalyzeChanges?: () => void;
@@ -33,8 +40,15 @@ function CountRow({
 export function RepositoryContextPanel({
   repository,
   snapshot,
+  agentSessions = [],
   busy,
   onAction,
+  onCreateAgentSession,
+  onRefreshAgentSessions,
+  onCompareAgentSession,
+  onMergeAgentSession,
+  onAbandonAgentSession,
+  onCleanupAgentSession,
   activeLlm,
   onTestLlm,
   onAnalyzeChanges,
@@ -43,6 +57,8 @@ export function RepositoryContextPanel({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [savingAiAllowed, setSavingAiAllowed] = useState(false);
+  const [agentTask, setAgentTask] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
 
   useEffect(() => {
     setTestResult(null);
@@ -189,6 +205,111 @@ export function RepositoryContextPanel({
         <button type="button" onClick={() => onAction("fetch")} disabled={busy}>
           F Refresh remote
         </button>
+      </div>
+
+      <p className="context-subheading agent-heading">AGENT WORKTREES</p>
+      <div className="agent-panel">
+        <form
+          className="agent-create-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const task = agentTask.trim();
+            if (!task || !onCreateAgentSession) return;
+            setAgentBusy(true);
+            try {
+              await onCreateAgentSession(task);
+              setAgentTask("");
+            } finally {
+              setAgentBusy(false);
+            }
+          }}
+        >
+          <input
+            value={agentTask}
+            onChange={(event) => setAgentTask(event.target.value)}
+            placeholder="Describe isolated work..."
+            disabled={busy || agentBusy || !onCreateAgentSession}
+            maxLength={300}
+          />
+          <button
+            type="submit"
+            disabled={busy || agentBusy || !agentTask.trim() || !onCreateAgentSession}
+          >
+            {agentBusy ? "Creating..." : "Create"}
+          </button>
+        </form>
+        <div className="agent-panel-header">
+          <span>{agentSessions.length} session{agentSessions.length === 1 ? "" : "s"}</span>
+          {onRefreshAgentSessions && (
+            <button
+              type="button"
+              className="link-button"
+              disabled={busy || agentBusy}
+              onClick={async () => {
+                setAgentBusy(true);
+                try { await onRefreshAgentSessions(); }
+                finally { setAgentBusy(false); }
+              }}
+            >
+              Refresh
+            </button>
+          )}
+        </div>
+        <div className="agent-session-list">
+          {agentSessions.length === 0 ? (
+            <p className="context-empty-small">No agent worktrees yet.</p>
+          ) : (
+            agentSessions.map((session) => (
+              <div key={session.id} className="agent-session-card">
+                <div className="agent-session-title">
+                  <strong>{session.task}</strong>
+                  <span className={`agent-session-status ${session.status}`}>{session.status}</span>
+                </div>
+                <code>{session.branchName}</code>
+                <small>
+                  {session.commitsAhead} commit(s) ahead · {session.changedFileCount} working change(s)
+                </small>
+                {session.lastCommit && <small>{session.lastCommit}</small>}
+                <div className="agent-session-actions">
+                  <button
+                    type="button"
+                    disabled={busy || agentBusy}
+                    onClick={() => void onCompareAgentSession?.(session.id)}
+                  >
+                    Compare
+                  </button>
+                  {session.status === "active" && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy || agentBusy || session.commitsAhead === 0}
+                        onClick={() => void onMergeAgentSession?.(session.id)}
+                      >
+                        Merge
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy || agentBusy}
+                        onClick={() => void onAbandonAgentSession?.(session.id)}
+                      >
+                        Abandon
+                      </button>
+                    </>
+                  )}
+                  {session.status !== "active" && session.status !== "cleaned" && (
+                    <button
+                      type="button"
+                      disabled={busy || agentBusy}
+                      onClick={() => void onCleanupAgentSession?.(session.id)}
+                    >
+                      Clean
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <p className="context-subheading ai-heading">AI ASSISTANT</p>

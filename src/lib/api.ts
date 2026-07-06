@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ActionExecutionResult,
   ActionPlanStep,
+  AgentSession,
+  AgentSessionActionResponse,
+  AgentSessionComparisonResponse,
   BootstrapStatus,
   CancelActionPlanResponse,
   DiagnosticsStatus,
@@ -44,6 +47,34 @@ export const desktopApi = {
 
   getRepositorySnapshot: (repositoryId: string) =>
     invoke<RepositorySnapshot>("get_repository_snapshot", { repositoryId }),
+
+  listAgentSessions: (repositoryId: string) =>
+    invoke<AgentSession[]>("list_agent_sessions", { repositoryId }),
+
+  createAgentSession: (
+    repositoryId: string,
+    task: string,
+    branchName?: string | null,
+    baseBranch?: string | null,
+  ) =>
+    invoke<AgentSession>("create_agent_session", {
+      repositoryId,
+      task,
+      branchName,
+      baseBranch,
+    }),
+
+  compareAgentSession: (repositoryId: string, sessionId: string) =>
+    invoke<AgentSessionComparisonResponse>("compare_agent_session", { repositoryId, sessionId }),
+
+  mergeAgentSession: (repositoryId: string, sessionId: string) =>
+    invoke<AgentSessionActionResponse>("merge_agent_session", { repositoryId, sessionId }),
+
+  abandonAgentSession: (repositoryId: string, sessionId: string) =>
+    invoke<AgentSessionActionResponse>("abandon_agent_session", { repositoryId, sessionId }),
+
+  cleanupAgentSession: (repositoryId: string, sessionId: string) =>
+    invoke<AgentSessionActionResponse>("cleanup_agent_session", { repositoryId, sessionId }),
 
   runReadAction: (repositoryId: string, request: ReadActionRequest) =>
     invoke<ReadActionResult>("run_read_action", { repositoryId, request }),

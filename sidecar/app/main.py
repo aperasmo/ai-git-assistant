@@ -19,7 +19,7 @@ from app.services.settings_service import SettingsService
 def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(
         title="AI Git Assistant Local Sidecar",
-        version="0.4.4",
+        version="0.5.0",
         docs_url="/docs" if settings.environment == "development" else None,
         redoc_url=None,
         openapi_url="/openapi.json" if settings.environment == "development" else None,

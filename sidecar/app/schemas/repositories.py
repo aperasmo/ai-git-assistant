@@ -41,6 +41,44 @@ class RepositoryResponse(ApiModel):
     last_remote_refresh_at: str | None = None
 
 
+AgentSessionStatus = Literal["active", "merged", "abandoned", "cleaned", "error"]
+
+
+class CreateAgentSessionRequest(ApiModel):
+    task: str = Field(min_length=1, max_length=300)
+    branch_name: str | None = Field(default=None, max_length=120)
+    base_branch: str | None = Field(default=None, max_length=120)
+
+
+class AgentSessionResponse(ApiModel):
+    id: str
+    repository_id: str
+    task: str
+    branch_name: str
+    base_branch: str
+    worktree_path: str
+    status: AgentSessionStatus
+    changed_file_count: int = 0
+    commits_ahead: int = 0
+    last_commit: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class AgentSessionComparisonResponse(ApiModel):
+    session: AgentSessionResponse
+    title: str
+    summary: str
+    content: str
+
+
+class AgentSessionActionResponse(ApiModel):
+    session: AgentSessionResponse
+    title: str
+    summary: str
+    content: str
+
+
 class ChangedPath(ApiModel):
     path: str
     index_status: str

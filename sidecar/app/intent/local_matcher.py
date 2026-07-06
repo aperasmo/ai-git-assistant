@@ -142,8 +142,17 @@ class LocalIntentMatcher:
             )
 
         commits_match = re.search(r"(?:last|recent)\s+(\d{1,2})\s+(?:commits?|logs?)", text)
-        if commits_match or text in {"log", "git log", "show log", "show logs", "show commits", "recent commits"}:
-            limit = int(commits_match.group(1)) if commits_match else 5
+        logs_first_match = re.search(
+            r"^(?:git\s+)?(?:logs?|commits?)\s+(?:last|recent)\s+(\d{1,2})$",
+            text,
+        )
+        if (
+            commits_match
+            or logs_first_match
+            or text in {"log", "logs", "git log", "git logs", "show log", "show logs", "show commits", "recent commits"}
+        ):
+            raw_limit = commits_match.group(1) if commits_match else logs_first_match.group(1) if logs_first_match else "5"
+            limit = int(raw_limit)
             return LocalResolution(
                 matched=True,
                 action=ReadAction.LOG,

@@ -8,11 +8,11 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.4.4 - Phase D.4** is the current AI-native Git workflow release. It includes everything from Phase C plus premium AI commit-message generation, AI change summaries, logical commit suggestions, PR-ready summaries, plan risk scoring, privacy receipts for AI context, GitHub draft release publishing with installer asset upload, repository remote provider awareness, and richer commit-message style controls.
+**0.5.0 - Phase 5** starts the next product line after the AI-native Git workflow release. It includes everything from Phase 4 plus clearer execution feedback, a workflow-style Git cheat sheet in Help, premium AI commit-message generation, AI change summaries, logical commit suggestions, PR-ready summaries, plan risk scoring, privacy receipts for AI context, GitHub draft release publishing with installer asset upload, repository remote provider awareness, richer commit-message style controls, and the first agent worktree control plane.
 
-Versioning follows the product phase: Phase A = `0.1.x`, Phase B = `0.2.x`, Phase C = `0.3.x`, Phase D = `0.4.x`. Sub-phase improvements stay inside the same phase line, so Phase D.4 uses `0.4.4`.
+Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`. The first release in a phase uses `.0`, so Phase 5 starts at `0.5.0`.
 
-See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phase B hardening notes.
+See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phase 2 hardening notes.
 
 ---
 
@@ -95,7 +95,7 @@ blame README.md
 show stashes
 show remotes
 show tags
-show tag v0.4.4
+show tag v0.5.0
 show conflicts
 commit all my changes with message "Fix login bug"
 push and commit everything with message "Add dark mode"
@@ -104,8 +104,8 @@ switch to main
 create branch feature/new-login
 stash my changes
 merge feature/new-login
-create tag v0.4.4 with message "Release v0.4.4"
-push tag v0.4.4
+create tag v0.5.0 with message "Release v0.5.0"
+push tag v0.5.0
 ```
 
 The app turns your sentence into a Git plan and shows it to you before doing anything.
@@ -146,11 +146,11 @@ In the commit wizard, enable AI for the repository and choose a commit-message s
 
 ## GitHub release publishing
 
-Phase D.2 includes a guided **Draft release** flow in the WRITE command bar. Add a fine-grained GitHub token in **Settings** for the target repository with **Repository permissions -> Contents -> Read and write**, then choose **Draft release** to enter the tag, title, description, and installer asset.
+Phase 4.2 includes a guided **Draft release** flow in the WRITE command bar. Add a fine-grained GitHub token in **Settings** for the target repository with **Repository permissions -> Contents -> Read and write**, then choose **Draft release** to enter the tag, title, description, and installer asset.
 
 The app creates a new GitHub draft release and uploads one asset only after you confirm the final wizard step. Updating existing releases, replacing assets, and retargeting existing tags are intentionally not part of the current flow.
 
-Phase D.3 adds provider awareness before platform actions run. If the selected repository is GitLab, Bitbucket, Azure DevOps, local-only, or unknown, the app explains that GitHub draft releases are not available for that repository while confirming local Git workflows still work.
+Phase 4.3 adds provider awareness before platform actions run. If the selected repository is GitLab, Bitbucket, Azure DevOps, local-only, or unknown, the app explains that GitHub draft releases are not available for that repository while confirming local Git workflows still work.
 
 If GitHub rejects the request with a token permission error, create or update a fine-grained token for that exact repository, enable **Contents: Read and write**, save it again in Settings, then retry.
 
@@ -203,7 +203,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `inspect stash@{0}` | Patch for one stash entry |
 | `show remotes` | Configured remote URLs |
 | `show tags` | Local release tags |
-| `show tag v0.4.4` | Inspect one tag |
+| `show tag v0.5.0` | Inspect one tag |
 | `history README.md` | File-specific commit history |
 | `blame README.md` | Line authorship for one file |
 | `show conflicts` | Conflict files and resolution guidance |
@@ -228,9 +228,9 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `merge feature/name` | Merge a local branch with guided conflict handling |
 | `continue merge` | Commit a resolved merge |
 | `abort merge` | Abort an in-progress merge |
-| `create tag v0.4.4 with message "Release v0.4.4"` | Create an annotated local tag |
-| `push tag v0.4.4` | Push one explicit tag to the remote |
-| `delete tag v0.4.4` | Delete a local tag after approval |
+| `create tag v0.5.0 with message "Release v0.5.0"` | Create an annotated local tag |
+| `push tag v0.5.0` | Push one explicit tag to the remote |
+| `delete tag v0.5.0` | Delete a local tag after approval |
 | `draft release` | Create a GitHub draft release and upload one asset |
 | `unstage login.py` | Remove file from staging |
 | `discard changes in login.py` | Revert file to last commit |
@@ -287,6 +287,23 @@ AI Git Assistant is not just a chat box. It also gives you the day-to-day Git vi
 
 ---
 
+## Agent worktrees
+
+Phase 5 adds an **Agent worktrees** section in the right panel. It lets you create an isolated Git worktree from the selected repository for a task, then track the session from inside the app.
+
+Current Phase 5 controls:
+
+- **Create** an isolated worktree and generated `agent/...` branch for a task
+- **Refresh** active sessions with branch, status, working changes, commits ahead, and latest commit
+- **Compare** the session against its base branch, including commits, changed files, diff stat, and working-tree status
+- **Merge** an active session back into the selected repository after the agent branch has commits and the main repository is clean
+- **Abandon** an active session by removing the worktree and deleting its generated branch
+- **Clean** merged or abandoned session files while keeping the session record
+
+This is the first control-plane slice. The app creates and manages the isolated worktree; the actual coding agent or editor can work inside that worktree, commit to the agent branch, then return to AI Git Assistant for compare and merge.
+
+---
+
 ## Walkthrough tour
 
 New to the app? Click the **?** button in the top-right corner to launch a guided tour that highlights every part of the interface.
@@ -295,7 +312,7 @@ New to the app? Click the **?** button in the top-right corner to launch a guide
 
 ## Git command reference
 
-Click **Help** in the top-right corner for a full reference of every supported command - including syntax, examples, and which ones require a terminal. The help card also calls out planned and blocked commands such as `git revert <commit>` and `git reset --hard <commit>`.
+Click **Help** in the top-right corner for a workflow cheat sheet of supported commands - grouped by setup, stage/snapshot, branch/merge, share/release, inspect/compare, and advanced safety. Each card shows app phrases, the matching Git command, and whether the action is available in-app, planned, terminal-only, or blocked.
 
 ---
 
@@ -341,10 +358,10 @@ Delete that file for a completely clean start.
 
 ## Roadmap
 
-- **Phase E:** Agent worktree control plane
-- **Phase F:** PR and review workflow
-- **Phase G:** Mac and Linux support
-- **Phase H:** Team context and conventions
+- **Phase 5:** Agent worktree control plane
+- **Phase 6:** PR and review workflow
+- **Phase 7:** Mac and Linux support
+- **Phase 8:** Team context and conventions
 
 ---
 
@@ -354,4 +371,4 @@ Found a bug or have a suggestion? Open an issue on this repository and describe 
 
 ---
 
-*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase D.4*
+*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase 5*

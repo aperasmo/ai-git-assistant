@@ -94,6 +94,20 @@ def test_phase_c_read_requests_resolve_locally():
         assert plan.read_action == action
 
 
+def test_log_aliases_with_limit_resolve_as_read_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+
+    for message in ["git logs last 5", "logs last 5", "git log recent 7"]:
+        plan = planner.plan("repo-1", message, make_snapshot())
+        assert plan.matched is True
+        assert plan.plan_kind == "read"
+        assert plan.requires_confirmation is False
+        assert plan.read_action == "log"
+
+    assert planner.plan("repo-1", "git logs last 5", make_snapshot()).read_params["limit"] == 5
+    assert planner.plan("repo-1", "git log recent 7", make_snapshot()).read_params["limit"] == 7
+
+
 def test_commit_selected_paths_then_push_creates_reviewable_plan():
     planner = LocalActionPlanner(LocalIntentMatcher())
 

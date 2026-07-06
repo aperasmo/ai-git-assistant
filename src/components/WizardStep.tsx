@@ -46,11 +46,17 @@ export function WizardStep({
   onPickReleaseAsset,
 }: WizardStepProps) {
   if (entry.status === "done") {
+    const isExecutingConfirm = busy && entry.stepKind === "confirm" && entry.chosenLabel === "Confirmed";
+
     return (
-      <div className="wizard-step-done">
-        <span className="wizard-done-icon">✓</span>
+      <div className={isExecutingConfirm ? "wizard-step-done wizard-step-executing" : "wizard-step-done"}>
+        {isExecutingConfirm ? (
+          <span className="wizard-done-spinner" aria-hidden="true" />
+        ) : (
+          <span className="wizard-done-icon">✓</span>
+        )}
         <span className="wizard-done-text">
-          {entry.prompt}: <strong>{entry.chosenLabel}</strong>
+          {entry.prompt}: <strong>{isExecutingConfirm ? "Executing..." : entry.chosenLabel}</strong>
         </span>
       </div>
     );

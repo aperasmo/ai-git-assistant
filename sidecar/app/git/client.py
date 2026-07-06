@@ -370,6 +370,50 @@ class GitClient:
     def clone(self, url: str, target_path: Path) -> GitResult:
         return self.run(["clone", url, str(target_path)], timeout_seconds=300)
 
+    def worktree_add(self, target_path: Path, branch_name: str, base_ref: str) -> GitResult:
+        return self.run(
+            ["worktree", "add", "-b", branch_name, str(target_path), base_ref],
+            timeout_seconds=120,
+        )
+
+    def worktree_remove(self, target_path: Path, *, force: bool = False) -> GitResult:
+        args = ["worktree", "remove"]
+        if force:
+            args.append("--force")
+        args.append(str(target_path))
+        return self.run(args, timeout_seconds=90)
+
+    def branch_delete_force(self, name: str) -> GitResult:
+        return self.run(["branch", "-D", name], allow_failure=True)
+
+    def rev_list_count(self, revision_range: str) -> int:
+        result = self.run(["rev-list", "--count", revision_range], allow_failure=True)
+        try:
+            return int(result.stdout.strip() or "0")
+        except ValueError:
+            return 0
+
+    def short_status(self) -> str:
+        return self.run(["status", "--short"], allow_failure=True).stdout
+
+    def last_commit_oneline(self) -> str:
+        return self.run(["log", "-1", "--oneline"], allow_failure=True).stdout.strip()
+
+    def compare_name_status(self, base_ref: str, branch_name: str) -> str:
+        return self.run(
+            ["diff", "--name-status", f"{base_ref}...{branch_name}"],
+            allow_failure=True,
+        ).stdout
+
+    def compare_stat(self, base_ref: str, branch_name: str) -> str:
+        return self.run(
+            ["diff", "--stat", f"{base_ref}...{branch_name}"],
+            allow_failure=True,
+        ).stdout
+
+    def log_range_oneline(self, revision_range: str) -> str:
+        return self.run(["log", "--oneline", revision_range], allow_failure=True).stdout
+
     def stash_push(self, message: str | None = None) -> GitResult:
         args: list[str] = ["stash", "push", "--include-untracked"]
         if message:
@@ -403,6 +447,19 @@ class GitClient:
 
     def merge_branch(self, name: str) -> GitResult:
         result = self.run(["merge", "--no-edit", name], timeout_seconds=90, allow_failure=True)
+        if result.return_code == 0:
+            return result
+        combined = (result.stderr + "\n" + result.stdout).strip()
+        if "automatic merge failed" in combined.lower() or "conflict" in combined.lower():
+            raise GitCommandError(combined[:1000])
+        raise GitCommandError(self._safe_error(result))
+
+    def merge_branch_no_ff(self, name: str, message: str) -> GitResult:
+        result = self.run(
+            ["merge", "--no-ff", name, "-m", message],
+            timeout_seconds=120,
+            allow_failure=True,
+        )
         if result.return_code == 0:
             return result
         combined = (result.stderr + "\n" + result.stdout).strip()

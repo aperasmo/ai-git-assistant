@@ -6,8 +6,12 @@ from app.auth import require_session_token
 from app.schemas.repositories import (
     ActionExecutionResult,
     AddToGitignoreRequest,
+    AgentSessionActionResponse,
+    AgentSessionComparisonResponse,
+    AgentSessionResponse,
     CancelActionPlanResponse,
     CloneRepositoryRequest,
+    CreateAgentSessionRequest,
     DraftGitHubReleaseRequest,
     DraftGitHubReleaseResponse,
     ExecuteActionPlanRequest,
@@ -109,6 +113,85 @@ def list_repositories(request: Request) -> list[RepositoryResponse]:
 )
 def repository_snapshot(repository_id: str, request: Request) -> RepositorySnapshot:
     return _service(request).snapshot(repository_id)
+
+
+@router.get(
+    "/{repository_id}/agent-sessions",
+    response_model=list[AgentSessionResponse],
+    dependencies=[Depends(require_session_token)],
+)
+def list_agent_sessions(repository_id: str, request: Request) -> list[AgentSessionResponse]:
+    return _service(request).list_agent_sessions(repository_id)
+
+
+@router.post(
+    "/{repository_id}/agent-sessions",
+    response_model=AgentSessionResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def create_agent_session(
+    repository_id: str,
+    payload: CreateAgentSessionRequest,
+    request: Request,
+) -> AgentSessionResponse:
+    return _service(request).create_agent_session(
+        repository_id,
+        task=payload.task,
+        branch_name=payload.branch_name,
+        base_branch=payload.base_branch,
+    )
+
+
+@router.get(
+    "/{repository_id}/agent-sessions/{session_id}/compare",
+    response_model=AgentSessionComparisonResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def compare_agent_session(
+    repository_id: str,
+    session_id: str,
+    request: Request,
+) -> AgentSessionComparisonResponse:
+    return _service(request).compare_agent_session(repository_id, session_id)
+
+
+@router.post(
+    "/{repository_id}/agent-sessions/{session_id}/merge",
+    response_model=AgentSessionActionResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def merge_agent_session(
+    repository_id: str,
+    session_id: str,
+    request: Request,
+) -> AgentSessionActionResponse:
+    return _service(request).merge_agent_session(repository_id, session_id)
+
+
+@router.post(
+    "/{repository_id}/agent-sessions/{session_id}/abandon",
+    response_model=AgentSessionActionResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def abandon_agent_session(
+    repository_id: str,
+    session_id: str,
+    request: Request,
+) -> AgentSessionActionResponse:
+    return _service(request).abandon_agent_session(repository_id, session_id)
+
+
+@router.post(
+    "/{repository_id}/agent-sessions/{session_id}/cleanup",
+    response_model=AgentSessionActionResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def cleanup_agent_session(
+    repository_id: str,
+    session_id: str,
+    request: Request,
+) -> AgentSessionActionResponse:
+    return _service(request).cleanup_agent_session(repository_id, session_id)
 
 
 @router.post(

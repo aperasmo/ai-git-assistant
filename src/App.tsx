@@ -21,6 +21,9 @@ import {
 import { githubRemote, providerDetailLines } from "./lib/remoteProviders";
 import type {
   ActionPlanStep,
+  AgentSession,
+  AgentSessionActionResponse,
+  AgentSessionComparisonResponse,
   BootstrapStatus,
   ChatTranscriptEntry,
   CommitMessageStyle,
@@ -152,6 +155,7 @@ export default function App() {
   const [activeRepositoryId, setActiveRepositoryId] = useState<string | null>(null);
   const activeRepositoryIdRef = useRef<string | null>(null);
   const [snapshot, setSnapshot] = useState<RepositorySnapshot | null>(null);
+  const [agentSessions, setAgentSessions] = useState<AgentSession[]>([]);
   const [transcripts, setTranscripts] = useState<Record<string, ChatTranscriptEntry[]>>({});
   const [busy, setBusy] = useState(false);
   const [applicationError, setApplicationError] = useState<string | null>(null);
@@ -240,6 +244,18 @@ export default function App() {
     return loaded;
   }, []);
 
+  const loadAgentSessions = useCallback(async (repositoryId: string | null = activeRepositoryIdRef.current) => {
+    if (!repositoryId) {
+      setAgentSessions([]);
+      return [];
+    }
+    const loaded = await desktopApi.listAgentSessions(repositoryId);
+    if (activeRepositoryIdRef.current === repositoryId) {
+      setAgentSessions(loaded);
+    }
+    return loaded;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -297,6 +313,7 @@ export default function App() {
     let cancelled = false;
 
     setSnapshot(null);
+    setAgentSessions([]);
 
     void desktopApi
       .getRepositorySnapshot(repositoryId)
@@ -308,6 +325,33 @@ export default function App() {
       .catch((cause) => {
         if (!cancelled && activeRepositoryIdRef.current === repositoryId) {
           setApplicationError(toErrorMessage(cause, "Unable to inspect repository."));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRepositoryId, bootstrap?.sidecarStatus]);
+
+  useEffect(() => {
+    if (!activeRepositoryId || bootstrap?.sidecarStatus !== "ready") {
+      setAgentSessions([]);
+      return;
+    }
+
+    const repositoryId = activeRepositoryId;
+    let cancelled = false;
+
+    void desktopApi
+      .listAgentSessions(repositoryId)
+      .then((sessions) => {
+        if (!cancelled && activeRepositoryIdRef.current === repositoryId) {
+          setAgentSessions(sessions);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && activeRepositoryIdRef.current === repositoryId) {
+          setAgentSessions([]);
         }
       });
 
@@ -907,7 +951,7 @@ export default function App() {
       id: stepId,
       kind: "wizard_step",
       stepKind: "text_input",
-      prompt: "Release tag, for example v0.4.1",
+      prompt: "Release tag, for example v0.5.0",
       status: "active",
     });
   }
@@ -1341,6 +1385,117 @@ export default function App() {
     }
   }
 
+  function appendAgentResult(
+    repositoryId: string,
+    result: AgentSessionComparisonResponse | AgentSessionActionResponse,
+  ) {
+    appendTranscriptEntry(repositoryId, {
+      id: createTranscriptId(),
+      kind: "result",
+      title: result.title,
+      summary: result.summary,
+      content: result.content,
+    });
+  }
+
+  async function createAgentSession(task: string) {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId || busy || activePendingPlan) return;
+
+    appendTranscriptEntry(repositoryId, {
+      id: createTranscriptId(),
+      kind: "user",
+      message: `Create agent worktree: ${task}`,
+    });
+
+    try {
+      setBusy(true);
+      setApplicationError(null);
+      const session = await desktopApi.createAgentSession(repositoryId, task);
+      if (activeRepositoryIdRef.current !== repositoryId) return;
+
+      await loadAgentSessions(repositoryId);
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "result",
+        title: "Agent worktree created",
+        summary: `${session.branchName} from ${session.baseBranch}`,
+        content: [
+          `Task: ${session.task}`,
+          `Branch: ${session.branchName}`,
+          `Base: ${session.baseBranch}`,
+          `Worktree: ${session.worktreePath}`,
+          "",
+          "Open this worktree in your editor or terminal, make commits on the agent branch, then return here to compare or merge it.",
+        ].join("\n"),
+      });
+    } catch (cause) {
+      if (activeRepositoryIdRef.current === repositoryId) {
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "error",
+          message: toErrorMessage(cause, "Agent worktree could not be created."),
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runAgentSessionAction(
+    sessionId: string,
+    action: "compare" | "merge" | "abandon" | "cleanup",
+  ) {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId || busy || activePendingPlan) return;
+
+    const labelByAction = {
+      compare: "Compare agent worktree",
+      merge: "Merge agent worktree",
+      abandon: "Abandon agent worktree",
+      cleanup: "Clean agent worktree",
+    } as const;
+
+    appendTranscriptEntry(repositoryId, {
+      id: createTranscriptId(),
+      kind: "user",
+      message: labelByAction[action],
+    });
+
+    try {
+      setBusy(true);
+      setApplicationError(null);
+      const result =
+        action === "compare"
+          ? await desktopApi.compareAgentSession(repositoryId, sessionId)
+          : action === "merge"
+            ? await desktopApi.mergeAgentSession(repositoryId, sessionId)
+            : action === "abandon"
+              ? await desktopApi.abandonAgentSession(repositoryId, sessionId)
+              : await desktopApi.cleanupAgentSession(repositoryId, sessionId);
+
+      if (activeRepositoryIdRef.current !== repositoryId) return;
+
+      appendAgentResult(repositoryId, result);
+      await loadAgentSessions(repositoryId);
+      if (action === "merge") {
+        const fresh = await desktopApi.getRepositorySnapshot(repositoryId);
+        if (activeRepositoryIdRef.current === repositoryId) setSnapshot(fresh);
+        await loadRepositories();
+      }
+    } catch (cause) {
+      if (activeRepositoryIdRef.current === repositoryId) {
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "error",
+          message: toErrorMessage(cause, `${labelByAction[action]} failed.`),
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setRepositoryLlmAllowed(allowed: boolean) {
     const repositoryId = activeRepositoryId;
     if (!repositoryId) return;
@@ -1412,7 +1567,7 @@ export default function App() {
   if (!gitStatus || gitStatus.status !== "available") {
     return (
       <StartupScreen
-        message={gitStatus?.message ?? "Checking Git installationâ€¦"}
+        message={gitStatus?.message ?? "Checking Git installation..."}
         gitStatus={gitStatus}
         failure={Boolean(gitStatus && gitStatus.status !== "checking")}
       />
@@ -1463,8 +1618,15 @@ export default function App() {
         <RepositoryContextPanel
           repository={activeRepository}
           snapshot={snapshot}
+          agentSessions={agentSessions}
           busy={interactionLocked}
           onAction={(action) => void runAction(action)}
+          onCreateAgentSession={(task) => createAgentSession(task)}
+          onRefreshAgentSessions={() => loadAgentSessions(activeRepositoryId)}
+          onCompareAgentSession={(sessionId) => runAgentSessionAction(sessionId, "compare")}
+          onMergeAgentSession={(sessionId) => runAgentSessionAction(sessionId, "merge")}
+          onAbandonAgentSession={(sessionId) => runAgentSessionAction(sessionId, "abandon")}
+          onCleanupAgentSession={(sessionId) => runAgentSessionAction(sessionId, "cleanup")}
           activeLlm={activeLlm}
           onTestLlm={() => desktopApi.testLlmConnection()}
           onAnalyzeChanges={() => void analyzeChanges()}
