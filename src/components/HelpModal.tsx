@@ -44,7 +44,7 @@ const WORKFLOWS: {
   {
     id: "share",
     title: "Share, Update & Release",
-    summary: "Refresh remote state, pull, push, tag, and draft releases safely.",
+    summary: "Refresh remote state, pull, push, tag, draft releases, and draft PRs safely.",
     state: "Local commits <-> remote provider <-> tag",
     commandIds: ["fetch", "pull", "push", "tags", "tag_write"],
   },

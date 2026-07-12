@@ -942,9 +942,157 @@ def test_draft_github_release_explains_non_github_provider(
 
     assert response.status_code == 422, response.json()
     detail = response.json()["detail"]
-    assert "GitHub draft releases are not available" in detail
+    assert "GitHub platform actions are not available" in detail
     assert "origin: GitLab (gitlab.com)" in detail
     assert "Local Git features still work" not in detail
+
+
+def test_draft_github_pull_request_uses_configured_token(
+    app_client,
+    auth_headers,
+    git_repository,
+    monkeypatch,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+    from app.services.github_release_service import GitHubDraftPullRequestResult
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "add", "README.md"], cwd=git_repository, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Refresh README"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "switch", "-c", "feature/readme"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (git_repository / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=git_repository, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add feature note"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+    monkeypatch.setattr(
+        "app.services.repository_service.GitClient.remote_branch_exists",
+        lambda self, remote, branch: remote == "origin" and branch == "feature/readme",
+    )
+
+    calls: list[dict] = []
+
+    class FakeGitHubReleaseClient:
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        def create_draft_pull_request(self, **kwargs):
+            calls.append({"token": self.token, **kwargs})
+            return GitHubDraftPullRequestResult(
+                number=12,
+                pull_request_url="https://github.com/example/demo-repository/pull/12",
+                title=kwargs["title"],
+            )
+
+    app_client.app.state.repository_service._github_release_client_factory = FakeGitHubReleaseClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/github/pull-requests/draft",
+        headers=auth_headers,
+        json={
+            "baseBranch": "master",
+            "title": "Add feature note",
+            "body": "Summary\n- Adds a feature note.",
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["repository"] == "example/demo-repository"
+    assert body["pullRequestUrl"].endswith("/pull/12")
+    assert body["baseBranch"] == "master"
+    assert body["headBranch"] == "feature/readme"
+    assert "feature.txt" in body["content"]
+    assert calls[0]["token"] == "github-token"
+    assert calls[0]["repository"].slug == "example/demo-repository"
+    assert calls[0]["head"] == "feature/readme"
+    assert calls[0]["base"] == "master"
+
+
+def test_draft_github_pull_request_blocks_unpushed_commits(
+    app_client,
+    auth_headers,
+    git_repository,
+    monkeypatch,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+
+    repo = git_repository
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/example/demo-repository.git"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "add", "README.md"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "bootstrap main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "switch", "-c", "feature/unpushed"], cwd=repo, check=True, capture_output=True)
+    (repo / "local.txt").write_text("local\n", encoding="utf-8")
+    subprocess.run(["git", "add", "local.txt"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Local only"], cwd=repo, check=True, capture_output=True)
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+    monkeypatch.setattr(
+        "app.services.repository_service.GitClient.remote_branch_exists",
+        lambda self, remote, branch: False,
+    )
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(repo)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/github/pull-requests/draft",
+        headers=auth_headers,
+        json={"baseBranch": "master", "title": "Local only", "body": ""},
+    )
+
+    assert response.status_code == 422, response.json()
+    assert "Push the branch first" in response.json()["detail"]
 
 
 def test_github_release_permission_error_is_actionable():

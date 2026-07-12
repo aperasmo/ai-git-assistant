@@ -12,6 +12,8 @@ from app.schemas.repositories import (
     CancelActionPlanResponse,
     CloneRepositoryRequest,
     CreateAgentSessionRequest,
+    DraftGitHubPullRequestRequest,
+    DraftGitHubPullRequestResponse,
     DraftGitHubReleaseRequest,
     DraftGitHubReleaseResponse,
     ExecuteActionPlanRequest,
@@ -287,6 +289,19 @@ def draft_github_release(
     request: Request,
 ) -> DraftGitHubReleaseResponse:
     return _service(request).draft_github_release(repository_id, payload)
+
+
+@router.post(
+    "/{repository_id}/github/pull-requests/draft",
+    response_model=DraftGitHubPullRequestResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def draft_github_pull_request(
+    repository_id: str,
+    payload: DraftGitHubPullRequestRequest,
+    request: Request,
+) -> DraftGitHubPullRequestResponse:
+    return _service(request).draft_github_pull_request(repository_id, payload)
 
 
 @router.post(

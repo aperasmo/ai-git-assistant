@@ -498,6 +498,17 @@ export default function App() {
     const repositoryId = activeRepositoryId;
     if (!repositoryId || findPendingPlan(transcripts[repositoryId] ?? [])) return;
 
+    const normalizedMessage = " " + message.trim().toLowerCase().replace(/\s+/g, " ") + " ";
+    if (
+      normalizedMessage.includes(" draft pr ") ||
+      normalizedMessage.includes(" draft pull request ") ||
+      normalizedMessage.includes(" create draft pr ") ||
+      normalizedMessage.includes(" create draft pull request ")
+    ) {
+      void runWizardFlow("draft_pr");
+      return;
+    }
+
     appendTranscriptEntry(repositoryId, {
       id: createTranscriptId(),
       kind: "user",
@@ -729,6 +740,8 @@ export default function App() {
       startConnectRemoteWizard();
     } else if (flowId === "draft_release") {
       startDraftReleaseWizard(repositoryId);
+    } else if (flowId === "draft_pr") {
+      startDraftPullRequestWizard(repositoryId);
     }
   }
 
@@ -951,7 +964,43 @@ export default function App() {
       id: stepId,
       kind: "wizard_step",
       stepKind: "text_input",
-      prompt: "Release tag, for example v0.5.0",
+      prompt: "Release tag, for example v0.6.0",
+      status: "active",
+    });
+  }
+
+  function startDraftPullRequestWizard(repositoryId: string) {
+    const remote = githubRemote(snapshot);
+    if (!remote) {
+      const detected = providerDetailLines(snapshot).join("; ");
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "error",
+        message: [
+          "GitHub draft pull requests are not available for this repository.",
+          `Detected remote provider: ${detected}`,
+          "You can still use local Git workflows, AI summaries, and agent worktrees.",
+          "GitLab merge requests, Bitbucket pull requests, and Azure DevOps pull requests are planned.",
+        ].join(" "),
+      });
+      appendTranscriptEntry(repositoryId, { id: createTranscriptId(), kind: "wizard_menu", variant: "compact" });
+      return;
+    }
+
+    const currentBranch = snapshot?.branch ?? "";
+    const likelyBase = currentBranch === "main" ? "develop" : "main";
+    const stepId = createTranscriptId();
+    activeWizardRef.current = {
+      flowId: "draft_pr",
+      currentStepId: stepId,
+      currentStepKind: "text_input",
+      data: {},
+    };
+    appendTranscriptEntry(repositoryId, {
+      id: stepId,
+      kind: "wizard_step",
+      stepKind: "text_input",
+      prompt: `Pull request base branch, for example ${likelyBase}`,
       status: "active",
     });
   }
@@ -1062,6 +1111,58 @@ export default function App() {
             stepKind: "asset_pick",
             prompt: "Choose the release asset",
             status: "active",
+          });
+        }
+      } else if (wizard.flowId === "draft_pr") {
+        const value = (choiceData.message ?? "").trim();
+        if (!wizard.data.prBaseBranch) {
+          const prData: WizardData = { ...wizard.data, prBaseBranch: value };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: prData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "text_input",
+            prompt: "Pull request title",
+            status: "active",
+          });
+        } else if (!wizard.data.prTitle) {
+          const prData: WizardData = { ...wizard.data, prTitle: value };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: prData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "text_input",
+            prompt: "Pull request description",
+            status: "active",
+          });
+        } else {
+          const prData: WizardData = { ...wizard.data, prBody: value };
+          const remoteName = githubRemote(snapshot)?.remote ?? "origin";
+          const currentBranch = snapshot?.branch ?? "current branch";
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: prData };
+          activeWizardRef.current = next;
+          const dirtyCount =
+            (snapshot?.stagedChanges ?? []).length +
+            (snapshot?.modifiedChanges ?? []).length +
+            (snapshot?.untrackedPaths ?? []).length;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "confirm",
+            prompt: "Draft GitHub pull request",
+            status: "active",
+            confirmLines: [
+              `Remote: ${remoteName} (${snapshot?.remoteUrls?.[remoteName] ?? "—"})`,
+              `Base: ${prData.prBaseBranch}`,
+              `Head: ${currentBranch}`,
+              `Title: ${prData.prTitle}`,
+              `Ahead remote: ${snapshot?.ahead ?? 0}`,
+              `Uncommitted files: ${dirtyCount}`,
+              "Draft: yes",
+              ...gitCmds("GitHub API: create draft pull request"),
+            ],
           });
         }
       } else if (wizard.flowId === "stage_only") {
@@ -1206,6 +1307,25 @@ export default function App() {
           title: release.title,
           summary: release.summary,
           content: release.content,
+        });
+        await loadRepositories();
+        return;
+      }
+
+      if (wizard.flowId === "draft_pr") {
+        const pullRequest = await desktopApi.draftGithubPullRequest(repositoryId, {
+          baseBranch: wizard.data.prBaseBranch ?? "",
+          title: wizard.data.prTitle ?? "",
+          body: wizard.data.prBody ?? "",
+        });
+        if (activeRepositoryIdRef.current !== repositoryId) return;
+        setSnapshot(pullRequest.snapshot);
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "result",
+          title: pullRequest.title,
+          summary: pullRequest.summary,
+          content: pullRequest.content,
         });
         await loadRepositories();
         return;

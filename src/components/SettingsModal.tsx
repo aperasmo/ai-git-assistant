@@ -234,10 +234,10 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
               {testResult.ok ? "✓ " : "✗ "}{testResult.message}
             </p>
           )}
-          <p className="settings-section-heading">GITHUB RELEASE PUBLISHER</p>
+          <p className="settings-section-heading">GITHUB PLATFORM ACTIONS</p>
           <p className="settings-hint">
-            Required for drafting GitHub releases and uploading installer assets. Use a fine-grained
-            token scoped to the release repository with Contents read/write access.
+            Required for drafting GitHub releases and pull requests. Use a fine-grained token scoped
+            to the repository with Contents read/write and Pull requests read/write access.
           </p>
           <label className="settings-label" htmlFor="github-token-input">
             GitHub token{githubSettings?.tokenSet ? " (token stored - enter a new one to replace)" : ""}
@@ -252,8 +252,8 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
             autoComplete="off"
           />
           <p className="settings-hint warning">
-            The token is encrypted locally before storage. Draft releases still require your explicit
-            wizard confirmation before anything is sent to GitHub.
+            The token is encrypted locally before storage. Draft releases and draft pull requests
+            still require your explicit wizard confirmation before anything is sent to GitHub.
           </p>
         </div>
 

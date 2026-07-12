@@ -334,6 +334,24 @@ export interface DraftGitHubReleaseResponse {
   snapshot: RepositorySnapshot;
 }
 
+export interface DraftGitHubPullRequestRequest {
+  baseBranch: string;
+  title: string;
+  body: string;
+}
+
+export interface DraftGitHubPullRequestResponse {
+  repository: string;
+  pullRequestUrl: string;
+  number: number;
+  baseBranch: string;
+  headBranch: string;
+  title: string;
+  summary: string;
+  content: string;
+  snapshot: RepositorySnapshot;
+}
+
 export interface CancelActionPlanResponse {
   cancelled: boolean;
 }

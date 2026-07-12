@@ -3,6 +3,8 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
+Last updated: 10/07/2026
+
 ---
 
 ## What the app can do today
@@ -22,7 +24,65 @@ Versions track the active product phase so releases are easy to understand:
 | Phase 7 | `0.7.x` | Cross-platform release |
 | Phase 8 | `0.8.x` | Team context and conventions |
 
-The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase 5 starts at `0.5.0`.
+The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase 6 starts at `0.6.0`.
+
+### Dated phase history
+
+These dates mark when the phase or feature set was first added to the project history.
+
+#### Phase 1 - 27/06/2026
+
+1. Added the MVP local Git assistant with repository registration and reviewed Git actions.
+2. Added onboarding, command bar flow, command help, and LLM integration/testing.
+3. Published the initial Windows installer line for Phase 1.
+
+#### Phase 2 - 30/06/2026
+
+1. Completed release hardening for repeatable sidecar, frontend, and Tauri installer builds.
+2. Added encrypted local secret storage, diagnostics, and support logging.
+3. Stabilized Windows test/build workflows and updated public release docs.
+
+#### Phase 3 - 30/06/2026
+
+1. Added Git client parity features: commit graph, full diff, file history, blame, stash, remotes, merge/conflict guidance, and tags.
+2. Added guided conflict resolution flows for continue/abort merge.
+3. Updated command references and status docs for the Git client parity release.
+
+#### Phase 4 - 03/07/2026
+
+1. Started AI-native Git workflows and updated the app phase label.
+2. Added release tag workflow support and repository provider awareness foundations.
+3. Added GitHub release publishing flow with provider-specific gating.
+
+#### Phase 4.4 - 04/07/2026
+
+1. Added premium AI commit-message composer styles: Detailed, Concise, Conventional, and Release.
+2. Added richer grouped diff context, detected scope, confidence, and alternate subjects.
+3. Updated tests, docs, and installer metadata for the commit composer release.
+
+#### Phase 5 - 07/07/2026
+
+1. Added the agent worktree control plane.
+2. Added session tracking, compare, merge, abandon, and cleanup controls.
+3. Added workflow-style Help and stronger read-only request guarding.
+
+#### Phase 6 - 10/07/2026
+
+1. Added GitHub draft pull request creation from the current branch.
+2. Added provider, branch, conflict, push, and remote-visibility readiness checks.
+3. Updated GitHub token guidance for Contents read/write and Pull requests read/write.
+
+#### Phase 7 - target TBD
+
+1. Planned macOS and Linux builds.
+2. Planned platform-specific secure storage.
+3. Planned install and troubleshooting docs per OS.
+
+#### Phase 8 - target TBD
+
+1. Planned team context and conventions.
+2. Planned repo-local style profiles and AI context receipts.
+3. Planned team-aware commit messages, PR summaries, release notes, and branch naming.
 
 ### Architecture
 
@@ -273,7 +333,7 @@ Phase 1 includes the AI fallback layer. If the local planner cannot recognise a 
 
 ---
 
-## Phase 2 release hardening - complete
+## Phase 2 release hardening - complete (30/06/2026)
 
 Phase 1 is complete and has already been published as a Windows installer. Phase 2 makes future releases repeatable, trustworthy, and easier to support.
 
@@ -290,7 +350,7 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 
 ## Next product phases
 
-### Phase 3 - Git client parity - complete
+### Phase 3 - Git client parity - complete (30/06/2026)
 
 - [x] Visual commit graph.
 - [x] Full patch diff with syntax highlighting.
@@ -300,7 +360,7 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Merge/conflict detection and guided conflict workflow.
 - [x] Release tag list/inspect/create/delete/push workflow.
 
-### Phase 4 - AI-native Git workflows - complete
+### Phase 4 - AI-native Git workflows - complete (03/07/2026)
 
 - [x] AI commit message generation from selected commit wizard diff, including consolidated subject/body drafts for multi-file changes.
 - [x] AI commit composer that splits mixed work into logical commits.
@@ -308,7 +368,7 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Risk scoring before approval.
 - [x] Privacy receipt showing exactly what context was sent to an external provider.
 
-### Phase 4.1 - GitHub release publisher - complete
+### Phase 4.1 - GitHub release publisher - complete (03/07/2026)
 
 - [x] Store a GitHub release token encrypted in local settings.
 - [x] Detect GitHub owner/repo from the configured remote URL.
@@ -316,7 +376,7 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Create a GitHub draft release and upload one installer asset after explicit approval.
 - [x] Return release URL, asset URL, and SHA-256 checksum in the transcript.
 
-### Phase 4.3 - Repository provider awareness - complete
+### Phase 4.3 - Repository provider awareness - complete (03/07/2026)
 
 - [x] Detect remote providers per selected repository from configured remote URLs.
 - [x] Label GitHub, GitLab, Bitbucket, Azure DevOps, unknown, local-only, and mixed-provider repositories in the right panel.
@@ -324,14 +384,14 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Guard GitHub-only draft release publishing with a provider-specific message when the selected repo is not GitHub-backed.
 - [x] Use provider awareness as the foundation for Phase 6 multi-provider PR/MR work.
 
-### Phase 4.4 - Premium commit message composer - complete
+### Phase 4.4 - Premium commit message composer - complete (04/07/2026)
 
 - [x] Add commit-message style modes: Detailed, Concise, Conventional, and Release.
 - [x] Enrich AI commit context with grouped paths, file status, diff stats, detected domains, and recent commit subjects.
 - [x] Return confidence, detected scope, and alternate subjects with the generated commit draft.
 - [x] Show richer commit draft controls in the wizard while keeping the final commit message editable.
 
-### Phase 5 - Agent worktree control plane
+### Phase 5 - Agent worktree control plane (07/07/2026)
 
 - [x] Show execution feedback while approved plans are running.
 - [x] Replace the flat command reference with a workflow-style Git cheat sheet grouped by setup, snapshot, branch, sharing, inspect, and advanced safety workflows.
@@ -341,15 +401,18 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Compare agent outputs against the base branch with commits, changed files, diff stat, and worktree status.
 - [x] Review, merge, abandon, or clean up agent work from the app.
 
-### Phase 6 - Multi-provider PR/MR and review workflow
+### Phase 6 - Multi-provider PR/MR and review workflow (10/07/2026)
 
-- [ ] Create GitHub Pull Requests and GitLab Merge Requests from the current branch.
+- [x] Create GitHub draft Pull Requests from the current branch.
+- [x] Guard draft PR creation with provider, branch, conflict, push, and remote-visibility readiness checks.
+- [x] Reuse encrypted GitHub token settings with Pull requests read/write permission guidance.
+- [ ] Create GitLab Merge Requests from the current branch.
 - [ ] AI-generated PR title/body/checklist from commits and diff.
 - [ ] Add provider adapters for GitHub first, then GitLab, then Bitbucket.
 - [ ] CI status and review comment display.
 - [ ] Review-response workflow.
 
-### Phase 7 - Cross-platform release
+### Phase 7 - Cross-platform release (target TBD)
 
 - [ ] Build and verify macOS `.app` / `.dmg` packaging.
 - [ ] Add Apple code signing and notarization path.
@@ -358,7 +421,7 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [ ] Verify bundled sidecar startup, Git discovery, file pickers, and installer/update behavior on macOS and Linux.
 - [ ] Document platform-specific install and troubleshooting steps.
 
-### Phase 8 - Team context and conventions
+### Phase 8 - Team context and conventions (target TBD)
 
 - [ ] Add repo-local team context, for example `.ai-git-assistant/team-context.md`.
 - [ ] Import team conventions from `CONTRIBUTING.md`, PR templates, changelog rules, and recent commit history.
@@ -397,7 +460,7 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 | `test_settings_service.py` | 10 | LLM/GitHub settings defaults, updates, encrypted secret persistence, and secret redaction |
 | `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
 | `test_health.py` | 3 | Authenticated sidecar health checks, protocol version, and diagnostics metadata |
-| `test_repository_flow.py` | 34 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, and agent worktree session lifecycle |
+| `test_repository_flow.py` | 36 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, agent worktree session lifecycle, and Phase 6 GitHub draft PR flow |
 | `test_remote_provider.py` | 9 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
 
-Current verified sidecar suite: 114 passing tests via `python -m pytest sidecar/tests --basetemp=.pytest-tmp-phase5-full`.
+Current verified sidecar suite: 116 passing tests via `python -m pytest sidecar/tests --basetemp=.pytest-tmp-phase6-full`.

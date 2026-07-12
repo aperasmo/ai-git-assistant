@@ -414,6 +414,10 @@ class GitClient:
     def log_range_oneline(self, revision_range: str) -> str:
         return self.run(["log", "--oneline", revision_range], allow_failure=True).stdout
 
+    def remote_branch_exists(self, remote: str, branch: str) -> bool:
+        result = self.run(["ls-remote", "--heads", remote, branch], timeout_seconds=60, allow_failure=True)
+        return bool(result.stdout.strip())
+
     def stash_push(self, message: str | None = None) -> GitResult:
         args: list[str] = ["stash", "push", "--include-untracked"]
         if message:

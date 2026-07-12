@@ -33,7 +33,7 @@ export function platformFeatureHint(snapshot?: RepositorySnapshot | null): strin
 
   const labels = Array.from(new Set(providers.map((item) => item.label))).join(", ");
   if (providers.some((item) => item.provider === "github")) {
-    return "GitHub releases are available. PR workflow is planned.";
+    return "GitHub draft releases and draft pull requests are available.";
   }
   return `${labels} platform actions are planned. Local Git actions still work.`;
 }

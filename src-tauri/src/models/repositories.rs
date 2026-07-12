@@ -267,6 +267,28 @@ pub struct DraftGitHubReleaseResponse {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DraftGitHubPullRequestRequest {
+    pub base_branch: String,
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftGitHubPullRequestResponse {
+    pub repository: String,
+    pub pull_request_url: String,
+    pub number: i64,
+    pub base_branch: String,
+    pub head_branch: String,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+    pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CancelActionPlanResponse {
     pub cancelled: bool,
 }

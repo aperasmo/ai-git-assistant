@@ -7,9 +7,10 @@ use crate::{
     models::repositories::{
         ActionExecutionResult, AgentSession, AgentSessionActionResponse,
         AgentSessionComparisonResponse, CancelActionPlanResponse, CreateAgentSessionRequest,
-        DraftGitHubReleaseRequest, DraftGitHubReleaseResponse, FolderClassification,
-        GenerateChangeSummaryResponse, GenerateCommitMessageResponse, LocalActionPlan,
-        ReadActionRequest, ReadActionResult, Repository, RepositorySnapshot,
+        DraftGitHubPullRequestRequest, DraftGitHubPullRequestResponse, DraftGitHubReleaseRequest,
+        DraftGitHubReleaseResponse, FolderClassification, GenerateChangeSummaryResponse,
+        GenerateCommitMessageResponse, LocalActionPlan, ReadActionRequest, ReadActionResult,
+        Repository, RepositorySnapshot,
     },
     sidecar_proxy::SidecarProxy,
 };
@@ -381,6 +382,22 @@ pub async fn draft_github_release(
         .post(
             &state,
             &format!("/v1/repositories/{repository_id}/github/releases/draft"),
+            &request,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn draft_github_pull_request(
+    repository_id: String,
+    request: DraftGitHubPullRequestRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<DraftGitHubPullRequestResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/github/pull-requests/draft"),
             &request,
         )
         .await

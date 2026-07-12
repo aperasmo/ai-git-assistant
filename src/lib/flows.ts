@@ -18,7 +18,8 @@ export type WizardFlowId =
   | "stash"
   | "discard"
   | "connect_remote"
-  | "draft_release";
+  | "draft_release"
+  | "draft_pr";
 
 export interface FlowDef {
   id: WizardFlowId;
@@ -47,6 +48,7 @@ export const FLOWS: FlowDef[] = [
   { id: "discard", label: "Discard changes", icon: "X", description: "Revert file changes", category: "write" },
   { id: "connect_remote", label: "Connect remote", icon: "@", description: "Add GitHub/GitLab origin", category: "write" },
   { id: "draft_release", label: "Draft release", icon: "V", description: "Create a GitHub draft release", category: "write" },
+  { id: "draft_pr", label: "Draft PR", icon: "Q", description: "Create a GitHub draft pull request", category: "write" },
 ];
 
 export const FLOW_LABELS: Record<WizardFlowId, string> = Object.fromEntries(
@@ -63,6 +65,9 @@ export interface WizardData {
   releaseBody?: string;
   assetPath?: string;
   prerelease?: boolean;
+  prBaseBranch?: string;
+  prTitle?: string;
+  prBody?: string;
 }
 
 export interface WizardState {

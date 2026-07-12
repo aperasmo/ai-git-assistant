@@ -36,6 +36,13 @@ class GitHubDraftReleaseResult:
     asset_sha256: str | None
 
 
+@dataclass(frozen=True)
+class GitHubDraftPullRequestResult:
+    number: int
+    pull_request_url: str
+    title: str
+
+
 def parse_github_remote_url(remote_url: str) -> GitHubRepositoryRef | None:
     value = remote_url.strip()
     for pattern in (_HTTPS_REMOTE, _SSH_REMOTE, _SSH_URL_REMOTE):
@@ -125,8 +132,45 @@ class GitHubReleaseClient:
             asset_sha256=asset_sha256,
         )
 
+    def create_draft_pull_request(
+        self,
+        *,
+        repository: GitHubRepositoryRef,
+        title: str,
+        body: str,
+        head: str,
+        base: str,
+    ) -> GitHubDraftPullRequestResult:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self._token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        payload: dict[str, object] = {
+            "title": title,
+            "body": body,
+            "head": head,
+            "base": base,
+            "draft": True,
+            "maintainer_can_modify": True,
+        }
+        api_url = f"https://api.github.com/repos/{repository.owner}/{repository.repo}/pulls"
+        try:
+            with httpx.Client(timeout=self._timeout, follow_redirects=True) as client:
+                response = client.post(api_url, headers=headers, json=payload)
+                self._raise_for_github_error(response, operation="pull request")
+                pull_request = response.json()
+        except httpx.HTTPError as exc:
+            raise ValidationFailure(f"GitHub pull request request failed: {exc}") from exc
+
+        return GitHubDraftPullRequestResult(
+            number=int(pull_request.get("number") or 0),
+            pull_request_url=str(pull_request.get("html_url") or ""),
+            title=str(pull_request.get("title") or title),
+        )
+
     @staticmethod
-    def _raise_for_github_error(response: httpx.Response) -> None:
+    def _raise_for_github_error(response: httpx.Response, *, operation: str = "release") -> None:
         if response.status_code < 400:
             return
         try:
@@ -138,8 +182,9 @@ class GitHubReleaseClient:
             and "resource not accessible by personal access token" in str(message).lower()
         ):
             raise ValidationFailure(
-                "GitHub token cannot create releases for this repository. "
-                "Create or update a fine-grained token for this repo with Contents: Read and write, "
+                f"GitHub token cannot create {operation}s for this repository. "
+                "Create or update a fine-grained token for this repo with Contents: Read and write "
+                "and Pull requests: Read and write, "
                 "then save it again in Settings."
             )
         raise ValidationFailure(

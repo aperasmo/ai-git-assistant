@@ -8,9 +8,9 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.5.0 - Phase 5** starts the next product line after the AI-native Git workflow release. It includes everything from Phase 4 plus clearer execution feedback, a workflow-style Git cheat sheet in Help, premium AI commit-message generation, AI change summaries, logical commit suggestions, PR-ready summaries, plan risk scoring, privacy receipts for AI context, GitHub draft release publishing with installer asset upload, repository remote provider awareness, richer commit-message style controls, and the first agent worktree control plane.
+**0.6.0 - Phase 6** starts the PR and review workflow line. It includes everything from Phase 5 plus GitHub draft pull request creation from the selected branch, provider-aware PR gating, PR readiness checks, and updated GitHub token guidance for pull request permissions.
 
-Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`. The first release in a phase uses `.0`, so Phase 5 starts at `0.5.0`.
+Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`. The first release in a phase uses `.0`, so Phase 6 starts at `0.6.0`.
 
 See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phase 2 hardening notes.
 
@@ -95,7 +95,7 @@ blame README.md
 show stashes
 show remotes
 show tags
-show tag v0.5.0
+show tag v0.6.0
 show conflicts
 commit all my changes with message "Fix login bug"
 push and commit everything with message "Add dark mode"
@@ -104,8 +104,8 @@ switch to main
 create branch feature/new-login
 stash my changes
 merge feature/new-login
-create tag v0.5.0 with message "Release v0.5.0"
-push tag v0.5.0
+create tag v0.6.0 with message "Release v0.6.0"
+push tag v0.6.0
 ```
 
 The app turns your sentence into a Git plan and shows it to you before doing anything.
@@ -144,15 +144,19 @@ In the commit wizard, enable AI for the repository and choose a commit-message s
 
 ---
 
-## GitHub release publishing
+## GitHub platform actions
 
-Phase 4.2 includes a guided **Draft release** flow in the WRITE command bar. Add a fine-grained GitHub token in **Settings** for the target repository with **Repository permissions -> Contents -> Read and write**, then choose **Draft release** to enter the tag, title, description, and installer asset.
+Add a fine-grained GitHub token in **Settings** for the target repository with **Repository permissions -> Contents -> Read and write** and **Pull requests -> Read and write**.
+
+Phase 4.2 includes a guided **Draft release** flow in the WRITE command bar. Choose **Draft release** to enter the tag, title, description, and installer asset.
 
 The app creates a new GitHub draft release and uploads one asset only after you confirm the final wizard step. Updating existing releases, replacing assets, and retargeting existing tags are intentionally not part of the current flow.
 
-Phase 4.3 adds provider awareness before platform actions run. If the selected repository is GitLab, Bitbucket, Azure DevOps, local-only, or unknown, the app explains that GitHub draft releases are not available for that repository while confirming local Git workflows still work.
+Phase 6.0 adds a guided **Draft PR** flow in the WRITE command bar. Choose **Draft PR**, enter the base branch, title, and description, then confirm the readiness summary. The app checks that the selected repository is GitHub-backed, the branch is named, the base differs from the current branch, conflicts are resolved, local commits are pushed, and GitHub can see the head branch.
 
-If GitHub rejects the request with a token permission error, create or update a fine-grained token for that exact repository, enable **Contents: Read and write**, save it again in Settings, then retry.
+Phase 4.3 adds provider awareness before platform actions run. If the selected repository is GitLab, Bitbucket, Azure DevOps, local-only, or unknown, the app explains that GitHub platform actions are not available for that repository while confirming local Git workflows still work.
+
+If GitHub rejects the request with a token permission error, create or update a fine-grained token for that exact repository, enable **Contents: Read and write** and **Pull requests: Read and write**, save it again in Settings, then retry.
 
 ---
 
@@ -162,7 +166,7 @@ AI Git Assistant works with GitLab, Bitbucket, Azure DevOps, and self-hosted rem
 
 Provider-specific platform features are guarded by the selected repository's remotes:
 
-- **GitHub:** draft release publishing is available now
+- **GitHub:** draft release publishing and draft pull request creation are available now
 - **GitLab:** normal Git workflows work now; merge requests and releases are planned
 - **Bitbucket:** normal Git workflows work now; pull requests are planned
 - **Azure DevOps:** normal Git workflows work now; platform integrations are planned
@@ -203,7 +207,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `inspect stash@{0}` | Patch for one stash entry |
 | `show remotes` | Configured remote URLs |
 | `show tags` | Local release tags |
-| `show tag v0.5.0` | Inspect one tag |
+| `show tag v0.6.0` | Inspect one tag |
 | `history README.md` | File-specific commit history |
 | `blame README.md` | Line authorship for one file |
 | `show conflicts` | Conflict files and resolution guidance |
@@ -228,10 +232,11 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `merge feature/name` | Merge a local branch with guided conflict handling |
 | `continue merge` | Commit a resolved merge |
 | `abort merge` | Abort an in-progress merge |
-| `create tag v0.5.0 with message "Release v0.5.0"` | Create an annotated local tag |
-| `push tag v0.5.0` | Push one explicit tag to the remote |
-| `delete tag v0.5.0` | Delete a local tag after approval |
+| `create tag v0.6.0 with message "Release v0.6.0"` | Create an annotated local tag |
+| `push tag v0.6.0` | Push one explicit tag to the remote |
+| `delete tag v0.6.0` | Delete a local tag after approval |
 | `draft release` | Create a GitHub draft release and upload one asset |
+| `draft PR` | Create a GitHub draft pull request from the current branch |
 | `unstage login.py` | Remove file from staging |
 | `discard changes in login.py` | Revert file to last commit |
 
@@ -328,8 +333,8 @@ Either rephrase your request, or set up an AI provider in Settings - it will han
 **Test connection shows an error**
 Double-check your API key. Make sure you clicked **Save** before clicking **Test connection**.
 
-**GitHub release publishing is rejected**
-Create or update a fine-grained GitHub token for the exact repository and set **Repository permissions -> Contents -> Read and write**. Save the token again in Settings, then retry the draft release.
+**GitHub platform action is rejected**
+Create or update a fine-grained GitHub token for the exact repository and set **Repository permissions -> Contents -> Read and write** and **Pull requests -> Read and write**. Save the token again in Settings, then retry.
 
 **Ollama: connection failed**
 Ollama must be running before the app can use it. Open a terminal and run `ollama serve`, then try again.
@@ -351,6 +356,7 @@ Delete that file for a completely clean start.
 - If you click **Generate with AI** for a commit message, grouped selected-file context, diff stats, recent commit subjects, and the selected diff/file snippets are sent to your configured provider
 - If you click **Analyze changes**, the receipt shows the exact selected diff context sent to the configured AI provider
 - If you publish a GitHub draft release, the tag, title, description, and selected asset are sent to GitHub using your saved token
+- If you create a GitHub draft pull request, the base branch, current branch, title, and description are sent to GitHub using your saved token
 - API keys and GitHub tokens are stored locally with Windows encryption
 - If you use Ollama, everything stays on your machine - nothing leaves your computer
 
@@ -371,4 +377,4 @@ Found a bug or have a suggestion? Open an issue on this repository and describe 
 
 ---
 
-*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase 5*
+*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase 6*

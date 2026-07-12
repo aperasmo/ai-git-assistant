@@ -341,6 +341,24 @@ class DraftGitHubReleaseResponse(ApiModel):
     snapshot: RepositorySnapshot
 
 
+class DraftGitHubPullRequestRequest(ApiModel):
+    base_branch: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=255)
+    body: str = Field(default="", max_length=20_000)
+
+
+class DraftGitHubPullRequestResponse(ApiModel):
+    repository: str
+    pull_request_url: str
+    number: int
+    base_branch: str
+    head_branch: str
+    title: str
+    summary: str
+    content: str
+    snapshot: RepositorySnapshot
+
+
 class CloneRepositoryRequest(ApiModel):
     url: str
     parent_path: str

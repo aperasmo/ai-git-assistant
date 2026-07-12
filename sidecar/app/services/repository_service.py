@@ -24,6 +24,8 @@ from app.schemas.repositories import (
     BranchInfo,
     CancelActionPlanResponse,
     CommitMessageStyle,
+    DraftGitHubPullRequestRequest,
+    DraftGitHubPullRequestResponse,
     DraftGitHubReleaseRequest,
     DraftGitHubReleaseResponse,
     GenerateChangeSummaryResponse,
@@ -63,6 +65,7 @@ _READ_ONLY_REQUEST_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _AGENT_BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
+_PR_BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 
 
 @dataclass(frozen=True)
@@ -720,6 +723,90 @@ class RepositoryService:
             snapshot=latest_snapshot,
         )
 
+    def draft_github_pull_request(
+        self,
+        repository_id: str,
+        request: DraftGitHubPullRequestRequest,
+    ) -> DraftGitHubPullRequestResponse:
+        if self.settings_service is None:
+            raise ValidationFailure("GitHub settings are unavailable.")
+
+        token = self.settings_service.get_raw_github_token()
+        if not token:
+            raise ValidationFailure(
+                "No GitHub token is configured. Open Settings and add a token with Contents read/write "
+                "and Pull requests read/write access."
+            )
+
+        snapshot = self.snapshot(repository_id)
+        repository_ref = self._github_repository_from_snapshot(snapshot)
+        head_branch = snapshot.branch
+        base_branch = request.base_branch.strip()
+        self._validate_pr_branch_name(base_branch)
+
+        if not head_branch:
+            raise ValidationFailure("Draft pull requests require a named branch, not detached HEAD.")
+        self._validate_pr_branch_name(head_branch)
+        if head_branch == base_branch:
+            raise ValidationFailure("Choose a base branch different from the current branch.")
+        if snapshot.write_blocked_reason or snapshot.conflicts:
+            raise ValidationFailure("Resolve repository conflicts before drafting a pull request.")
+        if snapshot.ahead > 0:
+            raise ValidationFailure(
+                "The current branch has local commits that are not pushed yet. Push first, then draft the pull request."
+            )
+
+        canonical_path = self.store.canonical_path(repository_id)
+        client = GitClient(canonical_path)
+        github_remote = self._github_remote_name_from_snapshot(snapshot)
+        if not client.remote_branch_exists(github_remote, head_branch):
+            raise ValidationFailure(
+                f"GitHub cannot see branch '{head_branch}' on remote '{github_remote}'. Push the branch first."
+            )
+
+        commits = client.log_range_oneline(f"{base_branch}..{head_branch}").strip()
+        changed_files = client.compare_name_status(base_branch, head_branch).strip()
+        diff_stat = client.compare_stat(base_branch, head_branch).strip()
+
+        client_api = self._github_release_client_factory(token)
+        result = client_api.create_draft_pull_request(
+            repository=repository_ref,
+            title=request.title.strip(),
+            body=request.body.strip(),
+            head=head_branch,
+            base=base_branch,
+        )
+        latest_snapshot = self.snapshot(repository_id)
+        content_lines = [
+            f"Repository: {repository_ref.slug}",
+            f"Draft PR: {result.pull_request_url}",
+            f"Number: #{result.number}",
+            f"Base: {base_branch}",
+            f"Head: {head_branch}",
+            "Draft: yes",
+            "",
+            "Commits:",
+            commits or "(GitHub accepted the PR, but no local commit range was available.)",
+            "",
+            "Changed files:",
+            changed_files or "(No local file list available.)",
+            "",
+            "Diff stat:",
+            diff_stat or "(No local diff stat available.)",
+        ]
+
+        return DraftGitHubPullRequestResponse(
+            repository=repository_ref.slug,
+            pull_request_url=result.pull_request_url,
+            number=result.number,
+            base_branch=base_branch,
+            head_branch=head_branch,
+            title="GitHub Draft Pull Request Created",
+            summary=f"Draft PR #{result.number} was created from {head_branch} into {base_branch}.",
+            content="\n".join(content_lines),
+            snapshot=latest_snapshot,
+        )
+
     def execute_action_plan(
         self,
         repository_id: str,
@@ -1147,7 +1234,7 @@ class RepositoryService:
     def _github_repository_from_snapshot(snapshot: RepositorySnapshot) -> GitHubRepositoryRef:
         if not snapshot.remote_urls:
             raise ValidationFailure(
-                "GitHub draft releases are not available because this repository has no remote. "
+                "GitHub platform actions are not available because this repository has no remote. "
                 "Local Git features still work."
             )
 
@@ -1167,11 +1254,21 @@ class RepositoryService:
 
         detected = RepositoryService._remote_provider_summary(snapshot)
         raise ValidationFailure(
-            "GitHub draft releases are not available for this repository. "
+            "GitHub platform actions are not available for this repository. "
             f"Detected remote provider: {detected}. "
             "You can still use status, commits, branches, push, pull, fetch, tags, stash, merge, "
-            "and AI summaries. GitLab, Bitbucket, and Azure DevOps release publishing are planned."
+            "and AI summaries. GitLab, Bitbucket, and Azure DevOps platform integrations are planned."
         )
+
+    @staticmethod
+    def _github_remote_name_from_snapshot(snapshot: RepositorySnapshot) -> str:
+        for provider in snapshot.remote_providers:
+            if provider.provider == "github":
+                return provider.remote
+        for name, remote_url in snapshot.remote_urls.items():
+            if parse_github_remote_url(remote_url) is not None:
+                return name
+        raise ValidationFailure("No GitHub remote was found for this repository.")
 
     @staticmethod
     def _remote_provider_summary(snapshot: RepositorySnapshot) -> str:
@@ -1830,6 +1927,20 @@ class RepositoryService:
             or candidate.startswith("-")
         ):
             raise ValidationFailure("Use a safe tag name such as v0.3.0.")
+
+    @staticmethod
+    def _validate_pr_branch_name(value: str) -> None:
+        candidate = value.strip()
+        if (
+            not _PR_BRANCH_PATTERN.fullmatch(candidate)
+            or ".." in candidate
+            or "@{" in candidate
+            or candidate.endswith(".")
+            or candidate.endswith("/")
+            or "//" in candidate
+            or candidate.startswith("-")
+        ):
+            raise ValidationFailure("Use a safe branch name such as main or feature/login.")
 
     @staticmethod
     def _normalise_requested_tag(value: str) -> str:

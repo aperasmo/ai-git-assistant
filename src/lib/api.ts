@@ -8,6 +8,8 @@ import type {
   BootstrapStatus,
   CancelActionPlanResponse,
   DiagnosticsStatus,
+  DraftGitHubPullRequestRequest,
+  DraftGitHubPullRequestResponse,
   DraftGitHubReleaseRequest,
   DraftGitHubReleaseResponse,
   FolderClassification,
@@ -99,6 +101,9 @@ export const desktopApi = {
 
   draftGithubRelease: (repositoryId: string, request: DraftGitHubReleaseRequest) =>
     invoke<DraftGitHubReleaseResponse>("draft_github_release", { repositoryId, request }),
+
+  draftGithubPullRequest: (repositoryId: string, request: DraftGitHubPullRequestRequest) =>
+    invoke<DraftGitHubPullRequestResponse>("draft_github_pull_request", { repositoryId, request }),
 
   addToGitignore: (repositoryId: string, paths: string[]) =>
     invoke<{ ok: boolean }>("add_to_gitignore", { repositoryId, paths }),
