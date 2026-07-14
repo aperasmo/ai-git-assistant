@@ -8,6 +8,8 @@ import type {
   BootstrapStatus,
   CancelActionPlanResponse,
   DiagnosticsStatus,
+  DraftGitLabMergeRequestRequest,
+  DraftGitLabMergeRequestResponse,
   DraftGitHubPullRequestRequest,
   DraftGitHubPullRequestResponse,
   DraftGitHubReleaseRequest,
@@ -15,8 +17,10 @@ import type {
   FolderClassification,
   GenerateChangeSummaryResponse,
   GenerateCommitMessageResponse,
+  GeneratePullRequestDraftResponse,
   GitInstallationStatus,
   GitHubSettings,
+  GitLabSettings,
   LLMSettings,
   LocalActionPlan,
   ReadActionRequest,
@@ -24,6 +28,7 @@ import type {
   Repository,
   RepositorySnapshot,
   UpdateGitHubSettingsRequest,
+  UpdateGitLabSettingsRequest,
   UpdateLLMSettingsRequest,
 } from "./types";
 
@@ -99,11 +104,17 @@ export const desktopApi = {
   generateChangeSummary: (repositoryId: string, paths: string[]) =>
     invoke<GenerateChangeSummaryResponse>("generate_change_summary", { repositoryId, paths }),
 
+  generatePullRequestDraft: (repositoryId: string, baseBranch: string) =>
+    invoke<GeneratePullRequestDraftResponse>("generate_pull_request_draft", { repositoryId, baseBranch }),
+
   draftGithubRelease: (repositoryId: string, request: DraftGitHubReleaseRequest) =>
     invoke<DraftGitHubReleaseResponse>("draft_github_release", { repositoryId, request }),
 
   draftGithubPullRequest: (repositoryId: string, request: DraftGitHubPullRequestRequest) =>
     invoke<DraftGitHubPullRequestResponse>("draft_github_pull_request", { repositoryId, request }),
+
+  draftGitlabMergeRequest: (repositoryId: string, request: DraftGitLabMergeRequestRequest) =>
+    invoke<DraftGitLabMergeRequestResponse>("draft_gitlab_merge_request", { repositoryId, request }),
 
   addToGitignore: (repositoryId: string, paths: string[]) =>
     invoke<{ ok: boolean }>("add_to_gitignore", { repositoryId, paths }),
@@ -127,6 +138,11 @@ export const desktopApi = {
 
   updateGithubSettings: (request: UpdateGitHubSettingsRequest) =>
     invoke<GitHubSettings>("update_github_settings", { request }),
+
+  getGitlabSettings: () => invoke<GitLabSettings>("get_gitlab_settings"),
+
+  updateGitlabSettings: (request: UpdateGitLabSettingsRequest) =>
+    invoke<GitLabSettings>("update_gitlab_settings", { request }),
 
   testLlmConnection: () =>
     invoke<{ ok: boolean; message: string }>("test_llm_connection"),

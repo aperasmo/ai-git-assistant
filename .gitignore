@@ -9,6 +9,7 @@ src-tauri/binaries/*.exe
 sidecar/.venv/
 sidecar/.pytest_cache/
 sidecar/.pytest-tmp/
+.pytest-tmp*/
 sidecar/**/__pycache__/
 sidecar/**/*.pyc
 sidecar/**/*.pyo

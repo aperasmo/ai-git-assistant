@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 10/07/2026
+Last updated: 13/07/2026
 
 ---
 
@@ -69,8 +69,16 @@ These dates mark when the phase or feature set was first added to the project hi
 #### Phase 6 - 10/07/2026
 
 1. Added GitHub draft pull request creation from the current branch.
-2. Added provider, branch, conflict, push, and remote-visibility readiness checks.
-3. Updated GitHub token guidance for Contents read/write and Pull requests read/write.
+2. Added GitLab draft merge request creation from the current branch.
+3. Added AI-generated PR/MR title, body, and checklist drafts from branch comparison context.
+4. Added provider, branch, conflict, push, and remote-visibility readiness checks.
+5. Updated GitHub and GitLab token guidance.
+
+#### Phase 6.2 - 13/07/2026
+
+1. Added Review status as a read-only PR/MR visibility command.
+2. Added GitHub PR and GitLab MR CI/check status, review summary, comment count, and recent comment display.
+3. Guarded review-status requests so they resolve locally as read actions instead of falling through to write-plan AI fallback.
 
 #### Phase 7 - target TBD
 
@@ -123,6 +131,7 @@ Type any of these in the chat input or use the quick-action buttons in the right
 | `show tags` / `show tag v0.3.0` | `git tag --list` / `git show --stat <tag>` |
 | `history README.md` / `blame README.md` | `git log --follow` / `git blame` for one file |
 | `show conflicts` | Conflicted files, conflict marker snippets, and next-step guidance |
+| `review status` / `PR status` / `MR status` | GitHub/GitLab provider API read for current branch PR/MR CI, reviews, and comments |
 | `refresh remote status` / `fetch` | `git fetch --prune` — updates ahead/behind counts |
 
 The right-hand context panel also shows live branch, ahead/behind, and recent commits at all times.
@@ -406,10 +415,12 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Create GitHub draft Pull Requests from the current branch.
 - [x] Guard draft PR creation with provider, branch, conflict, push, and remote-visibility readiness checks.
 - [x] Reuse encrypted GitHub token settings with Pull requests read/write permission guidance.
-- [ ] Create GitLab Merge Requests from the current branch.
-- [ ] AI-generated PR title/body/checklist from commits and diff.
-- [ ] Add provider adapters for GitHub first, then GitLab, then Bitbucket.
-- [ ] CI status and review comment display.
+- [x] Show the runtime app version in the header badge instead of a manually maintained phase label.
+- [x] Create GitLab Merge Requests from the current branch.
+- [x] AI-generated PR title/body/checklist from commits and diff.
+- [x] Add provider adapters for GitHub first, then GitLab.
+- [x] CI status and review comment display.
+- [ ] Add provider adapters for Bitbucket and Azure DevOps.
 - [ ] Review-response workflow.
 
 ### Phase 7 - Cross-platform release (target TBD)
@@ -456,11 +467,11 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 
 | Suite | Tests | What is covered |
 |---|---|---|
-| `test_action_planner.py` | 43 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase 3 stash/read/merge/tag commands |
-| `test_settings_service.py` | 10 | LLM/GitHub settings defaults, updates, encrypted secret persistence, and secret redaction |
+| `test_action_planner.py` | 44 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase 3 stash/read/merge/tag commands |
+| `test_settings_service.py` | 11 | LLM/GitHub/GitLab settings defaults, updates, encrypted secret persistence, and secret redaction |
 | `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
 | `test_health.py` | 3 | Authenticated sidecar health checks, protocol version, and diagnostics metadata |
-| `test_repository_flow.py` | 36 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, agent worktree session lifecycle, and Phase 6 GitHub draft PR flow |
+| `test_repository_flow.py` | 42 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, agent worktree session lifecycle, Phase 6 GitHub draft PR / GitLab draft MR flow, and Phase 6.2 PR/MR review status |
 | `test_remote_provider.py` | 9 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
 
-Current verified sidecar suite: 116 passing tests via `python -m pytest sidecar/tests --basetemp=.pytest-tmp-phase6-full`.
+Current verified sidecar suite: 121 passing tests via `npm run sidecar:test`.

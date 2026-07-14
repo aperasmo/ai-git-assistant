@@ -7,9 +7,11 @@ from typing import Iterator
 
 from app.schemas.settings import (
     GitHubSettings,
+    GitLabSettings,
     LLMProviderKind,
     LLMSettings,
     UpdateGitHubSettingsRequest,
+    UpdateGitLabSettingsRequest,
     UpdateLLMSettingsRequest,
 )
 from app.services.secret_store import SecretStore
@@ -17,6 +19,8 @@ from app.services.secret_store import SecretStore
 _LEGACY_API_KEY = "llm_api_key"
 _ENCRYPTED_API_KEY = "llm_api_key_dpapi"
 _ENCRYPTED_GITHUB_TOKEN = "github_token_dpapi"
+_ENCRYPTED_GITLAB_TOKEN = "gitlab_token_dpapi"
+_GITLAB_BASE_URL = "gitlab_base_url"
 _LLM_KEYS = ("llm_provider", _LEGACY_API_KEY, _ENCRYPTED_API_KEY, "llm_model", "llm_base_url")
 
 
@@ -133,6 +137,56 @@ class SettingsService:
                     conn.execute("DELETE FROM app_settings WHERE key = ?", (_ENCRYPTED_GITHUB_TOKEN,))
 
         return self.get_github_settings()
+
+    def get_gitlab_settings(self) -> GitLabSettings:
+        with self._connection() as conn:
+            token_row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (_ENCRYPTED_GITLAB_TOKEN,),
+            ).fetchone()
+            base_url_row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (_GITLAB_BASE_URL,),
+            ).fetchone()
+
+        return GitLabSettings(
+            token_set=bool((token_row["value"] if token_row else "").strip()),
+            base_url=(base_url_row["value"] if base_url_row else "").strip() or None,
+        )
+
+    def get_raw_gitlab_token(self) -> str | None:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (_ENCRYPTED_GITLAB_TOKEN,),
+            ).fetchone()
+
+        encrypted = (row["value"] if row else "").strip()
+        if not encrypted:
+            return None
+        return SecretStore.unprotect(encrypted).strip() or None
+
+    def update_gitlab_settings(self, request: UpdateGitLabSettingsRequest) -> GitLabSettings:
+        with self._connection() as conn:
+            if request.token is not None:
+                if request.token.strip():
+                    conn.execute(
+                        "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+                        (_ENCRYPTED_GITLAB_TOKEN, SecretStore.protect(request.token.strip())),
+                    )
+                else:
+                    conn.execute("DELETE FROM app_settings WHERE key = ?", (_ENCRYPTED_GITLAB_TOKEN,))
+
+            if request.base_url is not None:
+                if request.base_url.strip():
+                    conn.execute(
+                        "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+                        (_GITLAB_BASE_URL, request.base_url.strip().rstrip("/")),
+                    )
+                else:
+                    conn.execute("DELETE FROM app_settings WHERE key = ?", (_GITLAB_BASE_URL,))
+
+        return self.get_gitlab_settings()
 
     def update_llm_settings(self, request: UpdateLLMSettingsRequest) -> LLMSettings:
         updates: list[tuple[str, str]] = []

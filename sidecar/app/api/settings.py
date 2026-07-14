@@ -7,8 +7,10 @@ from app.auth import require_session_token
 from app.llm.router import LLMNotConfiguredError, _build_provider
 from app.schemas.settings import (
     GitHubSettings,
+    GitLabSettings,
     LLMSettings,
     UpdateGitHubSettingsRequest,
+    UpdateGitLabSettingsRequest,
     UpdateLLMSettingsRequest,
 )
 
@@ -64,6 +66,27 @@ def update_github_settings(
     request: Request,
 ) -> GitHubSettings:
     return _settings_service(request).update_github_settings(payload)
+
+
+@router.get(
+    "/gitlab",
+    response_model=GitLabSettings,
+    dependencies=[Depends(require_session_token)],
+)
+def get_gitlab_settings(request: Request) -> GitLabSettings:
+    return _settings_service(request).get_gitlab_settings()
+
+
+@router.put(
+    "/gitlab",
+    response_model=GitLabSettings,
+    dependencies=[Depends(require_session_token)],
+)
+def update_gitlab_settings(
+    payload: UpdateGitLabSettingsRequest,
+    request: Request,
+) -> GitLabSettings:
+    return _settings_service(request).update_gitlab_settings(payload)
 
 
 @router.post(

@@ -39,7 +39,8 @@ export type ReadAction =
   | "blame"
   | "conflicts"
   | "tags"
-  | "tag_show";
+  | "tag_show"
+  | "review_status";
 export type PlanKind = "read" | "write" | "info";
 export type PlanStepKind =
   | "read"
@@ -313,6 +314,17 @@ export interface GenerateChangeSummaryResponse {
   privacyReceipt?: PrivacyReceipt | null;
 }
 
+export interface GeneratePullRequestDraftResponse {
+  title: string;
+  body: string;
+  checklist: string[];
+  branchSummary: string;
+  fileSummaries: string[];
+  source: "llm";
+  contextSummary: string;
+  privacyReceipt?: PrivacyReceipt | null;
+}
+
 export interface DraftGitHubReleaseRequest {
   tagName: string;
   title: string;
@@ -346,10 +358,40 @@ export interface DraftGitHubPullRequestResponse {
   number: number;
   baseBranch: string;
   headBranch: string;
+  provider: "github";
   title: string;
   summary: string;
   content: string;
   snapshot: RepositorySnapshot;
+}
+
+export interface DraftGitLabMergeRequestRequest {
+  baseBranch: string;
+  title: string;
+  body: string;
+}
+
+export interface DraftGitLabMergeRequestResponse {
+  repository: string;
+  mergeRequestUrl: string;
+  number: number;
+  baseBranch: string;
+  headBranch: string;
+  provider: "gitlab";
+  title: string;
+  summary: string;
+  content: string;
+  snapshot: RepositorySnapshot;
+}
+
+export interface GitLabSettings {
+  tokenSet: boolean;
+  baseUrl?: string | null;
+}
+
+export interface UpdateGitLabSettingsRequest {
+  token?: string | null;
+  baseUrl?: string | null;
 }
 
 export interface CancelActionPlanResponse {
@@ -394,6 +436,7 @@ export type ChatTranscriptEntry =
       status: "active" | "done";
       choices?: string[];
       confirmLines?: string[];
+      initialValue?: string;
       chosenLabel?: string;
       danger?: boolean;
     };

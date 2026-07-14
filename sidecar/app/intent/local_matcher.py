@@ -38,6 +38,22 @@ class LocalIntentMatcher:
                 explanation="Resolved locally as conflict guidance.",
             )
 
+        if text in {
+            "review status",
+            "pr status",
+            "pull request status",
+            "mr status",
+            "merge request status",
+            "ci status",
+            "checks",
+            "show review status",
+        }:
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.REVIEW_STATUS,
+                explanation="Resolved locally as pull request or merge request review status.",
+            )
+
         file_history_match = re.match(
             r"^(?:file\s+history|history|show\s+history\s+for|log\s+for)\s+(?P<path>.+)$",
             original_text,

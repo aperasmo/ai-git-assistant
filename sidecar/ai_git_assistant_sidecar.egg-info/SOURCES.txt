@@ -39,6 +39,7 @@ app/schemas/settings.py
 app/schemas/system.py
 app/services/__init__.py
 app/services/github_release_service.py
+app/services/gitlab_merge_request_service.py
 app/services/repository_service.py
 app/services/repository_store.py
 app/services/secret_store.py

@@ -1,5 +1,10 @@
 import { useState } from "react";
-import type { ChatTranscriptEntry, CommitMessageStyle, GenerateCommitMessageResponse } from "../lib/types";
+import type {
+  ChatTranscriptEntry,
+  CommitMessageStyle,
+  GenerateCommitMessageResponse,
+  GeneratePullRequestDraftResponse,
+} from "../lib/types";
 import type { WizardData } from "../lib/flows";
 
 type WizardStepEntry = Extract<ChatTranscriptEntry, { kind: "wizard_step" }>;
@@ -32,6 +37,7 @@ interface WizardStepProps {
   onCancel: () => void;
   onAddToGitignore?: (paths: string[]) => Promise<void>;
   onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
+  onGeneratePullRequestDraft?: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset?: () => Promise<string | null>;
 }
 
@@ -43,6 +49,7 @@ export function WizardStep({
   onCancel,
   onAddToGitignore,
   onGenerateCommitMessage,
+  onGeneratePullRequestDraft,
   onPickReleaseAsset,
 }: WizardStepProps) {
   if (entry.status === "done") {
@@ -81,6 +88,7 @@ export function WizardStep({
           onNext={onNext}
           onCancel={onCancel}
           onGenerateCommitMessage={onGenerateCommitMessage}
+          onGeneratePullRequestDraft={onGeneratePullRequestDraft}
         />
       );
     case "asset_pick":
@@ -329,25 +337,35 @@ function TextInputStep({
   onNext,
   onCancel,
   onGenerateCommitMessage,
+  onGeneratePullRequestDraft,
 }: {
   entry: WizardStepEntry;
   busy: boolean;
   onNext: (label: string, data: Partial<WizardData>) => void;
   onCancel: () => void;
   onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
+  onGeneratePullRequestDraft?: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(entry.initialValue ?? "");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<GenerateCommitMessageResponse | null>(null);
+  const [prDraft, setPrDraft] = useState<GeneratePullRequestDraftResponse | null>(null);
   const [style, setStyle] = useState<CommitMessageStyle>("detailed");
   const isCommitMessage = entry.prompt === "Commit message";
+  const isPullRequestTitle = entry.prompt === "Pull request title";
   const selectedPaths = isCommitMessage ? entry.choices ?? [] : [];
   const canGenerate = selectedPaths.length > 0 && Boolean(onGenerateCommitMessage);
+  const prBaseBranch = isPullRequestTitle ? entry.choices?.[0] ?? "" : "";
+  const canGeneratePrDraft = isPullRequestTitle && Boolean(prBaseBranch) && Boolean(onGeneratePullRequestDraft);
 
   function handleNext() {
     const trimmed = value.trim();
     if (!trimmed) return;
+    if (isPullRequestTitle && prDraft?.body) {
+      onNext(trimmed, { message: trimmed, prBody: prDraft.body });
+      return;
+    }
     onNext(trimmed, { message: trimmed });
   }
 
@@ -360,6 +378,21 @@ function TextInputStep({
       const generated = await onGenerateCommitMessage(selectedPaths, nextStyle);
       setValue(generated.message);
       setReceipt(generated);
+    } catch (cause) {
+      setError(toWizardErrorMessage(cause));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleGeneratePullRequestDraft() {
+    if (!onGeneratePullRequestDraft || generating || !prBaseBranch) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const generated = await onGeneratePullRequestDraft(prBaseBranch);
+      setValue(generated.title);
+      setPrDraft(generated);
     } catch (cause) {
       setError(toWizardErrorMessage(cause));
     } finally {
@@ -422,6 +455,21 @@ function TextInputStep({
           </div>
         </div>
       )}
+      {canGeneratePrDraft && (
+        <div className="wizard-ai-tools">
+          <div className="wizard-ai-row">
+            <button
+              type="button"
+              className="wizard-ai-button"
+              disabled={busy || generating}
+              onClick={() => void handleGeneratePullRequestDraft()}
+            >
+              {generating ? "Generating..." : "Generate PR text with AI"}
+            </button>
+            <span>Uses branch commits, changed files, diff stats, and recent style.</span>
+          </div>
+        </div>
+      )}
       {receipt && (
         <div className="wizard-ai-draft-meta">
           <span>Confidence: {receipt.confidence}</span>
@@ -444,6 +492,12 @@ function TextInputStep({
         </div>
       ) : null}
       {receipt?.warning && <p className="wizard-ai-warning">{receipt.warning}</p>}
+      {prDraft && (
+        <div className="wizard-ai-draft-meta">
+          <span>{prDraft.branchSummary}</span>
+          {prDraft.checklist.length > 0 && <span>Checklist: {prDraft.checklist.length} items</span>}
+        </div>
+      )}
       {error && <p className="wizard-inline-error">{error}</p>}
       {receipt?.privacyReceipt && (
         <details className="wizard-privacy-receipt">

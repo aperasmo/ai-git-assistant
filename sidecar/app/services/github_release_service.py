@@ -43,6 +43,23 @@ class GitHubDraftPullRequestResult:
     title: str
 
 
+@dataclass(frozen=True)
+class GitHubPullRequestStatusResult:
+    number: int
+    url: str
+    title: str
+    state: str
+    draft: bool
+    base_branch: str
+    head_branch: str
+    head_sha: str
+    ci_status: str
+    review_summary: str
+    review_count: int
+    comment_count: int
+    latest_comments: tuple[str, ...] = ()
+
+
 def parse_github_remote_url(remote_url: str) -> GitHubRepositoryRef | None:
     value = remote_url.strip()
     for pattern in (_HTTPS_REMOTE, _SSH_REMOTE, _SSH_URL_REMOTE):
@@ -169,6 +186,102 @@ class GitHubReleaseClient:
             title=str(pull_request.get("title") or title),
         )
 
+    def get_pull_request_status(
+        self,
+        *,
+        repository: GitHubRepositoryRef,
+        head_branch: str,
+    ) -> GitHubPullRequestStatusResult | None:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self._token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        api_root = f"https://api.github.com/repos/{repository.owner}/{repository.repo}"
+        try:
+            with httpx.Client(timeout=self._timeout, follow_redirects=True) as client:
+                response = client.get(
+                    f"{api_root}/pulls",
+                    headers=headers,
+                    params={
+                        "state": "open",
+                        "head": f"{repository.owner}:{head_branch}",
+                        "per_page": 5,
+                    },
+                )
+                self._raise_for_github_error(response, operation="pull request status")
+                pulls = response.json()
+                if not pulls:
+                    return None
+                pull_request = pulls[0]
+                number = int(pull_request.get("number") or 0)
+                head = pull_request.get("head") or {}
+                base = pull_request.get("base") or {}
+                head_sha = str(head.get("sha") or "")
+
+                ci_status = "unknown"
+                if head_sha:
+                    status_response = client.get(
+                        f"{api_root}/commits/{head_sha}/status",
+                        headers=headers,
+                    )
+                    if status_response.status_code < 400:
+                        ci_status = str((status_response.json() or {}).get("state") or "unknown")
+
+                reviews_response = client.get(
+                    f"{api_root}/pulls/{number}/reviews",
+                    headers=headers,
+                    params={"per_page": 100},
+                )
+                review_states: list[str] = []
+                if reviews_response.status_code < 400:
+                    review_states = [
+                        str(item.get("state") or "").lower()
+                        for item in reviews_response.json()
+                        if item.get("state")
+                    ]
+
+                issue_comments_response = client.get(
+                    f"{api_root}/issues/{number}/comments",
+                    headers=headers,
+                    params={"per_page": 5},
+                )
+                latest_comments: list[str] = []
+                issue_comment_count = 0
+                if issue_comments_response.status_code < 400:
+                    issue_comments = issue_comments_response.json()
+                    issue_comment_count = len(issue_comments)
+                    latest_comments.extend(_comment_preview(item) for item in issue_comments[:5])
+
+                review_comments_response = client.get(
+                    f"{api_root}/pulls/{number}/comments",
+                    headers=headers,
+                    params={"per_page": 5},
+                )
+                review_comment_count = 0
+                if review_comments_response.status_code < 400:
+                    review_comments = review_comments_response.json()
+                    review_comment_count = len(review_comments)
+                    latest_comments.extend(_comment_preview(item) for item in review_comments[:5])
+        except httpx.HTTPError as exc:
+            raise ValidationFailure(f"GitHub pull request status request failed: {exc}") from exc
+
+        return GitHubPullRequestStatusResult(
+            number=number,
+            url=str(pull_request.get("html_url") or ""),
+            title=str(pull_request.get("title") or ""),
+            state=str(pull_request.get("state") or "open"),
+            draft=bool(pull_request.get("draft")),
+            base_branch=str(base.get("ref") or ""),
+            head_branch=str(head.get("ref") or head_branch),
+            head_sha=head_sha,
+            ci_status=ci_status,
+            review_summary=_review_summary(review_states),
+            review_count=len(review_states),
+            comment_count=issue_comment_count + review_comment_count,
+            latest_comments=tuple(comment for comment in latest_comments if comment),
+        )
+
     @staticmethod
     def _raise_for_github_error(response: httpx.Response, *, operation: str = "release") -> None:
         if response.status_code < 400:
@@ -182,7 +295,7 @@ class GitHubReleaseClient:
             and "resource not accessible by personal access token" in str(message).lower()
         ):
             raise ValidationFailure(
-                f"GitHub token cannot create {operation}s for this repository. "
+                f"GitHub token cannot access {operation} data for this repository. "
                 "Create or update a fine-grained token for this repo with Contents: Read and write "
                 "and Pull requests: Read and write, "
                 "then save it again in Settings."
@@ -198,3 +311,27 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _review_summary(states: list[str]) -> str:
+    if not states:
+        return "no reviews"
+    approvals = states.count("approved")
+    changes = states.count("changes_requested")
+    comments = states.count("commented")
+    parts: list[str] = []
+    if approvals:
+        parts.append(f"{approvals} approved")
+    if changes:
+        parts.append(f"{changes} changes requested")
+    if comments:
+        parts.append(f"{comments} commented")
+    return ", ".join(parts) if parts else f"{len(states)} review events"
+
+
+def _comment_preview(item: dict) -> str:
+    user = (item.get("user") or {}).get("login") or "reviewer"
+    body = str(item.get("body") or "").strip().replace("\r", " ").replace("\n", " ")
+    if len(body) > 140:
+        body = body[:137].rstrip() + "..."
+    return f"{user}: {body}" if body else ""

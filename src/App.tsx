@@ -18,7 +18,7 @@ import {
   type WizardFlowId,
   type WizardState,
 } from "./lib/flows";
-import { githubRemote, providerDetailLines } from "./lib/remoteProviders";
+import { githubRemote, gitlabRemote, providerDetailLines } from "./lib/remoteProviders";
 import type {
   ActionPlanStep,
   AgentSession,
@@ -30,6 +30,7 @@ import type {
   FolderClassification,
   GenerateChangeSummaryResponse,
   GenerateCommitMessageResponse,
+  GeneratePullRequestDraftResponse,
   GitInstallationStatus,
   LocalActionPlan,
   ReadAction,
@@ -52,6 +53,7 @@ const QUICK_ACTION_MESSAGES: Record<ReadAction, string> = {
   conflicts: "Show conflicts",
   tags: "Show tags",
   tag_show: "Inspect tag",
+  review_status: "Show review status",
 };
 
 // Windows reserved device names that git can report in status but cannot stage/read on Windows.
@@ -970,17 +972,19 @@ export default function App() {
   }
 
   function startDraftPullRequestWizard(repositoryId: string) {
-    const remote = githubRemote(snapshot);
-    if (!remote) {
+    const github = githubRemote(snapshot);
+    const gitlab = gitlabRemote(snapshot);
+    const provider = github ? "github" : gitlab ? "gitlab" : null;
+    if (!provider) {
       const detected = providerDetailLines(snapshot).join("; ");
       appendTranscriptEntry(repositoryId, {
         id: createTranscriptId(),
         kind: "error",
         message: [
-          "GitHub draft pull requests are not available for this repository.",
+          "Draft pull requests / merge requests are not available for this repository.",
           `Detected remote provider: ${detected}`,
           "You can still use local Git workflows, AI summaries, and agent worktrees.",
-          "GitLab merge requests, Bitbucket pull requests, and Azure DevOps pull requests are planned.",
+          "GitHub and GitLab are supported. Bitbucket and Azure DevOps pull requests are planned.",
         ].join(" "),
       });
       appendTranscriptEntry(repositoryId, { id: createTranscriptId(), kind: "wizard_menu", variant: "compact" });
@@ -994,7 +998,7 @@ export default function App() {
       flowId: "draft_pr",
       currentStepId: stepId,
       currentStepKind: "text_input",
-      data: {},
+      data: { prProvider: provider },
     };
     appendTranscriptEntry(repositoryId, {
       id: stepId,
@@ -1125,9 +1129,10 @@ export default function App() {
             stepKind: "text_input",
             prompt: "Pull request title",
             status: "active",
+            choices: [value],
           });
         } else if (!wizard.data.prTitle) {
-          const prData: WizardData = { ...wizard.data, prTitle: value };
+          const prData: WizardData = { ...wizard.data, prTitle: value, prBody: updatedData.prBody ?? wizard.data.prBody };
           const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: prData };
           activeWizardRef.current = next;
           appendTranscriptEntry(repositoryId, {
@@ -1136,10 +1141,14 @@ export default function App() {
             stepKind: "text_input",
             prompt: "Pull request description",
             status: "active",
+            initialValue: prData.prBody,
           });
         } else {
           const prData: WizardData = { ...wizard.data, prBody: value };
-          const remoteName = githubRemote(snapshot)?.remote ?? "origin";
+          const provider = prData.prProvider ?? "github";
+          const remoteName = provider === "gitlab"
+            ? gitlabRemote(snapshot)?.remote ?? "origin"
+            : githubRemote(snapshot)?.remote ?? "origin";
           const currentBranch = snapshot?.branch ?? "current branch";
           const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: prData };
           activeWizardRef.current = next;
@@ -1151,7 +1160,7 @@ export default function App() {
             id: nextStepId,
             kind: "wizard_step",
             stepKind: "confirm",
-            prompt: "Draft GitHub pull request",
+            prompt: provider === "gitlab" ? "Draft GitLab merge request" : "Draft GitHub pull request",
             status: "active",
             confirmLines: [
               `Remote: ${remoteName} (${snapshot?.remoteUrls?.[remoteName] ?? "—"})`,
@@ -1161,7 +1170,7 @@ export default function App() {
               `Ahead remote: ${snapshot?.ahead ?? 0}`,
               `Uncommitted files: ${dirtyCount}`,
               "Draft: yes",
-              ...gitCmds("GitHub API: create draft pull request"),
+              ...gitCmds(provider === "gitlab" ? "GitLab API: create draft merge request" : "GitHub API: create draft pull request"),
             ],
           });
         }
@@ -1313,11 +1322,14 @@ export default function App() {
       }
 
       if (wizard.flowId === "draft_pr") {
-        const pullRequest = await desktopApi.draftGithubPullRequest(repositoryId, {
+        const request = {
           baseBranch: wizard.data.prBaseBranch ?? "",
           title: wizard.data.prTitle ?? "",
           body: wizard.data.prBody ?? "",
-        });
+        };
+        const pullRequest = wizard.data.prProvider === "gitlab"
+          ? await desktopApi.draftGitlabMergeRequest(repositoryId, request)
+          : await desktopApi.draftGithubPullRequest(repositoryId, request);
         if (activeRepositoryIdRef.current !== repositoryId) return;
         setSnapshot(pullRequest.snapshot);
         appendTranscriptEntry(repositoryId, {
@@ -1449,6 +1461,20 @@ export default function App() {
     }
 
     const result = await desktopApi.generateCommitMessage(repositoryId, paths, style);
+    if (activeRepositoryIdRef.current === repositoryId) {
+      const fresh = await desktopApi.getRepositorySnapshot(repositoryId);
+      if (activeRepositoryIdRef.current === repositoryId) setSnapshot(fresh);
+    }
+    return result;
+  }
+
+  async function generatePullRequestDraft(baseBranch: string): Promise<GeneratePullRequestDraftResponse> {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId) {
+      throw new Error("Select a repository before generating pull request text.");
+    }
+
+    const result = await desktopApi.generatePullRequestDraft(repositoryId, baseBranch);
     if (activeRepositoryIdRef.current === repositoryId) {
       const fresh = await desktopApi.getRepositorySnapshot(repositoryId);
       if (activeRepositoryIdRef.current === repositoryId) setSnapshot(fresh);
@@ -1732,6 +1758,7 @@ export default function App() {
           onWizardCancel={onWizardCancel}
           onAddToGitignore={onAddToGitignore}
           onGenerateCommitMessage={generateCommitMessage}
+          onGeneratePullRequestDraft={generatePullRequestDraft}
           onPickReleaseAsset={desktopApi.pickReleaseAsset}
         />
 

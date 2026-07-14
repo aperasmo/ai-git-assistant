@@ -2,6 +2,7 @@
 import type {
   ChatTranscriptEntry,
   GenerateCommitMessageResponse,
+  GeneratePullRequestDraftResponse,
   CommitMessageStyle,
   LocalActionPlan,
 } from "../lib/types";
@@ -24,6 +25,7 @@ interface ChatPanelProps {
   onWizardCancel: () => void;
   onAddToGitignore: (paths: string[]) => Promise<void>;
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
+  onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset: () => Promise<string | null>;
 }
 
@@ -273,6 +275,7 @@ function TranscriptItem({
   onWizardCancel,
   onAddToGitignore,
   onGenerateCommitMessage,
+  onGeneratePullRequestDraft,
   onPickReleaseAsset,
 }: {
   entry: ChatTranscriptEntry;
@@ -285,6 +288,7 @@ function TranscriptItem({
   onWizardCancel: () => void;
   onAddToGitignore: (paths: string[]) => Promise<void>;
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
+  onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset: () => Promise<string | null>;
 }) {
   if (entry.kind === "user") {
@@ -332,6 +336,7 @@ function TranscriptItem({
         onCancel={onWizardCancel}
         onAddToGitignore={onAddToGitignore}
         onGenerateCommitMessage={onGenerateCommitMessage}
+        onGeneratePullRequestDraft={onGeneratePullRequestDraft}
         onPickReleaseAsset={onPickReleaseAsset}
       />
     );
@@ -364,6 +369,7 @@ export function ChatPanel({
   onWizardCancel,
   onAddToGitignore,
   onGenerateCommitMessage,
+  onGeneratePullRequestDraft,
   onPickReleaseAsset,
 }: ChatPanelProps) {
   const [message, setMessage] = useState("");
@@ -420,6 +426,7 @@ export function ChatPanel({
                   onWizardCancel={onWizardCancel}
                   onAddToGitignore={onAddToGitignore}
                   onGenerateCommitMessage={onGenerateCommitMessage}
+                  onGeneratePullRequestDraft={onGeneratePullRequestDraft}
                   onPickReleaseAsset={onPickReleaseAsset}
                 />
               ))}

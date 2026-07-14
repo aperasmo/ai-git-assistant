@@ -202,6 +202,9 @@ export function RepositoryContextPanel({
         <button type="button" onClick={() => onAction("conflicts")} disabled={busy}>
           ! Conflicts
         </button>
+        <button type="button" onClick={() => onAction("review_status")} disabled={busy}>
+          Y Review status
+        </button>
         <button type="button" onClick={() => onAction("fetch")} disabled={busy}>
           F Refresh remote
         </button>

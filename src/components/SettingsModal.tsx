@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { desktopApi } from "../lib/api";
-import type { GitHubSettings, LLMProviderKind, LLMSettings } from "../lib/types";
+import type { GitHubSettings, GitLabSettings, LLMProviderKind, LLMSettings } from "../lib/types";
 
 interface SettingsModalProps {
   open: boolean;
@@ -27,9 +27,12 @@ const DEFAULT_MODELS: Record<LLMProviderKind, string> = {
 export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [githubSettings, setGithubSettings] = useState<GitHubSettings | null>(null);
+  const [gitlabSettings, setGitlabSettings] = useState<GitLabSettings | null>(null);
   const [provider, setProvider] = useState<LLMProviderKind | "">("");
   const [apiKey, setApiKey] = useState("");
   const [githubToken, setGithubToken] = useState("");
+  const [gitlabToken, setGitlabToken] = useState("");
+  const [gitlabBaseUrl, setGitlabBaseUrl] = useState("https://gitlab.com");
   const [model, setModel] = useState("");
   const [baseUrl, setBaseUrl] = useState("http://localhost:11434");
   const [saving, setSaving] = useState(false);
@@ -44,15 +47,18 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     setSaveError(null);
     setSaved(false);
     setTestResult(null);
-    Promise.all([desktopApi.getLlmSettings(), desktopApi.getGithubSettings()])
-      .then(([s, gh]) => {
+    Promise.all([desktopApi.getLlmSettings(), desktopApi.getGithubSettings(), desktopApi.getGitlabSettings()])
+      .then(([s, gh, gl]) => {
         setSettings(s);
         setGithubSettings(gh);
+        setGitlabSettings(gl);
         setProvider(s.provider ?? "");
         setModel(s.model ?? "");
         setBaseUrl(s.baseUrl ?? "http://localhost:11434");
         setApiKey("");
         setGithubToken("");
+        setGitlabToken("");
+        setGitlabBaseUrl(gl.baseUrl ?? "https://gitlab.com");
       })
       .catch(() => {});
 
@@ -78,7 +84,9 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
     model.trim() !== (settings?.model ?? "") ||
     (isOllama && baseUrl.trim() !== (settings?.baseUrl ?? "http://localhost:11434")) ||
     apiKey !== "" ||
-    githubToken !== "";
+    githubToken !== "" ||
+    gitlabToken !== "" ||
+    gitlabBaseUrl.trim() !== (gitlabSettings?.baseUrl ?? "https://gitlab.com");
 
   async function handleSave() {
     setSaving(true);
@@ -94,15 +102,25 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
       if (githubToken !== "") {
         await desktopApi.updateGithubSettings({ token: githubToken || null });
       }
+      if (gitlabToken !== "" || gitlabBaseUrl.trim() !== (gitlabSettings?.baseUrl ?? "https://gitlab.com")) {
+        await desktopApi.updateGitlabSettings({
+          token: gitlabToken || null,
+          baseUrl: gitlabBaseUrl.trim() || null,
+        });
+      }
       // Re-fetch so settings reflects saved state and isDirty resets to false
-      const [updated, updatedGithub] = await Promise.all([
+      const [updated, updatedGithub, updatedGitlab] = await Promise.all([
         desktopApi.getLlmSettings(),
         desktopApi.getGithubSettings(),
+        desktopApi.getGitlabSettings(),
       ]);
       setSettings(updated);
       setGithubSettings(updatedGithub);
+      setGitlabSettings(updatedGitlab);
       setApiKey("");
       setGithubToken("");
+      setGitlabToken("");
+      setGitlabBaseUrl(updatedGitlab.baseUrl ?? "https://gitlab.com");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       if (provider) onSaved?.(provider, (model.trim() || DEFAULT_MODELS[provider as LLMProviderKind]) ?? "");
@@ -254,6 +272,38 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
           <p className="settings-hint warning">
             The token is encrypted locally before storage. Draft releases and draft pull requests
             still require your explicit wizard confirmation before anything is sent to GitHub.
+          </p>
+          <p className="settings-section-heading">GITLAB PLATFORM ACTIONS</p>
+          <p className="settings-hint">
+            Required for drafting GitLab merge requests. Use a personal access token with api scope
+            for the target project. Self-managed GitLab can use its own base URL.
+          </p>
+          <label className="settings-label" htmlFor="gitlab-token-input">
+            GitLab token{gitlabSettings?.tokenSet ? " (token stored - enter a new one to replace)" : ""}
+          </label>
+          <input
+            id="gitlab-token-input"
+            type="password"
+            className="settings-input"
+            value={gitlabToken}
+            onChange={(e) => setGitlabToken(e.target.value)}
+            placeholder={gitlabSettings?.tokenSet ? "Stored token" : "Paste a GitLab personal access token"}
+            autoComplete="off"
+          />
+          <label className="settings-label" htmlFor="gitlab-base-url-input">
+            GitLab base URL
+          </label>
+          <input
+            id="gitlab-base-url-input"
+            type="text"
+            className="settings-input"
+            value={gitlabBaseUrl}
+            onChange={(e) => setGitlabBaseUrl(e.target.value)}
+            placeholder="https://gitlab.com"
+          />
+          <p className="settings-hint warning">
+            The token is encrypted locally before storage. Draft merge requests still require your
+            explicit wizard confirmation before anything is sent to GitLab.
           </p>
         </div>
 

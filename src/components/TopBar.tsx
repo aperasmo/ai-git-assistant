@@ -1,3 +1,5 @@
+import { getVersion } from "@tauri-apps/api/app";
+import { useEffect, useState } from "react";
 import type { GitInstallationStatus, Repository } from "../lib/types";
 import { BrandMark } from "./BrandMark";
 
@@ -20,12 +22,38 @@ export function TopBar({
   onOpenTour,
   onOpenHelp,
 }: TopBarProps) {
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getVersion()
+      .then((version) => {
+        if (!cancelled) {
+          setAppVersion(formatFileVersion(version));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAppVersion(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <header className="topbar">
       <div className="topbar-title">
         <BrandMark />
         <strong>AI Git Assistant</strong>
-        <span className="beta-tag">PHASE 5</span>
+        {appVersion && (
+          <span className="beta-tag" title={`App version ${appVersion}`}>
+            v{appVersion}
+          </span>
+        )}
       </div>
 
       <div className="topbar-context">
@@ -71,4 +99,12 @@ export function TopBar({
       </div>
     </header>
   );
+}
+
+function formatFileVersion(version: string): string {
+  const [coreVersion, suffix] = version.split(/[-+]/, 2);
+  const parts = coreVersion.split(".");
+  const displayVersion = parts.length === 3 ? `${coreVersion}.0` : coreVersion;
+
+  return suffix ? `${displayVersion}-${suffix}` : displayVersion;
 }

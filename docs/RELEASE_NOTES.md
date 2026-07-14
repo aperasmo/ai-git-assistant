@@ -1,5 +1,43 @@
 # Release Notes
 
+## 0.6.2 - Phase 6
+
+Adds PR/MR review visibility for the current branch.
+
+### Shipped
+
+- Review status read action in the command bar and right-panel quick actions.
+- GitHub Pull Request status lookup for the current branch.
+- GitLab Merge Request status lookup for the current branch.
+- CI/check status, draft state, base/head branches, review summary, comment count, and recent comments in the result card.
+- Local matcher guard so `review status`, `PR status`, `MR status`, and `CI status` resolve as read-only actions instead of falling through to AI write planning.
+
+### Verification
+
+- `npm run build`
+- `cargo check`
+- `npm run sidecar:test` - 121 passing tests
+
+## 0.6.1 - Phase 6
+
+Completes the first PR/MR workflow line.
+
+### Shipped
+
+- GitHub draft pull request creation from the current branch.
+- GitLab draft merge request creation from the current branch.
+- AI-generated PR/MR title, body, and checklist drafts from branch comparison context.
+- Provider-aware readiness checks for branch name, base branch, conflicts, pushed commits, and remote branch visibility.
+- GitHub and GitLab token settings stored with local encryption.
+- Runtime app version badge in the header instead of a manually maintained phase label.
+- Agent worktree compare now uses the worktree `HEAD` consistently for committed file/stat comparisons.
+
+### Verification
+
+- `npm run build`
+- `cargo check`
+- `npm run sidecar:test` - 118 passing tests
+
 ## 0.1.0 - Phase A
 
 Initial Windows installer release.

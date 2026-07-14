@@ -7,10 +7,11 @@ use crate::{
     models::repositories::{
         ActionExecutionResult, AgentSession, AgentSessionActionResponse,
         AgentSessionComparisonResponse, CancelActionPlanResponse, CreateAgentSessionRequest,
+        DraftGitLabMergeRequestRequest, DraftGitLabMergeRequestResponse,
         DraftGitHubPullRequestRequest, DraftGitHubPullRequestResponse, DraftGitHubReleaseRequest,
         DraftGitHubReleaseResponse, FolderClassification, GenerateChangeSummaryResponse,
-        GenerateCommitMessageResponse, LocalActionPlan, ReadActionRequest, ReadActionResult,
-        Repository, RepositorySnapshot,
+        GenerateCommitMessageResponse, GeneratePullRequestDraftResponse, LocalActionPlan,
+        ReadActionRequest, ReadActionResult, Repository, RepositorySnapshot,
     },
     sidecar_proxy::SidecarProxy,
 };
@@ -372,6 +373,23 @@ pub async fn generate_change_summary(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub async fn generate_pull_request_draft(
+    repository_id: String,
+    base_branch: String,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GeneratePullRequestDraftResponse, String> {
+    let payload = json!({ "baseBranch": base_branch });
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/pull-requests/draft-text"),
+            &payload,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub async fn draft_github_release(
     repository_id: String,
     request: DraftGitHubReleaseRequest,
@@ -398,6 +416,22 @@ pub async fn draft_github_pull_request(
         .post(
             &state,
             &format!("/v1/repositories/{repository_id}/github/pull-requests/draft"),
+            &request,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn draft_gitlab_merge_request(
+    repository_id: String,
+    request: DraftGitLabMergeRequestRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<DraftGitLabMergeRequestResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/gitlab/merge-requests/draft"),
             &request,
         )
         .await

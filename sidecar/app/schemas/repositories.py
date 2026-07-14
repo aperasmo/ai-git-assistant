@@ -145,6 +145,7 @@ class ReadAction(StrEnum):
     CONFLICTS = "conflicts"
     TAGS = "tags"
     TAG_SHOW = "tag_show"
+    REVIEW_STATUS = "review_status"
 
 
 class ReadActionRequest(ApiModel):
@@ -353,10 +354,45 @@ class DraftGitHubPullRequestResponse(ApiModel):
     number: int
     base_branch: str
     head_branch: str
+    provider: Literal["github"] = "github"
     title: str
     summary: str
     content: str
     snapshot: RepositorySnapshot
+
+
+class DraftGitLabMergeRequestRequest(ApiModel):
+    base_branch: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=255)
+    body: str = Field(default="", max_length=20_000)
+
+
+class DraftGitLabMergeRequestResponse(ApiModel):
+    repository: str
+    merge_request_url: str
+    number: int
+    base_branch: str
+    head_branch: str
+    provider: Literal["gitlab"] = "gitlab"
+    title: str
+    summary: str
+    content: str
+    snapshot: RepositorySnapshot
+
+
+class GeneratePullRequestDraftRequest(ApiModel):
+    base_branch: str = Field(min_length=1, max_length=255)
+
+
+class GeneratePullRequestDraftResponse(ApiModel):
+    title: str
+    body: str
+    checklist: list[str] = Field(default_factory=list)
+    branch_summary: str
+    file_summaries: list[str] = Field(default_factory=list)
+    source: str = "llm"
+    context_summary: str
+    privacy_receipt: PrivacyReceipt | None = None
 
 
 class CloneRepositoryRequest(ApiModel):

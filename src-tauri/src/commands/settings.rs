@@ -6,8 +6,8 @@ use crate::{
     models::{
         repositories::Repository,
         settings::{
-            GitHubSettings, LLMSettings, SetExternalLLMRequest, UpdateGitHubSettingsRequest,
-            UpdateLLMSettingsRequest,
+            GitHubSettings, GitLabSettings, LLMSettings, SetExternalLLMRequest,
+            UpdateGitHubSettingsRequest, UpdateGitLabSettingsRequest, UpdateLLMSettingsRequest,
         },
     },
     sidecar_proxy::SidecarProxy,
@@ -51,6 +51,23 @@ pub async fn update_github_settings(
     proxy: State<'_, SidecarProxy>,
 ) -> Result<GitHubSettings, String> {
     proxy.put(&state, "/v1/settings/github", &request).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_gitlab_settings(
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GitLabSettings, String> {
+    proxy.get(&state, "/v1/settings/gitlab").await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn update_gitlab_settings(
+    request: UpdateGitLabSettingsRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GitLabSettings, String> {
+    proxy.put(&state, "/v1/settings/gitlab", &request).await
 }
 
 #[tauri::command(rename_all = "camelCase")]

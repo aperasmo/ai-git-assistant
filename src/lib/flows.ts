@@ -10,6 +10,7 @@ export type WizardFlowId =
   | "remotes"
   | "tags"
   | "conflicts"
+  | "review_status"
   | "fetch"
   | "commit_push"
   | "stage_only"
@@ -39,6 +40,7 @@ export const FLOWS: FlowDef[] = [
   { id: "remotes", label: "Remotes", icon: "R", description: "Show remote URLs", category: "read" },
   { id: "tags", label: "Tags", icon: "#", description: "List release tags", category: "read" },
   { id: "conflicts", label: "Conflicts", icon: "!", description: "Guided conflict status", category: "read" },
+  { id: "review_status", label: "Review status", icon: "Y", description: "PR/MR reviews and CI", category: "read" },
   { id: "fetch", label: "Fetch remote", icon: "F", description: "Refresh remote status", category: "read" },
   { id: "commit_push", label: "Commit & push", icon: "P", description: "Stage, commit and push", category: "write" },
   { id: "stage_only", label: "Stage & commit", icon: "C", description: "Stage files and commit", category: "write" },
@@ -48,7 +50,7 @@ export const FLOWS: FlowDef[] = [
   { id: "discard", label: "Discard changes", icon: "X", description: "Revert file changes", category: "write" },
   { id: "connect_remote", label: "Connect remote", icon: "@", description: "Add GitHub/GitLab origin", category: "write" },
   { id: "draft_release", label: "Draft release", icon: "V", description: "Create a GitHub draft release", category: "write" },
-  { id: "draft_pr", label: "Draft PR", icon: "Q", description: "Create a GitHub draft pull request", category: "write" },
+  { id: "draft_pr", label: "Draft PR", icon: "Q", description: "Create a GitHub PR or GitLab MR", category: "write" },
 ];
 
 export const FLOW_LABELS: Record<WizardFlowId, string> = Object.fromEntries(
@@ -68,6 +70,7 @@ export interface WizardData {
   prBaseBranch?: string;
   prTitle?: string;
   prBody?: string;
+  prProvider?: "github" | "gitlab";
 }
 
 export interface WizardState {
@@ -87,5 +90,6 @@ export const FLOW_READ_ACTIONS: Partial<Record<WizardFlowId, ReadAction>> = {
   remotes: "remotes",
   tags: "tags",
   conflicts: "conflicts",
+  review_status: "review_status",
   fetch: "fetch",
 };

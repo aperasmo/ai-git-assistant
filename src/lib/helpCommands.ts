@@ -84,6 +84,15 @@ export const HELP_COMMANDS: HelpCommand[] = [
     gitCommand: "git tag --list",
     gitExample: "git tag --list",
   },
+  {
+    id: "review_status",
+    name: "Review status",
+    category: "read",
+    description: "Shows the open GitHub pull request or GitLab merge request for the current branch, including CI/check status, review summary, comment count, and recent comments.",
+    appPhrases: ["review status", "PR status", "MR status", "CI status"],
+    gitCommand: "Provider API: read PR/MR status",
+    gitExample: "gh pr view --json statusCheckRollup,reviews,comments",
+  },
 
   // ── WRITE ─────────────────────────────────────────────────────────────────
   {
@@ -252,9 +261,9 @@ export const HELP_COMMANDS: HelpCommand[] = [
     id: "draft_pr",
     name: "Draft pull request",
     category: "write",
-    description: "Creates a GitHub draft pull request from the current branch after checking provider, branch, push, conflict, and base-branch readiness.",
-    appPhrases: ["draft PR", "create draft pull request"],
-    gitCommand: "GitHub API: create draft pull request",
+    description: "Creates a GitHub draft pull request or GitLab draft merge request from the current branch after checking provider, branch, push, conflict, and base-branch readiness.",
+    appPhrases: ["draft PR", "create draft pull request", "create draft merge request"],
+    gitCommand: "GitHub/GitLab API: create draft PR/MR",
     gitExample: "gh pr create --draft --base main --head feature/name",
   },
   {

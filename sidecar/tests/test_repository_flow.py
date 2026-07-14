@@ -81,6 +81,29 @@ def test_git_logs_last_count_resolves_as_read_plan(app_client, auth_headers, git
     assert body["source"] == "local"
 
 
+def test_review_status_resolves_as_read_plan(app_client, auth_headers, git_repository):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "review status"},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["matched"] is True
+    assert body["planKind"] == "read"
+    assert body["requiresConfirmation"] is False
+    assert body["readAction"] == "review_status"
+    assert body["source"] == "local"
+
+
 def test_read_shaped_unmatched_request_does_not_use_ai_write_fallback(
     app_client,
     auth_headers,
@@ -1093,6 +1116,257 @@ def test_draft_github_pull_request_blocks_unpushed_commits(
 
     assert response.status_code == 422, response.json()
     assert "Push the branch first" in response.json()["detail"]
+
+
+def test_github_review_status_reads_open_pull_request(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+    from app.services.github_release_service import GitHubPullRequestStatusResult
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "switch", "-c", "feature/review"], cwd=git_repository, check=True, capture_output=True)
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+
+    calls: list[dict] = []
+
+    class FakeGitHubReleaseClient:
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        def get_pull_request_status(self, **kwargs):
+            calls.append({"token": self.token, **kwargs})
+            return GitHubPullRequestStatusResult(
+                number=12,
+                url="https://github.com/example/demo-repository/pull/12",
+                title="Add review status",
+                state="open",
+                draft=False,
+                base_branch="main",
+                head_branch=kwargs["head_branch"],
+                head_sha="abcdef1234567890",
+                ci_status="success",
+                review_summary="1 approved",
+                review_count=1,
+                comment_count=2,
+                latest_comments=("reviewer: Looks good", "ci-bot: Checks passed"),
+            )
+
+    app_client.app.state.repository_service._github_release_client_factory = FakeGitHubReleaseClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "review_status"},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["title"] == "Review Status"
+    assert "Provider: GitHub" in body["content"]
+    assert "Change request: #12 Add review status" in body["content"]
+    assert "CI/check status: success" in body["content"]
+    assert "reviewer: Looks good" in body["content"]
+    assert calls[0]["token"] == "github-token"
+    assert calls[0]["repository"].slug == "example/demo-repository"
+    assert calls[0]["head_branch"] == "feature/review"
+
+
+def test_draft_gitlab_merge_request_uses_configured_token(
+    app_client,
+    auth_headers,
+    git_repository,
+    monkeypatch,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitLabSettingsRequest
+    from app.services.gitlab_merge_request_service import GitLabDraftMergeRequestResult
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://gitlab.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "add", "README.md"], cwd=git_repository, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Refresh README"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "switch", "-c", "feature/gitlab"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (git_repository / "gitlab.txt").write_text("gitlab\n", encoding="utf-8")
+    subprocess.run(["git", "add", "gitlab.txt"], cwd=git_repository, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add GitLab note"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    app_client.app.state.settings_service.update_gitlab_settings(
+        UpdateGitLabSettingsRequest(token="gitlab-token", base_url="https://gitlab.com")
+    )
+    monkeypatch.setattr(
+        "app.services.repository_service.GitClient.remote_branch_exists",
+        lambda self, remote, branch: remote == "origin" and branch == "feature/gitlab",
+    )
+
+    calls: list[dict] = []
+
+    class FakeGitLabMergeRequestClient:
+        def __init__(self, token: str, *, base_url: str | None = None) -> None:
+            self.token = token
+            self.base_url = base_url
+
+        def create_draft_merge_request(self, **kwargs):
+            calls.append({"token": self.token, "base_url": self.base_url, **kwargs})
+            return GitLabDraftMergeRequestResult(
+                number=8,
+                merge_request_url="https://gitlab.com/example/demo-repository/-/merge_requests/8",
+                title=kwargs["title"],
+            )
+
+    app_client.app.state.repository_service._gitlab_merge_request_client_factory = FakeGitLabMergeRequestClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/gitlab/merge-requests/draft",
+        headers=auth_headers,
+        json={
+            "baseBranch": "master",
+            "title": "Add GitLab note",
+            "body": "Summary\n- Adds a GitLab note.",
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["repository"] == "example/demo-repository"
+    assert body["mergeRequestUrl"].endswith("/merge_requests/8")
+    assert body["baseBranch"] == "master"
+    assert body["headBranch"] == "feature/gitlab"
+    assert "gitlab.txt" in body["content"]
+    assert calls[0]["token"] == "gitlab-token"
+    assert calls[0]["base_url"] == "https://gitlab.com"
+    assert calls[0]["repository"].slug == "example/demo-repository"
+    assert calls[0]["source_branch"] == "feature/gitlab"
+    assert calls[0]["target_branch"] == "master"
+
+
+def test_gitlab_review_status_reads_open_merge_request(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitLabSettingsRequest
+    from app.services.gitlab_merge_request_service import GitLabMergeRequestStatusResult
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://gitlab.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "switch", "-c", "feature/gitlab-review"], cwd=git_repository, check=True, capture_output=True)
+
+    app_client.app.state.settings_service.update_gitlab_settings(
+        UpdateGitLabSettingsRequest(token="gitlab-token", base_url="https://gitlab.com")
+    )
+
+    calls: list[dict] = []
+
+    class FakeGitLabMergeRequestClient:
+        def __init__(self, token: str, *, base_url: str | None = None) -> None:
+            self.token = token
+            self.base_url = base_url
+
+        def get_merge_request_status(self, **kwargs):
+            calls.append({"token": self.token, "base_url": self.base_url, **kwargs})
+            return GitLabMergeRequestStatusResult(
+                number=8,
+                url="https://gitlab.com/example/demo-repository/-/merge_requests/8",
+                title="Add GitLab review status",
+                state="opened",
+                draft=True,
+                base_branch="main",
+                head_branch=kwargs["source_branch"],
+                head_sha="123456abcdef7890",
+                ci_status="pending",
+                review_summary="no approval signal",
+                review_count=0,
+                comment_count=1,
+                latest_comments=("reviewer: Please add tests",),
+            )
+
+    app_client.app.state.repository_service._gitlab_merge_request_client_factory = FakeGitLabMergeRequestClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/read-actions",
+        headers=auth_headers,
+        json={"action": "review_status"},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert "Provider: GitLab" in body["content"]
+    assert "Change request: !8 Add GitLab review status" in body["content"]
+    assert "CI/check status: pending" in body["content"]
+    assert "reviewer: Please add tests" in body["content"]
+    assert calls[0]["token"] == "gitlab-token"
+    assert calls[0]["base_url"] == "https://gitlab.com"
+    assert calls[0]["repository"].slug == "example/demo-repository"
+    assert calls[0]["source_branch"] == "feature/gitlab-review"
 
 
 def test_github_release_permission_error_is_actionable():

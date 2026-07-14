@@ -12,6 +12,8 @@ from app.schemas.repositories import (
     CancelActionPlanResponse,
     CloneRepositoryRequest,
     CreateAgentSessionRequest,
+    DraftGitLabMergeRequestRequest,
+    DraftGitLabMergeRequestResponse,
     DraftGitHubPullRequestRequest,
     DraftGitHubPullRequestResponse,
     DraftGitHubReleaseRequest,
@@ -22,6 +24,8 @@ from app.schemas.repositories import (
     GenerateChangeSummaryResponse,
     GenerateCommitMessageRequest,
     GenerateCommitMessageResponse,
+    GeneratePullRequestDraftRequest,
+    GeneratePullRequestDraftResponse,
     InitialiseAndRegisterRequest,
     LocalActionPlan,
     LocalResolveRequest,
@@ -279,6 +283,19 @@ def generate_change_summary(
 
 
 @router.post(
+    "/{repository_id}/pull-requests/draft-text",
+    response_model=GeneratePullRequestDraftResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def generate_pull_request_draft(
+    repository_id: str,
+    payload: GeneratePullRequestDraftRequest,
+    request: Request,
+) -> GeneratePullRequestDraftResponse:
+    return _service(request).generate_pull_request_draft(repository_id, payload.base_branch)
+
+
+@router.post(
     "/{repository_id}/github/releases/draft",
     response_model=DraftGitHubReleaseResponse,
     dependencies=[Depends(require_session_token)],
@@ -302,6 +319,19 @@ def draft_github_pull_request(
     request: Request,
 ) -> DraftGitHubPullRequestResponse:
     return _service(request).draft_github_pull_request(repository_id, payload)
+
+
+@router.post(
+    "/{repository_id}/gitlab/merge-requests/draft",
+    response_model=DraftGitLabMergeRequestResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def draft_gitlab_merge_request(
+    repository_id: str,
+    payload: DraftGitLabMergeRequestRequest,
+    request: Request,
+) -> DraftGitLabMergeRequestResponse:
+    return _service(request).draft_gitlab_merge_request(repository_id, payload)
 
 
 @router.post(

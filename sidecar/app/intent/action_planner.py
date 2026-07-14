@@ -1452,6 +1452,7 @@ class LocalActionPlanner:
             ReadAction.CONFLICTS: "Read conflict guidance",
             ReadAction.TAGS: "Read tags",
             ReadAction.TAG_SHOW: "Inspect tag",
+            ReadAction.REVIEW_STATUS: "Read PR/MR review status",
         }
         return titles.get(action, "Read local repository state")
 

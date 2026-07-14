@@ -37,5 +37,15 @@ class UpdateGitHubSettingsRequest(ApiModel):
     token: str | None = None
 
 
+class GitLabSettings(ApiModel):
+    token_set: bool = False
+    base_url: str | None = None
+
+
+class UpdateGitLabSettingsRequest(ApiModel):
+    token: str | None = None
+    base_url: str | None = None
+
+
 class SetExternalLLMRequest(ApiModel):
     allowed: bool

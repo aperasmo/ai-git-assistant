@@ -167,7 +167,7 @@ Return only valid JSON with this exact shape:
   "branch_summary": "one short paragraph",
   "file_summaries": ["file: what changed"],
   "pr_title": "short PR title",
-  "pr_body": "markdown body with summary and testing/checks if inferable",
+  "pr_body": "markdown body with summary plus a checklist using - [ ] items when useful",
   "commit_suggestions": [
     {"message": "imperative commit subject", "files": ["path"], "rationale": "why these files belong together"}
   ]
@@ -175,6 +175,8 @@ Return only valid JSON with this exact shape:
 Rules:
 - Use only the files and patch content provided.
 - Do not invent tests, issues, branches, or files.
+- For PR bodies, include concise sections like Summary and Checklist.
+- Checklist items must be grounded in the provided commits, files, or diff stats.
 - Split mixed work into 1-5 logical commit suggestions.
 - Commit messages must be 72 characters or fewer and use imperative mood.
 """

@@ -242,6 +242,22 @@ pub struct GenerateChangeSummaryResponse {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GeneratePullRequestDraftResponse {
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub checklist: Vec<String>,
+    pub branch_summary: String,
+    #[serde(default)]
+    pub file_summaries: Vec<String>,
+    pub source: String,
+    pub context_summary: String,
+    #[serde(default)]
+    pub privacy_receipt: Option<Value>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DraftGitHubReleaseRequest {
     pub tag_name: String,
     pub title: String,
@@ -281,6 +297,30 @@ pub struct DraftGitHubPullRequestResponse {
     pub number: i64,
     pub base_branch: String,
     pub head_branch: String,
+    pub provider: String,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+    pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftGitLabMergeRequestRequest {
+    pub base_branch: String,
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftGitLabMergeRequestResponse {
+    pub repository: String,
+    pub merge_request_url: String,
+    pub number: i64,
+    pub base_branch: String,
+    pub head_branch: String,
+    pub provider: String,
     pub title: String,
     pub summary: String,
     pub content: String,

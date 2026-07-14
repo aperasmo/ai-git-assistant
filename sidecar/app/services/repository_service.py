@@ -24,11 +24,14 @@ from app.schemas.repositories import (
     BranchInfo,
     CancelActionPlanResponse,
     CommitMessageStyle,
+    DraftGitLabMergeRequestRequest,
+    DraftGitLabMergeRequestResponse,
     DraftGitHubPullRequestRequest,
     DraftGitHubPullRequestResponse,
     DraftGitHubReleaseRequest,
     DraftGitHubReleaseResponse,
     GenerateChangeSummaryResponse,
+    GeneratePullRequestDraftResponse,
     FolderClassificationResponse,
     GenerateCommitMessageResponse,
     LocalActionPlan,
@@ -45,6 +48,11 @@ from app.schemas.repositories import (
 )
 from app.services.repository_store import RepositoryStore
 from app.services.github_release_service import GitHubReleaseClient, GitHubRepositoryRef, parse_github_remote_url
+from app.services.gitlab_merge_request_service import (
+    GitLabMergeRequestClient,
+    GitLabRepositoryRef,
+    parse_gitlab_remote_url,
+)
 
 _logger = logging.getLogger("aiga.sidecar")
 
@@ -60,7 +68,9 @@ _CONFLICT_RESOLUTION_STEPS = {
 }
 _READ_ONLY_REQUEST_PATTERN = re.compile(
     r"^\s*(?:git\s+)?(?:"
-    r"status|diff|log|logs|history|blame|graph|branches?|remotes?|stashes?|tags?|conflicts?"
+    r"status|diff|log|logs|history|blame|graph|branches?|remotes?|stashes?|tags?|conflicts?|"
+    r"review\s+status|pr\s+status|pull\s+request\s+status|mr\s+status|merge\s+request\s+status|"
+    r"ci\s+status|checks"
     r")\b",
     re.IGNORECASE,
 )
@@ -103,6 +113,7 @@ class RepositoryService:
             from app.llm.router import LLMRouter
             self._llm_router = LLMRouter(settings_service)
         self._github_release_client_factory = GitHubReleaseClient
+        self._gitlab_merge_request_client_factory = GitLabMergeRequestClient
         self._pending_plans: dict[str, PendingWritePlan] = {}
         self._pending_plans_lock = Lock()
 
@@ -246,8 +257,8 @@ class RepositoryService:
             )
         client = GitClient(Path(session.worktree_path))
         commits = client.log_range_oneline(f"{session.base_branch}..HEAD").strip()
-        stat = client.compare_stat(session.base_branch, session.branch_name).strip()
-        files = client.compare_name_status(session.base_branch, session.branch_name).strip()
+        stat = client.compare_stat(session.base_branch, "HEAD").strip()
+        files = client.compare_name_status(session.base_branch, "HEAD").strip()
         status = client.short_status().strip()
         sections = [
             f"Task: {session.task}",
@@ -660,6 +671,60 @@ class RepositoryService:
         )
         return response.model_copy(update={"privacy_receipt": receipt})
 
+    def generate_pull_request_draft(
+        self,
+        repository_id: str,
+        base_branch: str,
+    ) -> GeneratePullRequestDraftResponse:
+        repository = self.store.get(repository_id)
+        if not repository.external_llm_allowed:
+            raise ValidationFailure(
+                "AI pull request drafts are disabled for this repository. Enable AI for this repo first."
+            )
+        if self._llm_router is None:
+            raise ValidationFailure("No AI provider is configured. Open Settings to add one.")
+
+        snapshot = self.snapshot(repository_id)
+        head_branch = snapshot.branch
+        base_branch = base_branch.strip()
+        self._validate_pr_branch_name(base_branch)
+        if not head_branch:
+            raise ValidationFailure("Pull request drafts require a named branch, not detached HEAD.")
+        self._validate_pr_branch_name(head_branch)
+        if head_branch == base_branch:
+            raise ValidationFailure("Choose a base branch different from the current branch.")
+        if snapshot.write_blocked_reason or snapshot.conflicts:
+            raise ValidationFailure("Resolve repository conflicts before drafting pull request text.")
+
+        canonical_path = self.store.canonical_path(repository_id)
+        diff_context = self._build_ai_pull_request_context(canonical_path, base_branch, head_branch, snapshot)
+        if not diff_context.content.strip():
+            raise ValidationFailure("There is no branch comparison context available for the pull request.")
+
+        context_summary = f"Generated PR draft from branch comparison {base_branch}...{head_branch}."
+        response = self._llm_router.change_summary(
+            branch=head_branch,
+            diff_context=diff_context.content,
+            context_summary=context_summary,
+        )
+        receipt = self._llm_privacy_receipt(
+            purpose="Generate pull request title and body",
+            files=diff_context.files,
+            context_items=diff_context.context_items,
+            exact_context=diff_context.content,
+            truncated=diff_context.truncated,
+        )
+        checklist = self._extract_pr_checklist(response.pr_body)
+        return GeneratePullRequestDraftResponse(
+            title=response.pr_title,
+            body=response.pr_body,
+            checklist=checklist,
+            branch_summary=response.branch_summary,
+            file_summaries=response.file_summaries,
+            context_summary=context_summary,
+            privacy_receipt=receipt,
+        )
+
     def draft_github_release(
         self,
         repository_id: str,
@@ -803,6 +868,91 @@ class RepositoryService:
             head_branch=head_branch,
             title="GitHub Draft Pull Request Created",
             summary=f"Draft PR #{result.number} was created from {head_branch} into {base_branch}.",
+            content="\n".join(content_lines),
+            snapshot=latest_snapshot,
+        )
+
+    def draft_gitlab_merge_request(
+        self,
+        repository_id: str,
+        request: DraftGitLabMergeRequestRequest,
+    ) -> DraftGitLabMergeRequestResponse:
+        if self.settings_service is None:
+            raise ValidationFailure("GitLab settings are unavailable.")
+
+        token = self.settings_service.get_raw_gitlab_token()
+        if not token:
+            raise ValidationFailure(
+                "No GitLab token is configured. Open Settings and add a token with api scope."
+            )
+
+        snapshot = self.snapshot(repository_id)
+        repository_ref = self._gitlab_repository_from_snapshot(snapshot)
+        head_branch = snapshot.branch
+        base_branch = request.base_branch.strip()
+        self._validate_pr_branch_name(base_branch)
+
+        if not head_branch:
+            raise ValidationFailure("Draft merge requests require a named branch, not detached HEAD.")
+        self._validate_pr_branch_name(head_branch)
+        if head_branch == base_branch:
+            raise ValidationFailure("Choose a base branch different from the current branch.")
+        if snapshot.write_blocked_reason or snapshot.conflicts:
+            raise ValidationFailure("Resolve repository conflicts before drafting a merge request.")
+        if snapshot.ahead > 0:
+            raise ValidationFailure(
+                "The current branch has local commits that are not pushed yet. Push first, then draft the merge request."
+            )
+
+        canonical_path = self.store.canonical_path(repository_id)
+        client = GitClient(canonical_path)
+        gitlab_remote = self._gitlab_remote_name_from_snapshot(snapshot)
+        if not client.remote_branch_exists(gitlab_remote, head_branch):
+            raise ValidationFailure(
+                f"GitLab cannot see branch '{head_branch}' on remote '{gitlab_remote}'. Push the branch first."
+            )
+
+        commits = client.log_range_oneline(f"{base_branch}..{head_branch}").strip()
+        changed_files = client.compare_name_status(base_branch, head_branch).strip()
+        diff_stat = client.compare_stat(base_branch, head_branch).strip()
+
+        gitlab_settings = self.settings_service.get_gitlab_settings()
+        base_url = gitlab_settings.base_url or f"https://{repository_ref.host}"
+        client_api = self._gitlab_merge_request_client_factory(token, base_url=base_url)
+        result = client_api.create_draft_merge_request(
+            repository=repository_ref,
+            title=request.title.strip(),
+            body=request.body.strip(),
+            source_branch=head_branch,
+            target_branch=base_branch,
+        )
+        latest_snapshot = self.snapshot(repository_id)
+        content_lines = [
+            f"Repository: {repository_ref.slug}",
+            f"Draft MR: {result.merge_request_url}",
+            f"Number: !{result.number}",
+            f"Base: {base_branch}",
+            f"Head: {head_branch}",
+            "Draft: yes",
+            "",
+            "Commits:",
+            commits or "(GitLab accepted the MR, but no local commit range was available.)",
+            "",
+            "Changed files:",
+            changed_files or "(No local file list available.)",
+            "",
+            "Diff stat:",
+            diff_stat or "(No local diff stat available.)",
+        ]
+
+        return DraftGitLabMergeRequestResponse(
+            repository=repository_ref.slug,
+            merge_request_url=result.merge_request_url,
+            number=result.number,
+            base_branch=base_branch,
+            head_branch=head_branch,
+            title="GitLab Draft Merge Request Created",
+            summary=f"Draft MR !{result.number} was created from {head_branch} into {base_branch}.",
             content="\n".join(content_lines),
             snapshot=latest_snapshot,
         )
@@ -1228,7 +1378,159 @@ class RepositoryService:
                 snapshot=snapshot,
             )
 
+        if request.action is ReadAction.REVIEW_STATUS:
+            snapshot = self.snapshot(repository_id)
+            content = self._render_review_status(repository_id, snapshot)
+            return ReadActionResult(
+                action=request.action,
+                title="Review Status",
+                summary="Current branch PR/MR status was read from the remote provider.",
+                content=content,
+                snapshot=snapshot,
+            )
+
         raise ValidationFailure("Unsupported read action.")
+
+    def _render_review_status(
+        self,
+        repository_id: str,
+        snapshot: RepositorySnapshot,
+    ) -> str:
+        if not snapshot.branch:
+            raise ValidationFailure("Review status requires a named branch, not detached HEAD.")
+        if self.settings_service is None:
+            raise ValidationFailure("Provider settings are unavailable.")
+
+        providers = {provider.provider for provider in snapshot.remote_providers}
+        if "github" in providers:
+            return self._render_github_review_status(snapshot)
+        if "gitlab" in providers:
+            return self._render_gitlab_review_status(snapshot)
+        if not snapshot.remote_providers:
+            return (
+                "No remote provider detected.\n\n"
+                "Review status needs an open GitHub pull request or GitLab merge request for the current branch."
+            )
+        return (
+            f"Detected remote provider: {self._remote_provider_summary(snapshot)}\n\n"
+            "Review status currently supports GitHub pull requests and GitLab merge requests. "
+            "Bitbucket and Azure DevOps review integrations are planned."
+        )
+
+    def _render_github_review_status(self, snapshot: RepositorySnapshot) -> str:
+        token = self.settings_service.get_raw_github_token()
+        if not token:
+            raise ValidationFailure(
+                "No GitHub token is configured. Open Settings and add a token with Pull requests read access."
+            )
+        repository_ref = self._github_repository_from_snapshot(snapshot)
+        client_api = self._github_release_client_factory(token)
+        status = client_api.get_pull_request_status(
+            repository=repository_ref,
+            head_branch=snapshot.branch or "",
+        )
+        if status is None:
+            return (
+                f"Provider: GitHub\nRepository: {repository_ref.slug}\nBranch: {snapshot.branch}\n\n"
+                "No open pull request was found for the current branch."
+            )
+        return self._format_change_request_status(
+            provider="GitHub",
+            repository=repository_ref.slug,
+            number_prefix="#",
+            number=status.number,
+            url=status.url,
+            title=status.title,
+            state=status.state,
+            draft=status.draft,
+            base_branch=status.base_branch,
+            head_branch=status.head_branch,
+            head_sha=status.head_sha,
+            ci_status=status.ci_status,
+            review_summary=status.review_summary,
+            review_count=status.review_count,
+            comment_count=status.comment_count,
+            latest_comments=list(status.latest_comments),
+        )
+
+    def _render_gitlab_review_status(self, snapshot: RepositorySnapshot) -> str:
+        token = self.settings_service.get_raw_gitlab_token()
+        if not token:
+            raise ValidationFailure(
+                "No GitLab token is configured. Open Settings and add a token with api scope."
+            )
+        repository_ref = self._gitlab_repository_from_snapshot(snapshot)
+        gitlab_settings = self.settings_service.get_gitlab_settings()
+        base_url = gitlab_settings.base_url or f"https://{repository_ref.host}"
+        client_api = self._gitlab_merge_request_client_factory(token, base_url=base_url)
+        status = client_api.get_merge_request_status(
+            repository=repository_ref,
+            source_branch=snapshot.branch or "",
+        )
+        if status is None:
+            return (
+                f"Provider: GitLab\nRepository: {repository_ref.slug}\nBranch: {snapshot.branch}\n\n"
+                "No open merge request was found for the current branch."
+            )
+        return self._format_change_request_status(
+            provider="GitLab",
+            repository=repository_ref.slug,
+            number_prefix="!",
+            number=status.number,
+            url=status.url,
+            title=status.title,
+            state=status.state,
+            draft=status.draft,
+            base_branch=status.base_branch,
+            head_branch=status.head_branch,
+            head_sha=status.head_sha,
+            ci_status=status.ci_status,
+            review_summary=status.review_summary,
+            review_count=status.review_count,
+            comment_count=status.comment_count,
+            latest_comments=list(status.latest_comments),
+        )
+
+    @staticmethod
+    def _format_change_request_status(
+        *,
+        provider: str,
+        repository: str,
+        number_prefix: str,
+        number: int,
+        url: str,
+        title: str,
+        state: str,
+        draft: bool,
+        base_branch: str,
+        head_branch: str,
+        head_sha: str,
+        ci_status: str,
+        review_summary: str,
+        review_count: int,
+        comment_count: int,
+        latest_comments: list[str],
+    ) -> str:
+        short_sha = head_sha[:12] if head_sha else "unknown"
+        lines = [
+            f"Provider: {provider}",
+            f"Repository: {repository}",
+            f"Change request: {number_prefix}{number} {title}",
+            f"URL: {url or '(not returned)'}",
+            f"State: {state}",
+            f"Draft: {'yes' if draft else 'no'}",
+            f"Base: {base_branch or 'unknown'}",
+            f"Head: {head_branch or 'unknown'}",
+            f"Head SHA: {short_sha}",
+            "",
+            f"CI/check status: {ci_status or 'unknown'}",
+            f"Reviews: {review_summary} ({review_count} event{'s' if review_count != 1 else ''})",
+            f"Comments: {comment_count}",
+        ]
+        if latest_comments:
+            lines.extend(["", "Latest comments:"])
+            lines.extend(f"- {comment}" for comment in latest_comments[:5])
+        return "\n".join(lines)
 
     @staticmethod
     def _github_repository_from_snapshot(snapshot: RepositorySnapshot) -> GitHubRepositoryRef:
@@ -1257,7 +1559,8 @@ class RepositoryService:
             "GitHub platform actions are not available for this repository. "
             f"Detected remote provider: {detected}. "
             "You can still use status, commits, branches, push, pull, fetch, tags, stash, merge, "
-            "and AI summaries. GitLab, Bitbucket, and Azure DevOps platform integrations are planned."
+            "and AI summaries. Use Draft PR for GitLab merge requests; Bitbucket and Azure DevOps "
+            "platform integrations are planned."
         )
 
     @staticmethod
@@ -1269,6 +1572,47 @@ class RepositoryService:
             if parse_github_remote_url(remote_url) is not None:
                 return name
         raise ValidationFailure("No GitHub remote was found for this repository.")
+
+    @staticmethod
+    def _gitlab_repository_from_snapshot(snapshot: RepositorySnapshot) -> GitLabRepositoryRef:
+        if not snapshot.remote_urls:
+            raise ValidationFailure(
+                "GitLab platform actions are not available because this repository has no remote. "
+                "Local Git features still work."
+            )
+
+        ordered_urls: list[str] = []
+        origin_url = snapshot.remote_urls.get("origin")
+        if origin_url:
+            ordered_urls.append(origin_url)
+        ordered_urls.extend(
+            url for name, url in snapshot.remote_urls.items()
+            if name != "origin"
+        )
+
+        for remote_url in ordered_urls:
+            repository_ref = parse_gitlab_remote_url(remote_url)
+            if repository_ref is not None:
+                return repository_ref
+
+        detected = RepositoryService._remote_provider_summary(snapshot)
+        raise ValidationFailure(
+            "GitLab platform actions are not available for this repository. "
+            f"Detected remote provider: {detected}. "
+            "You can still use status, commits, branches, push, pull, fetch, tags, stash, merge, "
+            "and AI summaries. GitHub draft pull requests are available for GitHub repositories; "
+            "Bitbucket and Azure DevOps platform integrations are planned."
+        )
+
+    @staticmethod
+    def _gitlab_remote_name_from_snapshot(snapshot: RepositorySnapshot) -> str:
+        for provider in snapshot.remote_providers:
+            if provider.provider == "gitlab":
+                return provider.remote
+        for name, remote_url in snapshot.remote_urls.items():
+            if parse_gitlab_remote_url(remote_url) is not None:
+                return name
+        raise ValidationFailure("No GitLab remote was found for this repository.")
 
     @staticmethod
     def _remote_provider_summary(snapshot: RepositorySnapshot) -> str:
@@ -1587,6 +1931,87 @@ class RepositoryService:
             context_items=list(dict.fromkeys(context_items)),
             truncated=True,
         )
+
+    @staticmethod
+    def _build_ai_pull_request_context(
+        canonical_path,
+        base_branch: str,
+        head_branch: str,
+        snapshot: RepositorySnapshot,
+    ) -> AiDiffContext:
+        client = GitClient(canonical_path)
+        commits = client.log_range_oneline(f"{base_branch}..{head_branch}").strip()
+        changed_files = client.compare_name_status(base_branch, head_branch).strip()
+        diff_stat = client.compare_stat(base_branch, head_branch).strip()
+        files = RepositoryService._paths_from_name_status(changed_files)
+        lines: list[str] = [
+            f"Base branch: {base_branch}",
+            f"Head branch: {head_branch}",
+            "",
+            "Instruction: Generate one pull request title, body, and review checklist for this branch.",
+            "",
+            "Commits:",
+            commits or "(No local commit range available.)",
+            "",
+            "Changed files:",
+            changed_files or "(No local file list available.)",
+            "",
+            "Diff stat:",
+            diff_stat or "(No local diff stat available.)",
+        ]
+        if snapshot.recent_commits:
+            lines.extend(
+                [
+                    "",
+                    "Recent repository commit style examples:",
+                    *[f"- {commit.subject}" for commit in snapshot.recent_commits[:5]],
+                ]
+            )
+        context_items = ["Branch names", "Commit range", "Changed files", "Diff stat"]
+        if snapshot.recent_commits:
+            context_items.append("Recent commit subjects")
+
+        context = "\n".join(lines)
+        truncated = len(context) > _MAX_COMMIT_MESSAGE_CONTEXT_CHARS
+        if truncated:
+            context = (
+                context[:_MAX_COMMIT_MESSAGE_CONTEXT_CHARS]
+                + "\n\n[Pull request context truncated by AI Git Assistant.]"
+            )
+        return AiDiffContext(
+            content=context,
+            files=files,
+            context_items=context_items,
+            truncated=truncated,
+        )
+
+    @staticmethod
+    def _paths_from_name_status(name_status: str) -> list[str]:
+        paths: list[str] = []
+        for line in name_status.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            if parts[0].startswith("R") and len(parts) >= 3:
+                paths.append(parts[2])
+            else:
+                paths.append(parts[-1])
+        return list(dict.fromkeys(paths))
+
+    @staticmethod
+    def _extract_pr_checklist(body: str) -> list[str]:
+        checklist: list[str] = []
+        for line in body.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("- [ ]", "- [x]", "* [ ]", "* [x]")):
+                checklist.append(stripped[5:].strip())
+        if checklist:
+            return checklist[:8]
+        return [
+            "Review changed files",
+            "Run relevant tests",
+            "Confirm CI passes",
+        ]
 
     @staticmethod
     def _ai_change_status_map(snapshot: RepositorySnapshot) -> dict[str, str]:
