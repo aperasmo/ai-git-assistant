@@ -42,6 +42,55 @@ def _git_init_bare_main(path: Path) -> None:
     )
 
 
+def _git_switch_to_main(repository: Path) -> None:
+    current = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if current.stdout.strip() == "main":
+        return
+
+    existing = subprocess.run(
+        ["git", "switch", "main"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if existing.returncode == 0:
+        return
+
+    result = subprocess.run(
+        ["git", "switch", "-c", "main"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return
+
+    fallback = subprocess.run(
+        ["git", "checkout", "-b", "main"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if fallback.returncode == 0:
+        return
+
+    raise subprocess.CalledProcessError(
+        fallback.returncode,
+        fallback.args,
+        output=fallback.stdout,
+        stderr=fallback.stderr,
+    )
+
+
 @pytest.fixture()
 def git_repository(tmp_path: Path) -> Path:
     repository = tmp_path / "demo-repository"
@@ -76,6 +125,7 @@ def git_repository_with_remote(tmp_path: Path) -> Path:
 
     repository = tmp_path / "demo-repository"
     subprocess.run(["git", "clone", str(bare), str(repository)], check=True, capture_output=True)
+    _git_switch_to_main(repository)
 
     def git(*args: str) -> None:
         subprocess.run(
@@ -102,6 +152,7 @@ def git_repository_behind_remote(tmp_path: Path) -> Path:
 
     contrib = tmp_path / "contrib"
     subprocess.run(["git", "clone", str(bare), str(contrib)], check=True, capture_output=True)
+    _git_switch_to_main(contrib)
     for args in [["git", "config", "user.name", "Contributor"], ["git", "config", "user.email", "c@test.invalid"]]:
         subprocess.run(args, cwd=contrib, check=True, capture_output=True)
     (contrib / "first.txt").write_text("first\n")
@@ -111,6 +162,7 @@ def git_repository_behind_remote(tmp_path: Path) -> Path:
 
     repository = tmp_path / "our-repo"
     subprocess.run(["git", "clone", str(bare), str(repository)], check=True, capture_output=True)
+    _git_switch_to_main(repository)
     for args in [["git", "config", "user.name", "Test User"], ["git", "config", "user.email", "test@test.invalid"]]:
         subprocess.run(args, cwd=repository, check=True, capture_output=True)
 
