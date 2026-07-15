@@ -91,6 +91,21 @@ def _git_switch_to_main(repository: Path) -> None:
     )
 
 
+def _git_track_origin_main(repository: Path) -> None:
+    subprocess.run(
+        ["git", "config", "branch.main.remote", "origin"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "branch.main.merge", "refs/heads/main"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+
+
 @pytest.fixture()
 def git_repository(tmp_path: Path) -> Path:
     repository = tmp_path / "demo-repository"
@@ -126,6 +141,7 @@ def git_repository_with_remote(tmp_path: Path) -> Path:
     repository = tmp_path / "demo-repository"
     subprocess.run(["git", "clone", str(bare), str(repository)], check=True, capture_output=True)
     _git_switch_to_main(repository)
+    _git_track_origin_main(repository)
 
     def git(*args: str) -> None:
         subprocess.run(
@@ -163,6 +179,7 @@ def git_repository_behind_remote(tmp_path: Path) -> Path:
     repository = tmp_path / "our-repo"
     subprocess.run(["git", "clone", str(bare), str(repository)], check=True, capture_output=True)
     _git_switch_to_main(repository)
+    _git_track_origin_main(repository)
     for args in [["git", "config", "user.name", "Test User"], ["git", "config", "user.email", "test@test.invalid"]]:
         subprocess.run(args, cwd=repository, check=True, capture_output=True)
 
