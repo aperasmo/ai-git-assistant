@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use tauri::AppHandle;
-use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+use tauri_plugin_shell::{
+    process::{CommandChild, CommandEvent},
+    ShellExt,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -192,18 +195,26 @@ async fn force_stop_sidecar_tree(pid: u32) {
 }
 
 #[cfg(not(target_os = "windows"))]
-async fn force_stop_sidecar_tree(_pid: u32) {}
+async fn force_stop_sidecar_child(child: CommandChild) {
+    let _ = child.kill();
+}
+
+#[cfg(target_os = "windows")]
+async fn force_stop_sidecar_child(child: CommandChild) {
+    force_stop_sidecar_tree(child.pid()).await;
+}
 
 pub async fn stop_sidecar(state: AppState) {
-    // The desktop app owns this sidecar PID. On Windows, taskkill /T removes
-    // the sidecar and any PyInstaller child processes beneath it.
+    // The desktop app owns this sidecar PID. Windows needs taskkill /T to
+    // remove PyInstaller child processes; Unix-like systems can terminate the
+    // sidecar child directly through Tauri's shell process handle.
     let child = {
         let mut runtime = state.runtime.lock().await;
         runtime.child.take()
     };
 
     if let Some(child) = child {
-        force_stop_sidecar_tree(child.pid()).await;
+        force_stop_sidecar_child(child).await;
     }
 
     state.stopped().await;

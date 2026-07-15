@@ -89,6 +89,13 @@
 - **Version badge:** the top bar displays the runtime app version from Tauri metadata instead of a hardcoded phase label.
 - **Review status:** the app can read the current branch's GitHub Pull Request or GitLab Merge Request, including CI/check status, draft state, review summary, comment count, and recent comments.
 
+### Phase 7 - Cross-platform release foundation
+
+- **Portable sidecar scripts:** `npm run sidecar:build` and `npm run sidecar:test` now use Node scripts instead of Windows-only PowerShell entry points.
+- **Platform-aware sidecar binaries:** sidecar output is copied to Tauri's `src-tauri/binaries` folder using the host target triple and the correct executable suffix for Windows versus macOS/Linux.
+- **Host-specific Tauri bundle commands:** Windows, macOS, and Linux bundle commands are exposed separately so each platform can be built on its matching host or CI runner.
+- **Non-Windows shutdown:** macOS/Linux hosts terminate the sidecar through Tauri's shell child process instead of relying on the Windows-only `taskkill` path.
+
 ### Post-launch fixes
 
 - **Rust unused import:** Removed unused `use serde_json::json;` from `src-tauri/src/commands/settings.rs`.

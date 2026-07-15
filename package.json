@@ -1,7 +1,7 @@
 {
   "name": "ai-git-assistant",
   "private": true,
-  "version": "0.6.2",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader runner",
@@ -10,9 +10,12 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "sidecar:build": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-sidecar.ps1",
-    "sidecar:test": "powershell -ExecutionPolicy Bypass -File .\\scripts\\test-sidecar.ps1",
-    "sidecar:test:install": "powershell -ExecutionPolicy Bypass -File .\\scripts\\test-sidecar.ps1 -InstallDependencies",
+    "tauri:build:windows": "tauri build --bundles nsis",
+    "tauri:build:mac": "tauri build --bundles app,dmg",
+    "tauri:build:linux": "tauri build --bundles appimage,deb",
+    "sidecar:build": "node ./scripts/build-sidecar.mjs",
+    "sidecar:test": "node ./scripts/test-sidecar.mjs",
+    "sidecar:test:install": "node ./scripts/test-sidecar.mjs --install-dependencies",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
   },

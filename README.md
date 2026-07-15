@@ -8,7 +8,7 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.6.2 - Phase 6** adds PR/MR review visibility. It includes everything from Phase 5 plus GitHub draft pull requests, GitLab draft merge requests, AI-generated PR title/body/checklist drafts, provider-aware readiness checks, CI/check status display, review summaries, and recent PR/MR comments.
+**0.7.0 - Phase 7** starts the cross-platform release line. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, and sidecar shutdown handling for macOS/Linux hosts.
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`. The first release in a phase uses `.0`, so Phase 6 starts at `0.6.0`.
 
@@ -95,7 +95,7 @@ blame README.md
 show stashes
 show remotes
 show tags
-show tag v0.6.2
+show tag v0.7.0
 show conflicts
 review status
 commit all my changes with message "Fix login bug"
@@ -105,8 +105,8 @@ switch to main
 create branch feature/new-login
 stash my changes
 merge feature/new-login
-create tag v0.6.2 with message "Release v0.6.2"
-push tag v0.6.2
+create tag v0.7.0 with message "Release v0.7.0"
+push tag v0.7.0
 ```
 
 The app turns your sentence into a Git plan and shows it to you before doing anything.
@@ -177,6 +177,30 @@ Provider-specific platform features are guarded by the selected repository's rem
 
 ---
 
+## Cross-platform status
+
+Phase 7.0 begins Mac and Linux support by removing Windows-only build assumptions from the project scripts.
+
+| Host OS | Status |
+|---|---|
+| Windows | Supported and release-built with NSIS |
+| macOS | Build path prepared; signed/notarized release still pending |
+| Linux | Build path prepared; AppImage/DEB verification still pending |
+
+Portable build commands:
+
+```powershell
+npm run sidecar:build
+npm run sidecar:test
+npm run tauri:build:windows
+npm run tauri:build:mac
+npm run tauri:build:linux
+```
+
+Each OS still needs to build on its own host or CI runner because Tauri, PyInstaller, WebView dependencies, signing, and installer tooling are platform-specific.
+
+---
+
 ## The approval screen
 
 Every write operation (commit, push, branch, etc.) shows a plan like this before running:
@@ -210,7 +234,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `inspect stash@{0}` | Patch for one stash entry |
 | `show remotes` | Configured remote URLs |
 | `show tags` | Local release tags |
-| `show tag v0.6.2` | Inspect one tag |
+| `show tag v0.7.0` | Inspect one tag |
 | `history README.md` | File-specific commit history |
 | `blame README.md` | Line authorship for one file |
 | `show conflicts` | Conflict files and resolution guidance |
@@ -236,9 +260,9 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `merge feature/name` | Merge a local branch with guided conflict handling |
 | `continue merge` | Commit a resolved merge |
 | `abort merge` | Abort an in-progress merge |
-| `create tag v0.6.2 with message "Release v0.6.2"` | Create an annotated local tag |
-| `push tag v0.6.2` | Push one explicit tag to the remote |
-| `delete tag v0.6.2` | Delete a local tag after approval |
+| `create tag v0.7.0 with message "Release v0.7.0"` | Create an annotated local tag |
+| `push tag v0.7.0` | Push one explicit tag to the remote |
+| `delete tag v0.7.0` | Delete a local tag after approval |
 | `draft release` | Create a GitHub draft release and upload one asset |
 | `draft PR` | Create a GitHub draft PR or GitLab draft MR from the current branch |
 | `unstage login.py` | Remove file from staging |
@@ -374,7 +398,7 @@ Delete that file for a completely clean start.
 
 - **Phase 5:** Agent worktree control plane
 - **Phase 6:** PR and review workflow
-- **Phase 7:** Mac and Linux support
+- **Phase 7:** Mac and Linux release support
 - **Phase 8:** Team context and conventions
 
 ---
@@ -385,4 +409,4 @@ Found a bug or have a suggestion? Open an issue on this repository and describe 
 
 ---
 
-*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase 6*
+*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase 7*

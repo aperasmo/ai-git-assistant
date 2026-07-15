@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 13/07/2026
+Last updated: 14/07/2026
 
 ---
 
@@ -80,11 +80,12 @@ These dates mark when the phase or feature set was first added to the project hi
 2. Added GitHub PR and GitLab MR CI/check status, review summary, comment count, and recent comment display.
 3. Guarded review-status requests so they resolve locally as read actions instead of falling through to write-plan AI fallback.
 
-#### Phase 7 - target TBD
+#### Phase 7 - 14/07/2026
 
-1. Planned macOS and Linux builds.
-2. Planned platform-specific secure storage.
-3. Planned install and troubleshooting docs per OS.
+1. Started the cross-platform release line at `0.7.0`.
+2. Replaced Windows-only npm sidecar build/test commands with portable Node scripts.
+3. Added platform-aware sidecar binary naming and explicit Windows/macOS/Linux Tauri bundle commands.
+4. Added non-Windows sidecar shutdown handling through the Tauri shell child process.
 
 #### Phase 8 - target TBD
 
@@ -423,8 +424,12 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [ ] Add provider adapters for Bitbucket and Azure DevOps.
 - [ ] Review-response workflow.
 
-### Phase 7 - Cross-platform release (target TBD)
+### Phase 7 - Cross-platform release (14/07/2026)
 
+- [x] Replace Windows-only PowerShell sidecar build/test npm commands with cross-platform Node scripts.
+- [x] Generate platform-aware sidecar binary names for Tauri sidecar discovery.
+- [x] Add explicit Windows, macOS, and Linux Tauri bundle commands.
+- [x] Terminate the sidecar child process on macOS/Linux during app shutdown.
 - [ ] Build and verify macOS `.app` / `.dmg` packaging.
 - [ ] Add Apple code signing and notarization path.
 - [ ] Build and verify Linux packaging, starting with AppImage or `.deb`.
@@ -454,6 +459,11 @@ npm run sidecar:test
 
 # First-time test dependency install, if needed
 npm run sidecar:test:install
+
+# Build a platform bundle on the matching host OS
+npm run tauri:build:windows
+npm run tauri:build:mac
+npm run tauri:build:linux
 
 # Start in development mode
 npm run tauri:dev

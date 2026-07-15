@@ -1,5 +1,25 @@
 # Release Notes
 
+## 0.7.0 - Phase 7
+
+Starts the cross-platform release line.
+
+### Shipped
+
+- Portable Node-based `sidecar:build` script replacing the Windows-only npm PowerShell path.
+- Portable Node-based `sidecar:test` script with the same isolated project-local pytest temp behavior.
+- Platform-aware sidecar output naming: `.exe` for Windows target triples, extensionless binaries for macOS/Linux target triples.
+- Explicit Tauri bundle commands for Windows, macOS, and Linux host builds.
+- macOS/Linux sidecar shutdown handling through Tauri's shell child process.
+
+### Verification
+
+- `npm run build`
+- `cargo check`
+- `npm run sidecar:test`
+- `npm run sidecar:build`
+- `npm run tauri:build:windows`
+
 ## 0.6.2 - Phase 6
 
 Adds PR/MR review visibility for the current branch.
