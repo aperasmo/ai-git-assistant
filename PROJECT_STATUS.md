@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 14/07/2026
+Last updated: 15/07/2026
 
 ---
 
@@ -86,6 +86,13 @@ These dates mark when the phase or feature set was first added to the project hi
 2. Replaced Windows-only npm sidecar build/test commands with portable Node scripts.
 3. Added platform-aware sidecar binary naming and explicit Windows/macOS/Linux Tauri bundle commands.
 4. Added non-Windows sidecar shutdown handling through the Tauri shell child process.
+
+#### Phase 7.1 - 15/07/2026
+
+1. Added Ubuntu 20.04 compatibility for Git versions that do not support `git init -b`.
+2. Fixed repository common-dir resolution on older Git so normal repositories are not mistaken for linked worktrees.
+3. Added non-Windows portable local secret storage for AI and provider tokens.
+4. Added Python command autodetection for sidecar build/test scripts.
 
 #### Phase 8 - target TBD
 
@@ -430,10 +437,14 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Generate platform-aware sidecar binary names for Tauri sidecar discovery.
 - [x] Add explicit Windows, macOS, and Linux Tauri bundle commands.
 - [x] Terminate the sidecar child process on macOS/Linux during app shutdown.
+- [x] Add Ubuntu 20.04 Git compatibility for plain-folder init and test repositories.
+- [x] Resolve normal repository `.git` directories correctly on older Git versions.
+- [x] Replace Windows-only secret assumptions with non-Windows portable local secret storage.
+- [x] Auto-detect `python` / `python3` for sidecar build and test scripts.
 - [ ] Build and verify macOS `.app` / `.dmg` packaging.
 - [ ] Add Apple code signing and notarization path.
 - [ ] Build and verify Linux packaging, starting with AppImage or `.deb`.
-- [ ] Replace Windows-only secret assumptions with platform-specific secure storage.
+- [ ] Upgrade macOS/Linux secrets to native Keychain / Secret Service storage.
 - [ ] Verify bundled sidecar startup, Git discovery, file pickers, and installer/update behavior on macOS and Linux.
 - [ ] Document platform-specific install and troubleshooting steps.
 
@@ -469,7 +480,7 @@ npm run tauri:build:linux
 npm run tauri:dev
 ```
 
-Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
+Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.25+.
 
 ---
 
@@ -484,4 +495,4 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.39+.
 | `test_repository_flow.py` | 42 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, agent worktree session lifecycle, Phase 6 GitHub draft PR / GitLab draft MR flow, and Phase 6.2 PR/MR review status |
 | `test_remote_provider.py` | 9 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
 
-Current verified sidecar suite: 121 passing tests via `npm run sidecar:test`.
+Current verified sidecar suite: 121 passing tests via `npm run sidecar:test` on Windows; Ubuntu 20.04 verification is in progress.

@@ -95,7 +95,18 @@ class GitClient:
         # Repository creation is an explicit write operation. Keep it inside the
         # Git client so it uses the same non-interactive, argument-array execution
         # boundary as every other Git command in the application.
-        return self.run(["init", "-b", initial_branch])
+        result = self.run(["init", "-b", initial_branch], allow_failure=True)
+        if result.return_code == 0:
+            return result
+
+        combined = f"{result.stderr}\n{result.stdout}".lower()
+        if "unknown switch `b'" not in combined and "unknown switch 'b'" not in combined:
+            raise GitCommandError(self._safe_error(result))
+
+        fallback = self.run(["init"])
+        if initial_branch:
+            self.run(["symbolic-ref", "HEAD", f"refs/heads/{initial_branch}"])
+        return fallback
 
     def status_porcelain_v1_z(self) -> str:
         return self.run(["status", "--porcelain=v1", "--untracked-files=all", "-z"]).stdout

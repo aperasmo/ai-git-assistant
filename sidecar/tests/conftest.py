@@ -12,6 +12,34 @@ from app.main import create_app
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("GIT_CEILING_DIRECTORIES", str(PROJECT_ROOT))
+os.environ.setdefault("AIGA_PORTABLE_SECRET_STORE", "1")
+
+
+def _git_init_bare_main(path: Path) -> None:
+    result = subprocess.run(
+        ["git", "init", "--bare", "-b", "main", str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return
+
+    combined = f"{result.stderr}\n{result.stdout}".lower()
+    if "unknown switch `b'" not in combined and "unknown switch 'b'" not in combined:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            result.args,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+
+    subprocess.run(["git", "init", "--bare", str(path)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "--git-dir", str(path), "symbolic-ref", "HEAD", "refs/heads/main"],
+        check=True,
+        capture_output=True,
+    )
 
 
 @pytest.fixture()
@@ -44,7 +72,7 @@ def git_repository_with_remote(tmp_path: Path) -> Path:
     """A cloned repository whose main branch already tracks origin/main."""
     bare = tmp_path / "remote.git"
     bare.mkdir()
-    subprocess.run(["git", "init", "--bare", "-b", "main", str(bare)], check=True, capture_output=True)
+    _git_init_bare_main(bare)
 
     repository = tmp_path / "demo-repository"
     subprocess.run(["git", "clone", str(bare), str(repository)], check=True, capture_output=True)
@@ -70,7 +98,7 @@ def git_repository_behind_remote(tmp_path: Path) -> Path:
     """A cloned repo where origin/main is 1 commit ahead (local is behind)."""
     bare = tmp_path / "remote.git"
     bare.mkdir()
-    subprocess.run(["git", "init", "--bare", "-b", "main", str(bare)], check=True, capture_output=True)
+    _git_init_bare_main(bare)
 
     contrib = tmp_path / "contrib"
     subprocess.run(["git", "clone", str(bare), str(contrib)], check=True, capture_output=True)

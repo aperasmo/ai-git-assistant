@@ -11,6 +11,7 @@ from app.schemas.settings import (
     UpdateGitLabSettingsRequest,
     UpdateLLMSettingsRequest,
 )
+from app.services.secret_store import SecretStore
 from app.services.settings_service import SettingsService
 
 
@@ -22,6 +23,11 @@ def db_path(tmp_path: Path) -> Path:
 @pytest.fixture(autouse=False)
 def svc(db_path: Path) -> SettingsService:
     return SettingsService(db_path)
+
+
+def assert_encrypted_secret(value: str, plain: str) -> None:
+    assert value != plain
+    assert value.startswith((SecretStore.PREFIX, SecretStore.PORTABLE_PREFIX))
 
 
 def test_initial_state_is_empty(svc: SettingsService):
@@ -61,8 +67,7 @@ def test_api_key_is_not_stored_in_plaintext(svc: SettingsService, db_path: Path)
 
     stored = {key: value for key, value in rows}
     assert "llm_api_key" not in stored
-    assert stored["llm_api_key_dpapi"] != "my-secret-key"
-    assert stored["llm_api_key_dpapi"].startswith("dpapi:")
+    assert_encrypted_secret(stored["llm_api_key_dpapi"], "my-secret-key")
 
 
 def test_legacy_plaintext_api_key_is_migrated(svc: SettingsService, db_path: Path):
@@ -79,7 +84,7 @@ def test_legacy_plaintext_api_key_is_migrated(svc: SettingsService, db_path: Pat
 
     stored = {key: value for key, value in rows}
     assert "llm_api_key" not in stored
-    assert stored["llm_api_key_dpapi"].startswith("dpapi:")
+    assert_encrypted_secret(stored["llm_api_key_dpapi"], "legacy-secret")
 
 
 def test_clear_api_key_with_empty_string(svc: SettingsService):
@@ -99,8 +104,7 @@ def test_github_token_is_encrypted_and_hidden(svc: SettingsService, db_path: Pat
         rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
 
     stored = {key: value for key, value in rows}
-    assert stored["github_token_dpapi"] != "ghp-test-token"
-    assert stored["github_token_dpapi"].startswith("dpapi:")
+    assert_encrypted_secret(stored["github_token_dpapi"], "ghp-test-token")
 
 
 def test_gitlab_token_is_encrypted_and_hidden(svc: SettingsService, db_path: Path):
@@ -119,8 +123,7 @@ def test_gitlab_token_is_encrypted_and_hidden(svc: SettingsService, db_path: Pat
         rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
 
     stored = {key: value for key, value in rows}
-    assert stored["gitlab_token_dpapi"] != "glpat-test-token"
-    assert stored["gitlab_token_dpapi"].startswith("dpapi:")
+    assert_encrypted_secret(stored["gitlab_token_dpapi"], "glpat-test-token")
 
 
 def test_update_does_not_overwrite_unmentioned_fields(svc: SettingsService):

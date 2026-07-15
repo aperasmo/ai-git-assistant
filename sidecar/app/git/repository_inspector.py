@@ -159,11 +159,7 @@ class RepositoryInspector:
             ).stdout.strip()
         ).resolve()
 
-        common_dir = Path(
-            repository_client.run(
-                ["rev-parse", "--path-format=absolute", "--git-common-dir"]
-            ).stdout.strip()
-        ).resolve()
+        common_dir = self._resolve_git_directory(repository_client, top_level, "--git-common-dir")
 
         if git_dir != common_dir:
             raise ValidationFailure("Linked Git worktrees are not supported in v1.")

@@ -1,5 +1,21 @@
 # Release Notes
 
+## 0.7.1 - Phase 7.1
+
+Hardens the cross-platform release line after the first Ubuntu verification pass.
+
+### Shipped
+
+- Git 2.25-compatible repository initialization for Ubuntu 20.04 and other older Git hosts.
+- Older-Git repository validation fix so normal `.git` directories are not mistaken for linked worktrees.
+- Non-Windows portable local secret storage for AI provider keys, GitHub tokens, and GitLab tokens.
+- `python` / `python3` autodetection for portable sidecar build and test scripts.
+- Linux test fixture compatibility for older Git versions that do not support `git init -b`.
+
+### Verification
+
+- `npm run sidecar:test -- -- tests/test_settings_service.py tests/test_repository_flow.py::test_register_and_read_status tests/test_repository_flow.py::test_initialise_and_register_plain_folder_after_confirmation tests/test_repository_flow.py::test_register_nested_folder_uses_repository_root`
+
 ## 0.7.0 - Phase 7
 
 Starts the cross-platform release line.

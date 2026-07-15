@@ -12,7 +12,7 @@ const baseTempRoot = path.join(projectRoot, ".local", "pytest-tmp");
 const runTemp = path.join(baseTempRoot, `run-${randomUUID().replaceAll("-", "")}`);
 
 const options = parseArgs(process.argv.slice(2));
-const python = options.python ?? process.env.PYTHON ?? "python";
+const python = options.python ?? process.env.PYTHON ?? detectPythonCommand();
 
 if (options.installDependencies) {
   run(python, ["-m", "pip", "install", ".[dev]"], { cwd: sidecarRoot });
@@ -75,4 +75,19 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}.`);
   }
+}
+
+function detectPythonCommand() {
+  const candidates = process.platform === "win32" ? ["python"] : ["python", "python3"];
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate, ["--version"], {
+      cwd: projectRoot,
+      stdio: "ignore",
+      shell: false,
+    });
+    if (!result.error && result.status === 0) {
+      return candidate;
+    }
+  }
+  throw new Error("Python 3.12+ was not found. Activate a Python 3.12 virtual environment or pass --python.");
 }

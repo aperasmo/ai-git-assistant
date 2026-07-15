@@ -1,7 +1,7 @@
 # Implementation Status
 
-**Last updated:** 25 June 2026  
-**Current state:** Phase 3 complete + post-launch fixes. All three phases of the v1 MVP are implemented and passing tests.
+**Last updated:** 15 July 2026  
+**Current state:** Phase 7.1 cross-platform hardening in progress. Windows is release-built; Linux verification is underway.
 
 ---
 
@@ -95,6 +95,10 @@
 - **Platform-aware sidecar binaries:** sidecar output is copied to Tauri's `src-tauri/binaries` folder using the host target triple and the correct executable suffix for Windows versus macOS/Linux.
 - **Host-specific Tauri bundle commands:** Windows, macOS, and Linux bundle commands are exposed separately so each platform can be built on its matching host or CI runner.
 - **Non-Windows shutdown:** macOS/Linux hosts terminate the sidecar through Tauri's shell child process instead of relying on the Windows-only `taskkill` path.
+- **Ubuntu 20.04 Git compatibility:** repository initialization and test fixtures work with Git versions that do not support `git init -b`.
+- **Older-Git repository validation:** normal `.git` common directories are resolved relative to the repository root so they are not mistaken for linked worktrees.
+- **Non-Windows secrets:** Linux/macOS can store AI provider keys, GitHub tokens, and GitLab tokens with portable local encryption while native keychain integration remains planned.
+- **Python command autodetection:** sidecar build/test scripts detect `python` or `python3`, while still allowing explicit `--python`.
 
 ### Post-launch fixes
 
