@@ -435,6 +435,7 @@ export type ChatTranscriptEntry =
       prompt: string;
       status: "active" | "done";
       choices?: string[];
+      gitignoreChoices?: string[];
       confirmLines?: string[];
       initialValue?: string;
       chosenLabel?: string;

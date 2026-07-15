@@ -813,6 +813,7 @@ export default function App() {
       prompt: "Which files do you want to include?",
       status: "active",
       choices: sortedFiles,
+      gitignoreChoices: sortRepositoryPaths((snapshot?.untrackedPaths ?? []).map((c) => c.path)),
     });
   }
 
@@ -842,6 +843,7 @@ export default function App() {
       prompt: "Which files do you want to discard changes in?",
       status: "active",
       choices: sortedFiles,
+      gitignoreChoices: sortRepositoryPaths((snapshot?.untrackedPaths ?? []).map((c) => c.path)),
     });
   }
 
@@ -1411,35 +1413,62 @@ export default function App() {
     }
   }
 
-  async function onAddToGitignore(paths: string[]) {
+  async function onAddToGitignore(paths: string[]): Promise<string[]> {
     const repositoryId = activeRepositoryId;
     const stepId = activeWizardRef.current?.currentStepId;
-    if (!repositoryId) return;
+    if (!repositoryId) return [];
+    const untracked = new Set((snapshot?.untrackedPaths ?? []).map((item) => item.path));
+    const eligiblePaths = Array.from(new Set(paths.filter((path) => untracked.has(path))));
 
-    // Persist in session set so future wizard runs filter these files out.
-    setSessionGitignored((current) => {
-      const next = new Set(current[repositoryId] ?? []);
-      paths.forEach((p) => next.add(p));
-      return { ...current, [repositoryId]: Array.from(next) };
-    });
-
-    // Also remove from the live transcript entry so a remounted FilePickStep
-    // re-initialises without them.
-    if (stepId) {
-      setTranscripts((current) => ({
-        ...current,
-        [repositoryId]: (current[repositoryId] ?? []).map((e) =>
-          e.id === stepId && e.kind === "wizard_step"
-            ? { ...e, choices: (e.choices ?? []).filter((c) => !paths.includes(c)) }
-            : e,
-        ),
-      }));
+    if (eligiblePaths.length === 0) {
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "error",
+        message: "Only untracked files can be added to .gitignore from this file picker.",
+      });
+      return [];
     }
 
     try {
-      await desktopApi.addToGitignore(repositoryId, paths);
+      await desktopApi.addToGitignore(repositoryId, eligiblePaths);
+
+      // Persist in session set so future wizard runs filter these files out.
+      setSessionGitignored((current) => {
+        const next = new Set(current[repositoryId] ?? []);
+        eligiblePaths.forEach((p) => next.add(p));
+        return { ...current, [repositoryId]: Array.from(next) };
+      });
+
+      // Also remove from the live transcript entry so a remounted FilePickStep
+      // re-initialises without them.
+      if (stepId) {
+        setTranscripts((current) => ({
+          ...current,
+          [repositoryId]: (current[repositoryId] ?? []).map((e) =>
+            e.id === stepId && e.kind === "wizard_step"
+              ? {
+                  ...e,
+                  choices: (e.choices ?? []).filter((c) => !eligiblePaths.includes(c)),
+                  gitignoreChoices: (e.gitignoreChoices ?? []).filter((c) => !eligiblePaths.includes(c)),
+                }
+              : e,
+          ),
+        }));
+      }
+
       const fresh = await desktopApi.getRepositorySnapshot(repositoryId);
       if (activeRepositoryIdRef.current === repositoryId) setSnapshot(fresh);
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "result",
+        title: "Files added to .gitignore",
+        summary: `${eligiblePaths.length} untracked file${eligiblePaths.length === 1 ? "" : "s"} will be ignored by Git.`,
+        content: [
+          "Added exact .gitignore entries:",
+          ...eligiblePaths.map((path) => `- ${path}`),
+        ].join("\n"),
+      });
+      return eligiblePaths;
     } catch (cause) {
       if (activeRepositoryIdRef.current === repositoryId) {
         appendTranscriptEntry(repositoryId, {
@@ -1448,6 +1477,7 @@ export default function App() {
           message: toErrorMessage(cause, "Could not write to .gitignore. The file list was updated locally only."),
         });
       }
+      return [];
     }
   }
 

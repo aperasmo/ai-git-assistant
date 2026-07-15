@@ -23,7 +23,7 @@ interface ChatPanelProps {
   onWizardNext: (choiceLabel: string, data: Partial<WizardData>) => void;
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
-  onAddToGitignore: (paths: string[]) => Promise<void>;
+  onAddToGitignore: (paths: string[]) => Promise<string[]>;
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset: () => Promise<string | null>;
@@ -286,7 +286,7 @@ function TranscriptItem({
   onWizardNext: (choiceLabel: string, data: Partial<WizardData>) => void;
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
-  onAddToGitignore: (paths: string[]) => Promise<void>;
+  onAddToGitignore: (paths: string[]) => Promise<string[]>;
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset: () => Promise<string | null>;

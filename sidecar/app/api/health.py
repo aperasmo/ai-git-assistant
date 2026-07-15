@@ -10,4 +10,4 @@ router = APIRouter(prefix="/v1", tags=["system"])
 
 @router.get("/health", response_model=HealthResponse, dependencies=[Depends(require_session_token)])
 def health() -> HealthResponse:
-    return HealthResponse(status="ok", protocol_version="1", service_version="0.7.1")
+    return HealthResponse(status="ok", protocol_version="1", service_version="0.7.2")

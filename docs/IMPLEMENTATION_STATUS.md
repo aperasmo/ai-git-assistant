@@ -1,7 +1,7 @@
 # Implementation Status
 
 **Last updated:** 15 July 2026  
-**Current state:** Phase 7.1 cross-platform hardening in progress. Windows is release-built; Linux verification is underway.
+**Current state:** Phase 7.2 cross-platform hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; AppImage and macOS packaging remain pending.
 
 ---
 
@@ -99,6 +99,8 @@
 - **Older-Git repository validation:** normal `.git` common directories are resolved relative to the repository root so they are not mistaken for linked worktrees.
 - **Non-Windows secrets:** Linux/macOS can store AI provider keys, GitHub tokens, and GitLab tokens with portable local encryption while native keychain integration remains planned.
 - **Python command autodetection:** sidecar build/test scripts detect `python` or `python3`, while still allowing explicit `--python`.
+- **Gitignore Assistant:** file-pick wizard steps can add selected untracked files to `.gitignore`, de-duplicate exact entries, refresh the snapshot, and list the written entries in the transcript.
+- **Linux `.deb` packaging:** Ubuntu 22.04 builds the frontend, passes sidecar tests, builds the sidecar binary, and bundles `AI Git Assistant_0.7.1_amd64.deb`; the next release build will emit `0.7.2`.
 
 ### Post-launch fixes
 

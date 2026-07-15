@@ -530,7 +530,14 @@ class RepositoryService:
         gitignore = root / ".gitignore"
         existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
         existing_lines = {line.strip() for line in existing.splitlines() if line.strip()}
-        new_lines = [p for p in paths if p not in existing_lines]
+        new_lines = []
+        seen = set(existing_lines)
+        for path in paths:
+            line = path.strip()
+            if not line or line in seen:
+                continue
+            seen.add(line)
+            new_lines.append(line)
         if not new_lines:
             return
         has_our_section = self._GITIGNORE_SECTION_MARKER in existing

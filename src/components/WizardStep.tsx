@@ -35,7 +35,7 @@ interface WizardStepProps {
   onNext: (choiceLabel: string, data: Partial<WizardData>) => void;
   onConfirm: () => void;
   onCancel: () => void;
-  onAddToGitignore?: (paths: string[]) => Promise<void>;
+  onAddToGitignore?: (paths: string[]) => Promise<string[]>;
   onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft?: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset?: () => Promise<string | null>;
@@ -119,7 +119,7 @@ function FilePickStep({
   busy: boolean;
   onNext: (label: string, data: Partial<WizardData>) => void;
   onCancel: () => void;
-  onAddToGitignore?: (paths: string[]) => Promise<void>;
+  onAddToGitignore?: (paths: string[]) => Promise<string[]>;
 }) {
   const initial = entry.choices ?? [];
   const [choices, setChoices] = useState<string[]>(initial);
@@ -132,6 +132,8 @@ function FilePickStep({
   } | null>(null);
 
   const allSelected = choices.length > 0 && selected.length === choices.length;
+  const gitignoreChoices = new Set(entry.gitignoreChoices ?? []);
+  const selectedGitignoreChoices = selected.filter((path) => gitignoreChoices.has(path));
 
   function toggle(path: string, checked: boolean) {
     setSelected((prev) => (checked ? [...prev, path] : prev.filter((f) => f !== path)));
@@ -148,12 +150,23 @@ function FilePickStep({
 
   async function handleGitignore(path: string) {
     if (!onAddToGitignore || gitignoring) return;
-    // Optimistic: remove from UI immediately before the async call
-    setChoices((prev) => prev.filter((p) => p !== path));
-    setSelected((prev) => prev.filter((p) => p !== path));
     setGitignoring(true);
     try {
-      await onAddToGitignore([path]);
+      const ignored = await onAddToGitignore([path]);
+      setChoices((prev) => prev.filter((p) => !ignored.includes(p)));
+      setSelected((prev) => prev.filter((p) => !ignored.includes(p)));
+    } finally {
+      setGitignoring(false);
+    }
+  }
+
+  async function handleGitignoreSelected() {
+    if (!onAddToGitignore || gitignoring || selectedGitignoreChoices.length === 0) return;
+    setGitignoring(true);
+    try {
+      const ignored = await onAddToGitignore(selectedGitignoreChoices);
+      setChoices((prev) => prev.filter((p) => !ignored.includes(p)));
+      setSelected((prev) => prev.filter((p) => !ignored.includes(p)));
     } finally {
       setGitignoring(false);
     }
@@ -218,6 +231,17 @@ function FilePickStep({
         >
           Cancel
         </button>
+        {onAddToGitignore && (entry.gitignoreChoices ?? []).length > 0 && (
+          <button
+            type="button"
+            className="wizard-ignore-button"
+            disabled={isLocked || selectedGitignoreChoices.length === 0}
+            onClick={() => void handleGitignoreSelected()}
+            title="Add selected untracked files to .gitignore"
+          >
+            Ignore selected
+          </button>
+        )}
         <span className={`wizard-file-count ${selected.length === 0 ? "wizard-file-count-zero" : ""}`}>
           {selected.length}/{choices.length} files selected
         </span>
@@ -236,13 +260,13 @@ function FilePickStep({
             <button
               type="button"
               className="wizard-context-item"
-              disabled={gitignoring || !onAddToGitignore}
+              disabled={gitignoring || !onAddToGitignore || !gitignoreChoices.has(contextMenu.path)}
               onClick={() => {
                 void handleGitignore(contextMenu.path);
                 setContextMenu(null);
               }}
             >
-              Add to .gitignore
+              {gitignoreChoices.has(contextMenu.path) ? "Add to .gitignore" : "Only untracked files can be ignored"}
             </button>
           </div>
         </>

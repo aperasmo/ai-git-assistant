@@ -32,6 +32,48 @@ def test_register_and_read_status(app_client, auth_headers, git_repository):
     assert "modified:\tREADME.md" in status.json()["content"]
 
 
+def test_add_to_gitignore_appends_exact_untracked_paths(app_client, auth_headers, git_repository):
+    (git_repository / "ai-git-assistant.db").write_text("runtime\n", encoding="utf-8")
+    (git_repository / "ai-git-assistant.db-shm").write_text("runtime\n", encoding="utf-8")
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/add-to-gitignore",
+        headers=auth_headers,
+        json={
+            "paths": [
+                "ai-git-assistant.db",
+                "ai-git-assistant.db-shm",
+                "ai-git-assistant.db",
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["ok"] is True
+    gitignore = (git_repository / ".gitignore").read_text(encoding="utf-8")
+    assert "# -- AI GIT ASSISTANT --" in gitignore
+    assert gitignore.count("ai-git-assistant.db\n") == 1
+    assert gitignore.count("ai-git-assistant.db-shm\n") == 1
+
+    snapshot = app_client.get(
+        f"/v1/repositories/{repository_id}/snapshot",
+        headers=auth_headers,
+    )
+    assert snapshot.status_code == 200, snapshot.json()
+    untracked_paths = {item["path"] for item in snapshot.json()["untrackedPaths"]}
+    assert "ai-git-assistant.db" not in untracked_paths
+    assert "ai-git-assistant.db-shm" not in untracked_paths
+    assert ".gitignore" in untracked_paths
+
+
 def test_local_matcher(app_client, auth_headers, git_repository):
     register = app_client.post(
         "/v1/repositories/register",

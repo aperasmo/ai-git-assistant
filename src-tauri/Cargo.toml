@@ -1,6 +1,6 @@
 [package]
 name = "ai-git-assistant"
-version = "0.7.1"
+version = "0.7.2"
 description = "Local-first desktop Git assistant"
 authors = ["Allan P. Erasmo"]
 edition = "2021"

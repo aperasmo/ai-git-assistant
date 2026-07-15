@@ -94,6 +94,13 @@ These dates mark when the phase or feature set was first added to the project hi
 3. Added non-Windows portable local secret storage for AI and provider tokens.
 4. Added Python command autodetection for sidecar build/test scripts.
 
+#### Phase 7.2 - 15/07/2026
+
+1. Added a visible Gitignore Assistant action for selected untracked files in file-pick wizard steps.
+2. Limited ignore writes to untracked files and listed the exact `.gitignore` entries written.
+3. De-duplicated `.gitignore` entries across existing file content and the current request.
+4. Verified Ubuntu 22.04 Linux `.deb` packaging after sidecar tests and sidecar build passed.
+
 #### Phase 8 - target TBD
 
 1. Planned team context and conventions.
@@ -441,9 +448,11 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Resolve normal repository `.git` directories correctly on older Git versions.
 - [x] Replace Windows-only secret assumptions with non-Windows portable local secret storage.
 - [x] Auto-detect `python` / `python3` for sidecar build and test scripts.
+- [x] Add Gitignore Assistant support for selected untracked runtime files.
+- [x] Build and verify Linux `.deb` packaging on Ubuntu 22.04.
 - [ ] Build and verify macOS `.app` / `.dmg` packaging.
 - [ ] Add Apple code signing and notarization path.
-- [ ] Build and verify Linux packaging, starting with AppImage or `.deb`.
+- [ ] Build and verify Linux AppImage packaging.
 - [ ] Upgrade macOS/Linux secrets to native Keychain / Secret Service storage.
 - [ ] Verify bundled sidecar startup, Git discovery, file pickers, and installer/update behavior on macOS and Linux.
 - [ ] Document platform-specific install and troubleshooting steps.

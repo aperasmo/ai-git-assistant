@@ -1113,6 +1113,13 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   color: #68717d; font-size: 12px; cursor: pointer;
 }
 .wizard-cancel-button:hover:not(:disabled) { color: #aab2be; border-color: #46505d; }
+.wizard-ignore-button {
+  padding: 7px 14px; border-radius: 7px;
+  border: 1px solid rgba(96,165,250,.45); background: rgba(96,165,250,.1);
+  color: #93c5fd; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.wizard-ignore-button:hover:not(:disabled) { background: rgba(96,165,250,.2); }
+.wizard-ignore-button:disabled { opacity: .4; }
 
 /* right-click context menu */
 .wizard-context-backdrop {

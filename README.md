@@ -8,7 +8,7 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.7.1 - Phase 7.1** hardens the cross-platform release line. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu 20.04 Git compatibility, and non-Windows local secret storage.
+**0.7.2 - Phase 7.2** adds the Gitignore Assistant and confirms the first Linux `.deb` packaging path. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, and guided `.gitignore` updates for untracked runtime files.
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
 
@@ -23,6 +23,7 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 - **Works with any Git repository** on your machine
 - **Gives you Git-client visibility** - inspect diffs, history, blame, branches, stashes, remotes, tags, and conflicts
 - **Detects repository providers** - the right panel labels GitHub, GitLab, Bitbucket, Azure DevOps, local-only, and mixed-provider remotes
+- **Helps ignore local noise** - selected untracked runtime files can be added to `.gitignore` from the file picker
 - **Connects to an AI provider** (optional) so it can understand requests the built-in patterns don't cover
 - **Safe by design** - no force pushes, no hard resets, no surprises
 
@@ -95,7 +96,7 @@ blame README.md
 show stashes
 show remotes
 show tags
-show tag v0.7.1
+show tag v0.7.2
 show conflicts
 review status
 commit all my changes with message "Fix login bug"
@@ -105,8 +106,8 @@ switch to main
 create branch feature/new-login
 stash my changes
 merge feature/new-login
-create tag v0.7.1 with message "Release v0.7.1"
-push tag v0.7.1
+create tag v0.7.2 with message "Release v0.7.2"
+push tag v0.7.2
 ```
 
 The app turns your sentence into a Git plan and shows it to you before doing anything.
@@ -179,13 +180,13 @@ Provider-specific platform features are guarded by the selected repository's rem
 
 ## Cross-platform status
 
-Phase 7.1 begins Mac and Linux support by removing Windows-only build assumptions from the project scripts and fixing the first Ubuntu verification blockers.
+Phase 7.2 begins Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing the first Ubuntu verification blockers, and confirming Ubuntu `.deb` packaging.
 
 | Host OS | Status |
 |---|---|
 | Windows | Supported and release-built with NSIS |
 | macOS | Build path prepared; signed/notarized release still pending |
-| Linux | Build path prepared; Ubuntu verification in progress |
+| Linux | Ubuntu 22.04 `.deb` packaging verified; AppImage still pending because the downloader timed out |
 
 Portable build commands:
 
@@ -236,7 +237,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `inspect stash@{0}` | Patch for one stash entry |
 | `show remotes` | Configured remote URLs |
 | `show tags` | Local release tags |
-| `show tag v0.7.1` | Inspect one tag |
+| `show tag v0.7.2` | Inspect one tag |
 | `history README.md` | File-specific commit history |
 | `blame README.md` | Line authorship for one file |
 | `show conflicts` | Conflict files and resolution guidance |
@@ -262,9 +263,9 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `merge feature/name` | Merge a local branch with guided conflict handling |
 | `continue merge` | Commit a resolved merge |
 | `abort merge` | Abort an in-progress merge |
-| `create tag v0.7.1 with message "Release v0.7.1"` | Create an annotated local tag |
-| `push tag v0.7.1` | Push one explicit tag to the remote |
-| `delete tag v0.7.1` | Delete a local tag after approval |
+| `create tag v0.7.2 with message "Release v0.7.2"` | Create an annotated local tag |
+| `push tag v0.7.2` | Push one explicit tag to the remote |
+| `delete tag v0.7.2` | Delete a local tag after approval |
 | `draft release` | Create a GitHub draft release and upload one asset |
 | `draft PR` | Create a GitHub draft PR or GitLab draft MR from the current branch |
 | `unstage login.py` | Remove file from staging |

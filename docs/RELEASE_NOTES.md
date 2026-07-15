@@ -1,5 +1,26 @@
 # Release Notes
 
+## 0.7.2 - Phase 7.2
+
+Adds a Gitignore Assistant slice and confirms the first Ubuntu Linux package build.
+
+### Shipped
+
+- Visible **Ignore selected** action in file-pick wizard steps.
+- Ignore action is limited to selected untracked files so modified source files are not accidentally added to `.gitignore`.
+- Exact `.gitignore` entries are appended under the AI Git Assistant section and de-duplicated across existing entries and the current request.
+- Session filtering keeps newly ignored files out of the current wizard flow after the `.gitignore` write succeeds.
+- Local confirmation result lists the exact entries written.
+- Repository `.gitignore` now excludes SQLite WAL companion files (`*.db-shm`, `*.db-wal`) in addition to `*.db`.
+
+### Verification
+
+- `npm run build`
+- `python -m pytest sidecar/tests/test_repository_flow.py::test_add_to_gitignore_appends_exact_untracked_paths -q --basetemp .pytest-tmp-gitignore -p no:cacheprovider`
+- Ubuntu 22.04: `npm run sidecar:test`
+- Ubuntu 22.04: `npm run sidecar:build`
+- Ubuntu 22.04: `npx tauri build --bundles deb`
+
 ## 0.7.1 - Phase 7.1
 
 Hardens the cross-platform release line after the first Ubuntu verification pass.
