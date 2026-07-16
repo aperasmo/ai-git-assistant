@@ -1003,11 +1003,15 @@ class LocalActionPlanner:
             )
 
         known_branches = {branch.name for branch in snapshot.local_branches}
-        if known_branches and branch_name not in known_branches:
+        is_remote_tracking_branch = (
+            "/" in branch_name and branch_name.split("/", 1)[0] in snapshot.remote_names
+        )
+        if known_branches and branch_name not in known_branches and not is_remote_tracking_branch:
             raise ValidationFailure(
                 f"Branch '{branch_name}' is not a known local branch. Fetch or create it first."
             )
 
+        target_kind = "remote-tracking branch" if is_remote_tracking_branch else "local branch"
         return self._write_plan(
             repository_id=repository_id,
             message=message,
@@ -1016,7 +1020,7 @@ class LocalActionPlanner:
                     kind=PlanStepKind.MERGE,
                     title=f"Merge '{branch_name}'",
                     detail=(
-                        f"Merge local branch '{branch_name}' into the current branch. "
+                        f"Merge {target_kind} '{branch_name}' into the current branch. "
                         "If conflicts occur, the app will show conflict guidance and block unrelated writes."
                     ),
                     branch=branch_name,

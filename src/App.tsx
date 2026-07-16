@@ -263,6 +263,49 @@ export default function App() {
     const lower = message.toLowerCase();
 
     if (
+      lower.includes("not possible to fast-forward") ||
+      lower.includes("need to specify how to reconcile divergent branches") ||
+      lower.includes("divergent branches")
+    ) {
+      const remote = currentSnapshot?.upstreamRemote ?? preferredRemote(currentSnapshot);
+      const upstreamBranchRaw = currentSnapshot?.upstreamBranch ?? currentSnapshot?.branch ?? "main";
+      const upstreamBranch = remote && upstreamBranchRaw.startsWith(`${remote}/`)
+        ? upstreamBranchRaw.slice(remote.length + 1)
+        : upstreamBranchRaw;
+      const upstreamTarget = remote ? `${remote}/${upstreamBranch}` : null;
+
+      appendRecoveryEntry(
+        repositoryId,
+        "Branch has diverged",
+        "Your local branch and the remote branch both have commits the other side does not have.",
+        "Fast-forward pull is blocked to avoid a surprise merge. Review the remote changes, then merge the upstream branch deliberately from the app.",
+        [
+          ...(upstreamTarget
+            ? [
+                {
+                  label: `Merge ${upstreamTarget}`,
+                  description: "Create a reviewed merge plan for the remote changes.",
+                  action: "merge_upstream" as const,
+                  recommended: true,
+                },
+              ]
+            : []),
+          {
+            label: "Fetch remote",
+            description: "Refresh remote state before deciding.",
+            action: "fetch_remote",
+          },
+          {
+            label: "View differences",
+            description: "Inspect the current local changes and commits.",
+            action: "view_diff",
+          },
+        ],
+      );
+      return;
+    }
+
+    if (
       lower.includes("write access to repository not granted") ||
       (lower.includes("repository not found") && lower.includes("push")) ||
       (lower.includes("authentication failed") && lower.includes("push"))
@@ -2012,8 +2055,30 @@ export default function App() {
       return;
     }
 
+    if (option.action === "fetch_remote") {
+      void runAction("fetch");
+      return;
+    }
+
+    if (option.action === "view_diff") {
+      void runAction("diff");
+      return;
+    }
+
     if (option.action === "pull_latest") {
       void runWizardFlow("pull");
+      return;
+    }
+
+    if (option.action === "merge_upstream") {
+      const remote = snapshot?.upstreamRemote ?? preferredRemote(snapshot);
+      const upstreamBranchRaw = snapshot?.upstreamBranch ?? snapshot?.branch ?? "main";
+      const upstreamBranch = remote && upstreamBranchRaw.startsWith(`${remote}/`)
+        ? upstreamBranchRaw.slice(remote.length + 1)
+        : upstreamBranchRaw;
+      if (remote) {
+        void submitMessage(`merge ${remote}/${upstreamBranch}`);
+      }
       return;
     }
 

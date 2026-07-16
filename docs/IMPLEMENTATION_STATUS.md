@@ -1,7 +1,7 @@
 # Implementation Status
 
 **Last updated:** 16 July 2026  
-**Current state:** Phase 7.5 cross-platform hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; AppImage and macOS packaging remain pending.
+**Current state:** Phase 7.6 cross-platform hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; AppImage and macOS packaging remain pending.
 
 ---
 
@@ -102,8 +102,9 @@
 - **Gitignore Assistant:** file-pick wizard steps can add selected untracked files to `.gitignore`, de-duplicate exact entries, refresh the snapshot, and list the written entries in the transcript.
 - **Git identity setup:** Settings can read and save global Git `user.name` and `user.email` through the standard `git config --global` path before commit workflows run.
 - **Settings usability:** Settings uses a wider two-column layout where possible and scrolls on shorter Linux VM screens.
-- **Linux `.deb` packaging:** Ubuntu 22.04 builds the frontend, passes sidecar tests, builds the sidecar binary, and bundles the Debian package line; the next release build will emit `0.7.5`.
+- **Linux `.deb` packaging:** Ubuntu 22.04 builds the frontend, passes sidecar tests, builds the sidecar binary, and bundles the Debian package line; the next release build will emit `0.7.6`.
 - **GitHub push-auth recovery:** GitHub write-permission failures now explain the fine-grained token requirement and offer a push-only retry so an existing local commit is not duplicated.
+- **Divergent-branch recovery:** Fast-forward pull failures now explain the cross-machine divergence and offer fetch, diff, or a reviewed upstream merge.
 
 ### Post-launch fixes
 

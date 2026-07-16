@@ -1,5 +1,22 @@
 # Release Notes
 
+## 0.7.6 - Phase 7.6
+
+Improves Guided Recovery for cross-machine divergent branches found during Linux verification.
+
+### Shipped
+
+- Added a **Branch has diverged** recovery card when fast-forward pull is blocked.
+- Recovery can fetch remote state, show differences, or prepare a reviewed merge of the upstream branch.
+- Merge planning now accepts remote-tracking branches such as `origin/main`.
+- The app keeps fast-forward-only pull as the default, so merge commits remain explicit and reviewed.
+
+### Verification
+
+- `npm run build`
+- `cargo check`
+- `npm run sidecar:test`
+
 ## 0.7.5 - Phase 7.5
 
 Improves Guided Recovery for GitHub push authentication failures found during Linux verification.

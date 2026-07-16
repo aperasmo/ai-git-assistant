@@ -8,7 +8,7 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.7.5 - Phase 7.5** improves Guided Recovery for GitHub push authentication walls found during Linux verification. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates for untracked runtime files, first-class Git identity setup before committing, reviewed upstream setup, and push-only retry guidance when a GitHub token lacks `Contents: Read and write`.
+**0.7.6 - Phase 7.6** improves Guided Recovery for cross-machine divergent branches found during Linux verification. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates for untracked runtime files, first-class Git identity setup before committing, reviewed upstream setup, push-only retry guidance, and explicit upstream merge recovery when fast-forward pull is blocked.
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
 
@@ -109,7 +109,7 @@ blame README.md
 show stashes
 show remotes
 show tags
-show tag v0.7.5
+show tag v0.7.6
 show conflicts
 review status
 set upstream to origin/main
@@ -120,8 +120,8 @@ switch to main
 create branch feature/new-login
 stash my changes
 merge feature/new-login
-create tag v0.7.5 with message "Release v0.7.5"
-push tag v0.7.5
+create tag v0.7.6 with message "Release v0.7.6"
+push tag v0.7.6
 ```
 
 The app turns your sentence into a Git plan and shows it to you before doing anything.
@@ -194,7 +194,7 @@ Provider-specific platform features are guarded by the selected repository's rem
 
 ## Cross-platform status
 
-Phase 7.5 continues Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing Ubuntu verification blockers, confirming Ubuntu `.deb` packaging, adding Git author identity setup in Settings for new machines, and turning common setup blockers into guided next steps. It also adds GitHub push-auth recovery when the remote rejects a push because the token lacks repository write permission.
+Phase 7.6 continues Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing Ubuntu verification blockers, confirming Ubuntu `.deb` packaging, adding Git author identity setup in Settings for new machines, and turning common setup blockers into guided next steps. It also adds GitHub push-auth recovery and divergent-branch recovery when fast-forward pull is blocked.
 
 | Host OS | Status |
 |---|---|
@@ -251,7 +251,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `inspect stash@{0}` | Patch for one stash entry |
 | `show remotes` | Configured remote URLs |
 | `show tags` | Local release tags |
-| `show tag v0.7.5` | Inspect one tag |
+| `show tag v0.7.6` | Inspect one tag |
 | `history README.md` | File-specific commit history |
 | `blame README.md` | Line authorship for one file |
 | `show conflicts` | Conflict files and resolution guidance |
@@ -277,9 +277,9 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `merge feature/name` | Merge a local branch with guided conflict handling |
 | `continue merge` | Commit a resolved merge |
 | `abort merge` | Abort an in-progress merge |
-| `create tag v0.7.5 with message "Release v0.7.5"` | Create an annotated local tag |
-| `push tag v0.7.5` | Push one explicit tag to the remote |
-| `delete tag v0.7.5` | Delete a local tag after approval |
+| `create tag v0.7.6 with message "Release v0.7.6"` | Create an annotated local tag |
+| `push tag v0.7.6` | Push one explicit tag to the remote |
+| `delete tag v0.7.6` | Delete a local tag after approval |
 | `draft release` | Create a GitHub draft release and upload one asset |
 | `draft PR` | Create a GitHub draft PR or GitLab draft MR from the current branch |
 | `unstage login.py` | Remove file from staging |

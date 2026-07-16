@@ -464,6 +464,31 @@ def test_merge_branch_creates_plan():
     assert "merge --no-edit" in (plan.steps[0].command_preview or "")
 
 
+def test_merge_remote_tracking_branch_creates_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(
+        update={
+            "staged_changes": [],
+            "modified_changes": [],
+            "untracked_paths": [],
+            "local_branches": [
+                BranchInfo(name="main", is_current=True, upstream="origin/main"),
+            ],
+            "remote_names": ["origin"],
+            "branch": "main",
+            "upstream_remote": "origin",
+            "upstream_branch": "main",
+        }
+    )
+
+    plan = planner.plan("repo-1", "merge origin/main", snapshot)
+
+    assert plan.plan_kind == "write"
+    assert plan.steps[0].kind.value == "merge"
+    assert plan.steps[0].branch == "origin/main"
+    assert "remote-tracking branch" in plan.steps[0].detail
+
+
 def test_merge_requires_clean_working_tree():
     planner = LocalActionPlanner(LocalIntentMatcher())
 

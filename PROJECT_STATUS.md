@@ -122,6 +122,13 @@ These dates mark when the phase or feature set was first added to the project hi
 3. Updated Settings guidance to call out fine-grained GitHub token repository access and `Contents: Read and write`.
 4. Updated public docs and metadata for `0.7.5`.
 
+#### Phase 7.6 - 16/07/2026
+
+1. Added Guided Recovery for fast-forward pull failures when local and remote branches have diverged.
+2. Added recovery actions to fetch remote state, view differences, or merge the upstream branch deliberately.
+3. Allowed reviewed merge plans for remote-tracking branches such as `origin/main`.
+4. Updated public docs and metadata for `0.7.6`.
+
 #### Phase 8 - target TBD
 
 1. Planned team context and conventions.
