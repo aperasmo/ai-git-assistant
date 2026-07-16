@@ -131,6 +131,13 @@ These dates mark when the phase or feature set was first added to the project hi
 5. Improved the GitHub draft release flow with existing-tag selection, create-new-tag entry, a larger markdown release description editor, and multiple installer assets.
 6. Updated public docs and metadata for `0.7.6`.
 
+#### Phase 7.7 - 17/07/2026
+
+1. Added Release Manager behavior so GitHub draft releases are created or updated by tag.
+2. Enabled cross-machine release assembly: Windows can upload the `.exe`, Linux can update the same draft with the `.deb`.
+3. Added duplicate asset detection so existing asset filenames are reported and skipped instead of replaced silently.
+4. Updated public docs and metadata for `0.7.7`.
+
 #### Phase 8 - target TBD
 
 1. Planned team context and conventions.
@@ -427,7 +434,7 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Store a GitHub release token encrypted in local settings.
 - [x] Detect GitHub owner/repo from the configured remote URL.
 - [x] Guide the user through tag, title, description, asset selection, and final confirmation.
-- [x] Create a GitHub draft release and upload one installer asset after explicit approval.
+- [x] Create or update a GitHub draft release and upload installer assets after explicit approval.
 - [x] Return release URL, asset URL, and SHA-256 checksum in the transcript.
 
 ### Phase 4.3 - Repository provider awareness - complete (03/07/2026)

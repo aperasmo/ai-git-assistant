@@ -1560,7 +1560,8 @@ export default function App() {
             `Title: ${releaseData.releaseTitle}`,
             `Assets (${assets.length}): ${assets.map((path) => path.split(/[\\/]/).pop() ?? path).join(", ")}`,
             "Draft: yes",
-            ...gitCmds("GitHub API: create draft release", `GitHub API: upload ${assets.length} selected asset(s)`),
+            "Mode: create a new draft, or update the existing draft for this tag",
+            ...gitCmds("GitHub API: create or update draft release", `GitHub API: upload new selected asset(s)`),
           ],
         });
       }

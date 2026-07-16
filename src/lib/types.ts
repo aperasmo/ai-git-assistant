@@ -353,12 +353,14 @@ export interface ReleaseAssetUpload {
   name: string;
   url?: string | null;
   sha256?: string | null;
+  status?: string;
 }
 
 export interface DraftGitHubReleaseResponse {
   tagName: string;
   repository: string;
   releaseUrl: string;
+  action: string;
   assetUrl?: string | null;
   assetName?: string | null;
   assetSha256?: string | null;

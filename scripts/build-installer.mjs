@@ -10,6 +10,17 @@ const projectRoot = path.resolve(scriptsDir, "..");
 const options = parseArgs(process.argv.slice(2));
 const target = options.target ?? detectTarget();
 const bundle = options.bundle ?? defaultBundleForTarget(target);
+const mixedWindowsLinuxShell = isMixedWindowsLinuxShell();
+
+if (mixedWindowsLinuxShell) {
+  throw new Error(
+    [
+      "Windows installer builds must run from Windows PowerShell, Command Prompt, or a normal Windows terminal.",
+      "This shell looks like WSL/Linux calling Windows Node/npm, which cannot reliably spawn npm.cmd from this path.",
+      "Use `npm run installer:windows` in Windows, or use `npm run installer:linux` inside Ubuntu.",
+    ].join(" "),
+  );
+}
 
 if (!isNativeTarget(target)) {
   throw new Error(
@@ -85,16 +96,26 @@ function isNativeTarget(target) {
   );
 }
 
+function isMixedWindowsLinuxShell() {
+  return (
+    process.platform === "win32" &&
+    (Boolean(process.env.WSL_DISTRO_NAME) ||
+      Boolean(process.env.WSL_INTEROP) ||
+      process.cwd().startsWith("/mnt/"))
+  );
+}
+
 function runNpm(args) {
-  runCommand(process.platform === "win32" ? "npm.cmd" : "npm", args);
+  runCommand("npm", args);
 }
 
 function runCommand(command, args) {
+  const useShell = process.platform === "win32";
   const result = spawnSync(command, args, {
     cwd: projectRoot,
     env: process.env,
     stdio: "inherit",
-    shell: false,
+    shell: useShell,
   });
   if (result.error) {
     throw result.error;

@@ -777,24 +777,31 @@ class RepositoryService:
             asset_path=asset_paths[0] if asset_paths else None,
         )
         latest_snapshot = self.snapshot(repository_id)
+        action_label = "updated" if result.action == "updated" else "created"
+        uploaded_count = sum(1 for asset in result.assets if asset.status == "uploaded")
+        existing_count = sum(1 for asset in result.assets if asset.status == "already_exists")
+
         content_lines = [
             f"Repository: {repository_ref.slug}",
             f"Tag: {result.tag_name}",
             f"Release: {result.release_url}",
             "Draft: yes",
+            f"Action: {action_label}",
             f"Prerelease: {'yes' if request.prerelease else 'no'}",
         ]
         if result.assets:
             content_lines.extend(
                 [
                     "",
-                    f"Assets uploaded: {len(result.assets)}",
+                    f"Assets selected: {len(result.assets)}",
+                    f"Assets uploaded: {uploaded_count}",
+                    f"Already on draft: {existing_count}",
                 ]
             )
             for asset in result.assets:
                 content_lines.extend(
                     [
-                        f"- {asset.name}",
+                        f"- {asset.name} ({asset.status.replace('_', ' ')})",
                         f"  URL: {asset.url or '(not returned)'}",
                         f"  SHA-256: {asset.sha256}",
                     ]
@@ -804,17 +811,25 @@ class RepositoryService:
             tag_name=result.tag_name,
             repository=repository_ref.slug,
             release_url=result.release_url,
+            action=result.action,
             asset_url=result.asset_url,
             asset_name=result.asset_name,
             asset_sha256=result.asset_sha256,
             assets=[
-                ReleaseAssetUpload(name=asset.name, url=asset.url, sha256=asset.sha256)
+                ReleaseAssetUpload(
+                    name=asset.name,
+                    url=asset.url,
+                    sha256=asset.sha256,
+                    status=asset.status,
+                )
                 for asset in result.assets
             ],
-            title="GitHub Draft Release Created",
+            title=f"GitHub Draft Release {action_label.title()}",
             summary=(
-                "A draft GitHub release was created"
-                + (f" and {len(result.assets)} asset(s) were uploaded." if result.assets else ".")
+                f"A draft GitHub release was {action_label}"
+                + (f"; {uploaded_count} asset(s) uploaded" if uploaded_count else "")
+                + (f"; {existing_count} asset(s) already existed" if existing_count else "")
+                + "."
             ),
             content="\n".join(content_lines),
             snapshot=latest_snapshot,

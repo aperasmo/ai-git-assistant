@@ -8,7 +8,7 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.7.6 - Phase 7.6** improves Guided Recovery for cross-machine divergent branches found during Linux verification. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, one-command installer builds, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates for untracked runtime files, first-class Git identity setup before committing, reviewed upstream setup, push-only retry guidance, explicit upstream merge recovery when fast-forward pull is blocked, and a polished multi-asset GitHub draft release flow.
+**0.7.7 - Phase 7.7** adds a Release Manager flow for multi-platform GitHub releases. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, one-command installer builds, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates, Git identity setup, reviewed upstream setup, push-only retry guidance, divergent-branch recovery, and GitHub draft releases that can be created or updated by tag with multiple installer assets.
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
 
@@ -49,20 +49,20 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 
 ## Requirements
 
-- Windows 10 or 11 (64-bit)
-- [Git for Windows](https://git-scm.com/download/win) installed
+- Windows 10 or 11 (64-bit), or Ubuntu 22.04+ for the Linux `.deb`
+- Git installed and available on PATH
 
-That's it. No Python, no Node.js, nothing else to install.
+That's it. No Python, no Node.js, nothing else to install for normal app use.
 
 ---
 
 ## Installation
 
-1. Download the latest **`AI Git Assistant_*_x64-setup.exe`** installer from the [Releases](https://github.com/aperasmo/ai-git-assistant-app/releases) page
+1. Download the latest installer from the [Releases](https://github.com/aperasmo/ai-git-assistant-app/releases) page: **`.exe`** for Windows or **`.deb`** for Ubuntu Linux
 2. Double-click the installer and follow the prompts
 3. Launch **AI Git Assistant** from your Start menu or desktop shortcut
 
-> Your settings and repositories are saved in `C:\Users\<you>\.ai-git-assistant\` and survive reinstalls and updates.
+> Your settings and repositories are saved in your user profile's `.ai-git-assistant` folder and survive reinstalls and updates.
 
 ---
 
@@ -109,7 +109,7 @@ blame README.md
 show stashes
 show remotes
 show tags
-show tag v0.7.6
+show tag v0.7.7
 show conflicts
 review status
 set upstream to origin/main
@@ -120,8 +120,8 @@ switch to main
 create branch feature/new-login
 stash my changes
 merge feature/new-login
-create tag v0.7.6 with message "Release v0.7.6"
-push tag v0.7.6
+create tag v0.7.7 with message "Release v0.7.7"
+push tag v0.7.7
 ```
 
 The app turns your sentence into a Git plan and shows it to you before doing anything.
@@ -164,9 +164,9 @@ In the commit wizard, enable AI for the repository and choose a commit-message s
 
 Add a fine-grained GitHub token in **Settings** for the target repository with **Repository permissions -> Contents -> Read and write** and **Pull requests -> Read and write**.
 
-Phase 4.2 includes a guided **Draft release** flow in the WRITE command bar. Choose **Draft release** to select an existing tag or type a new one, enter the title, write markdown release notes in the larger description editor, and attach one or more installer assets.
+Phase 7.7 includes a guided **Release manager** flow in the WRITE command bar. Choose **Release manager** to select an existing tag or type a new one, enter the title, write markdown release notes in the larger description editor, and attach one or more installer assets.
 
-The app creates a new GitHub draft release and uploads the selected assets only after you confirm the final wizard step. Updating existing releases, replacing assets, and retargeting existing tags are intentionally not part of the current flow.
+The app creates a new GitHub draft release if the tag has no draft yet. If a draft already exists for that tag, the app updates that draft and uploads only the new selected assets. Existing asset filenames are reported and skipped instead of being replaced silently.
 
 Phase 6.1 adds a guided **Draft PR** flow in the WRITE command bar. Choose **Draft PR**, enter the base branch, optionally generate the title/body/checklist with AI, review or edit the text, then confirm the readiness summary. GitHub repositories create draft Pull Requests. GitLab repositories create draft Merge Requests. The app checks that the branch is named, the base differs from the current branch, conflicts are resolved, local commits are pushed, and the provider can see the head branch.
 
@@ -194,7 +194,7 @@ Provider-specific platform features are guarded by the selected repository's rem
 
 ## Cross-platform status
 
-Phase 7.6 continues Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing Ubuntu verification blockers, confirming Ubuntu `.deb` packaging, adding Git author identity setup in Settings for new machines, and turning common setup blockers into guided next steps. It also adds GitHub push-auth recovery and divergent-branch recovery when fast-forward pull is blocked.
+Phase 7.7 continues Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing Ubuntu verification blockers, confirming Ubuntu `.deb` packaging, adding Git author identity setup in Settings for new machines, and turning common setup blockers into guided next steps. It also adds GitHub push-auth recovery, divergent-branch recovery when fast-forward pull is blocked, and a Release Manager path for one release with Windows/Linux assets.
 
 | Host OS | Status |
 |---|---|
@@ -265,7 +265,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `inspect stash@{0}` | Patch for one stash entry |
 | `show remotes` | Configured remote URLs |
 | `show tags` | Local release tags |
-| `show tag v0.7.6` | Inspect one tag |
+| `show tag v0.7.7` | Inspect one tag |
 | `history README.md` | File-specific commit history |
 | `blame README.md` | Line authorship for one file |
 | `show conflicts` | Conflict files and resolution guidance |
@@ -291,10 +291,10 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `merge feature/name` | Merge a local branch with guided conflict handling |
 | `continue merge` | Commit a resolved merge |
 | `abort merge` | Abort an in-progress merge |
-| `create tag v0.7.6 with message "Release v0.7.6"` | Create an annotated local tag |
-| `push tag v0.7.6` | Push one explicit tag to the remote |
-| `delete tag v0.7.6` | Delete a local tag after approval |
-| `draft release` | Create a GitHub draft release and upload one asset |
+| `create tag v0.7.7 with message "Release v0.7.7"` | Create an annotated local tag |
+| `push tag v0.7.7` | Push one explicit tag to the remote |
+| `delete tag v0.7.7` | Delete a local tag after approval |
+| `release manager` / `draft release` | Create or update a GitHub draft release and upload installer assets |
 | `draft PR` | Create a GitHub draft PR or GitLab draft MR from the current branch |
 | `unstage login.py` | Remove file from staging |
 | `discard changes in login.py` | Revert file to last commit |
@@ -404,7 +404,7 @@ Also make sure you have pulled a model first: `ollama pull deepseek-r1:8b`
 Open the diagnostics panel and export the local logs. The log export is designed for bug reports and support.
 
 **The app remembered my repositories from a previous install**
-Settings and repo list are stored in `C:\Users\<you>\.ai-git-assistant\ai-git-assistant.db`.
+Settings and repo list are stored in your user profile's `.ai-git-assistant/ai-git-assistant.db`.
 Delete that file for a completely clean start.
 
 ---
@@ -415,7 +415,7 @@ Delete that file for a completely clean start.
 - Only the **names of changed files**, current **branch**, and your **typed request** are sent to the AI provider when the AI fallback is used
 - If you click **Generate with AI** for a commit message, grouped selected-file context, diff stats, recent commit subjects, and the selected diff/file snippets are sent to your configured provider
 - If you click **Analyze changes**, the receipt shows the exact selected diff context sent to the configured AI provider
-- If you publish a GitHub draft release, the tag, title, description, and selected asset are sent to GitHub using your saved token
+- If you publish or update a GitHub draft release, the tag, title, description, and selected assets are sent to GitHub using your saved token
 - If you generate PR/MR text with AI, the base/head branches, commits, changed-file list, diff stats, and recent commit subjects are sent to your configured provider
 - If you create a GitHub draft pull request, the base branch, current branch, title, and description are sent to GitHub using your saved token
 - If you create a GitLab draft merge request, the base branch, current branch, title, and description are sent to GitLab using your saved token

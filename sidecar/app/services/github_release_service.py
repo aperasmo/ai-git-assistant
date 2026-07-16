@@ -36,6 +36,7 @@ class GitHubDraftReleaseResult:
     asset_name: str | None
     asset_sha256: str | None
     assets: tuple["GitHubReleaseAssetResult", ...] = ()
+    action: str = "created"
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class GitHubReleaseAssetResult:
     name: str
     url: str | None
     sha256: str | None
+    status: str = "uploaded"
 
 
 @dataclass(frozen=True)
@@ -112,17 +114,60 @@ class GitHubReleaseClient:
         if target_commitish:
             payload["target_commitish"] = target_commitish
 
-        api_url = f"https://api.github.com/repos/{repository.owner}/{repository.repo}/releases"
+        api_root = f"https://api.github.com/repos/{repository.owner}/{repository.repo}"
+        api_url = f"{api_root}/releases"
         try:
             with httpx.Client(timeout=self._timeout, follow_redirects=True) as client:
-                release_response = client.post(api_url, headers=headers, json=payload)
-                self._raise_for_github_error(release_response)
-                release = release_response.json()
+                existing_release = self._find_release_by_tag(
+                    client=client,
+                    headers=headers,
+                    repository=repository,
+                    tag_name=tag_name,
+                )
+                if existing_release is not None:
+                    if not bool(existing_release.get("draft")):
+                        raise ValidationFailure(
+                            f"Release tag '{tag_name}' already exists as a published release. "
+                            "Choose a new tag or update the published release on GitHub."
+                        )
+                    release_id = existing_release.get("id")
+                    release_response = client.patch(
+                        f"{api_url}/{release_id}",
+                        headers=headers,
+                        json=payload,
+                    )
+                    self._raise_for_github_error(release_response)
+                    release = release_response.json()
+                    release_action = "updated"
+                else:
+                    release_response = client.post(api_url, headers=headers, json=payload)
+                    self._raise_for_github_error(release_response)
+                    release = release_response.json()
+                    release_action = "created"
+
+                existing_assets = {
+                    str(asset.get("name") or ""): asset
+                    for asset in self._release_assets(client, headers, release)
+                    if asset.get("name")
+                }
 
                 uploaded_assets: list[GitHubReleaseAssetResult] = []
                 for asset_path in upload_paths:
                     asset_name = asset_path.name
                     asset_sha256 = _sha256_file(asset_path)
+                    existing_asset = existing_assets.get(asset_name)
+                    if existing_asset is not None:
+                        uploaded_assets.append(
+                            GitHubReleaseAssetResult(
+                                name=asset_name,
+                                url=str(existing_asset.get("browser_download_url") or "")
+                                or None,
+                                sha256=asset_sha256,
+                                status="already_exists",
+                            )
+                        )
+                        continue
+
                     upload_url = (
                         release.get("upload_url", "")
                         .split("{", 1)[0]
@@ -151,8 +196,10 @@ class GitHubReleaseClient:
                             name=asset_name,
                             url=str(asset_url) if asset_url else None,
                             sha256=asset_sha256,
+                            status="uploaded",
                         )
                     )
+                    existing_assets[asset_name] = asset
 
         except httpx.HTTPError as exc:
             raise ValidationFailure(f"GitHub release request failed: {exc}") from exc
@@ -165,7 +212,55 @@ class GitHubReleaseClient:
             asset_name=first_asset.name if first_asset else None,
             asset_sha256=first_asset.sha256 if first_asset else None,
             assets=tuple(uploaded_assets),
+            action=release_action,
         )
+
+    def _find_release_by_tag(
+        self,
+        *,
+        client: httpx.Client,
+        headers: dict[str, str],
+        repository: GitHubRepositoryRef,
+        tag_name: str,
+    ) -> dict | None:
+        api_root = f"https://api.github.com/repos/{repository.owner}/{repository.repo}"
+        response = client.get(
+            f"{api_root}/releases/tags/{quote(tag_name, safe='')}",
+            headers=headers,
+        )
+        if response.status_code == 200:
+            return response.json()
+        if response.status_code not in {404, 422}:
+            self._raise_for_github_error(response)
+
+        releases_response = client.get(
+            f"{api_root}/releases",
+            headers=headers,
+            params={"per_page": 100},
+        )
+        self._raise_for_github_error(releases_response)
+        for release in releases_response.json():
+            if str(release.get("tag_name") or "") == tag_name:
+                return release
+        return None
+
+    def _release_assets(
+        self,
+        client: httpx.Client,
+        headers: dict[str, str],
+        release: dict,
+    ) -> list[dict]:
+        assets = release.get("assets")
+        if isinstance(assets, list):
+            return [asset for asset in assets if isinstance(asset, dict)]
+
+        assets_url = release.get("assets_url")
+        if not assets_url:
+            return []
+
+        response = client.get(str(assets_url), headers=headers, params={"per_page": 100})
+        self._raise_for_github_error(response)
+        return [asset for asset in response.json() if isinstance(asset, dict)]
 
     def create_draft_pull_request(
         self,

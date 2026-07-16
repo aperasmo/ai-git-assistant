@@ -276,6 +276,8 @@ pub struct ReleaseAssetUpload {
     pub name: String,
     pub url: Option<String>,
     pub sha256: Option<String>,
+    #[serde(default)]
+    pub status: String,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -284,6 +286,8 @@ pub struct DraftGitHubReleaseResponse {
     pub tag_name: String,
     pub repository: String,
     pub release_url: String,
+    #[serde(default)]
+    pub action: String,
     pub asset_url: Option<String>,
     pub asset_name: Option<String>,
     pub asset_sha256: Option<String>,

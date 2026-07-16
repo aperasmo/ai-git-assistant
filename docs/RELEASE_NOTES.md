@@ -1,5 +1,24 @@
 # Release Notes
 
+## 0.7.7 - Phase 7.7
+
+Adds Release Manager behavior for assembling one GitHub release from multiple platform machines.
+
+### Shipped
+
+- Draft release flow now creates a new draft or updates the existing draft for the selected tag.
+- Windows and Linux installers can be uploaded to the same draft release from their own machines.
+- Existing asset filenames are detected and reported as already present instead of being replaced silently.
+- Release Manager wording now appears in the write command bar and confirmation step.
+- Public docs and version metadata updated to `0.7.7`.
+
+### Verification
+
+- `npm run build`
+- `cargo check --locked`
+- `npm run sidecar:test` - 127 passed
+- focused release flow tests for single, multiple, and existing-draft GitHub release assets
+
 ## 0.7.6 - Phase 7.6
 
 Improves Guided Recovery for cross-machine divergent branches found during Linux verification and polishes the release publishing flow for multi-platform assets.

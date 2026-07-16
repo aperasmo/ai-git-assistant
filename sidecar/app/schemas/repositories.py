@@ -336,12 +336,14 @@ class ReleaseAssetUpload(ApiModel):
     name: str
     url: str | None = None
     sha256: str | None = None
+    status: str = "uploaded"
 
 
 class DraftGitHubReleaseResponse(ApiModel):
     tag_name: str
     repository: str
     release_url: str
+    action: str = "created"
     asset_url: str | None = None
     asset_name: str | None = None
     asset_sha256: str | None = None

@@ -49,7 +49,7 @@ export const FLOWS: FlowDef[] = [
   { id: "stash", label: "Stash changes", icon: "H", description: "Save work in progress", category: "write" },
   { id: "discard", label: "Discard changes", icon: "X", description: "Revert file changes", category: "write" },
   { id: "connect_remote", label: "Connect remote", icon: "@", description: "Add GitHub/GitLab origin", category: "write" },
-  { id: "draft_release", label: "Draft release", icon: "V", description: "Create a GitHub draft release", category: "write" },
+  { id: "draft_release", label: "Release manager", icon: "V", description: "Create or update a GitHub draft release", category: "write" },
   { id: "draft_pr", label: "Draft PR", icon: "Q", description: "Create a GitHub PR or GitLab MR", category: "write" },
 ];
 

@@ -617,28 +617,34 @@ function OptionSelectStep({
     <div className="wizard-step-card">
       <p className="wizard-step-prompt">{entry.prompt}</p>
       {isReleaseTag && (
-        <div className="wizard-tag-create-row">
-          <input
-            type="text"
-            className="wizard-text-input"
-            value={newTagName}
-            onChange={(e) => setNewTagName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") chooseTag(newTagName);
-            }}
-            placeholder="Search or create a new tag, for example v0.7.6"
-            disabled={busy}
-            autoFocus
-          />
-          <button
-            type="button"
-            className="wizard-browse-button"
-            disabled={busy || !newTagName.trim()}
-            onClick={() => chooseTag(newTagName)}
-          >
-            Use tag
-          </button>
-        </div>
+        <>
+          <p className="wizard-empty-hint">
+            Pick an existing tag or type a new one. If a draft already exists for this tag,
+            the app updates that draft and adds new assets.
+          </p>
+          <div className="wizard-tag-create-row">
+            <input
+              type="text"
+              className="wizard-text-input"
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") chooseTag(newTagName);
+              }}
+              placeholder="Search or create a new tag, for example v0.7.6"
+              disabled={busy}
+              autoFocus
+            />
+            <button
+              type="button"
+              className="wizard-browse-button"
+              disabled={busy || !newTagName.trim()}
+              onClick={() => chooseTag(newTagName)}
+            >
+              Use tag
+            </button>
+          </div>
+        </>
       )}
       <div className="wizard-option-grid">
         {(entry.choices ?? []).map((choice) => (
