@@ -148,13 +148,23 @@ function FilePickStep({
     onNext(label, { files: selected });
   }
 
+  function applyIgnoredFiles(ignored: string[]) {
+    if (ignored.length === 0) return;
+    const ignoredSet = new Set(ignored);
+    const remainingChoices = choices.filter((path) => !ignoredSet.has(path));
+    setChoices(remainingChoices);
+    setSelected((prev) => prev.filter((path) => !ignoredSet.has(path)));
+    if (remainingChoices.length === 0) {
+      onCancel();
+    }
+  }
+
   async function handleGitignore(path: string) {
     if (!onAddToGitignore || gitignoring) return;
     setGitignoring(true);
     try {
       const ignored = await onAddToGitignore([path]);
-      setChoices((prev) => prev.filter((p) => !ignored.includes(p)));
-      setSelected((prev) => prev.filter((p) => !ignored.includes(p)));
+      applyIgnoredFiles(ignored);
     } finally {
       setGitignoring(false);
     }
@@ -165,8 +175,7 @@ function FilePickStep({
     setGitignoring(true);
     try {
       const ignored = await onAddToGitignore(selectedGitignoreChoices);
-      setChoices((prev) => prev.filter((p) => !ignored.includes(p)));
-      setSelected((prev) => prev.filter((p) => !ignored.includes(p)));
+      applyIgnoredFiles(ignored);
     } finally {
       setGitignoring(false);
     }
