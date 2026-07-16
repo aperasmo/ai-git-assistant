@@ -63,6 +63,7 @@ export interface WizardData {
   remote?: string;
   branch?: string;
   tagName?: string;
+  releaseMode?: "create" | "edit";
   releaseTitle?: string;
   releaseBody?: string;
   assetPath?: string;

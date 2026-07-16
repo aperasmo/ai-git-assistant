@@ -6,7 +6,8 @@ Adds Release Manager behavior for assembling one GitHub release from multiple pl
 
 ### Shipped
 
-- Draft release flow now creates a new draft or updates the existing draft for the selected tag.
+- Release Manager now starts with explicit **Create new draft** and **Edit existing draft** choices.
+- Draft release flow creates a new draft or updates the existing draft for the selected tag.
 - Windows and Linux installers can be uploaded to the same draft release from their own machines.
 - Existing asset filenames are detected and reported as already present instead of being replaced silently.
 - Release Manager wording now appears in the write command bar and confirmation step.

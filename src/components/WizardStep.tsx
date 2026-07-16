@@ -605,6 +605,7 @@ function OptionSelectStep({
   onCancel: () => void;
 }) {
   const isReleaseTag = entry.prompt === "Release tag";
+  const isReleaseAction = entry.prompt === "Release action";
   const [newTagName, setNewTagName] = useState(entry.initialValue ?? "");
 
   function chooseTag(tagName: string) {
@@ -613,9 +614,19 @@ function OptionSelectStep({
     onNext(trimmed, { tagName: trimmed });
   }
 
+  function chooseReleaseAction(choice: string) {
+    onNext(choice, { releaseMode: choice.toLowerCase().includes("edit") ? "edit" : "create" });
+  }
+
   return (
     <div className="wizard-step-card">
       <p className="wizard-step-prompt">{entry.prompt}</p>
+      {isReleaseAction && (
+        <p className="wizard-empty-hint">
+          Use Edit existing draft when another machine already created this release and you only need
+          to add more installer assets.
+        </p>
+      )}
       {isReleaseTag && (
         <>
           <p className="wizard-empty-hint">
@@ -653,7 +664,13 @@ function OptionSelectStep({
             type="button"
             className="wizard-option-button"
             disabled={busy}
-            onClick={() => (isReleaseTag ? chooseTag(choice) : onNext(choice, { remote: choice }))}
+            onClick={() =>
+              isReleaseTag
+                ? chooseTag(choice)
+                : isReleaseAction
+                  ? chooseReleaseAction(choice)
+                  : onNext(choice, { remote: choice })
+            }
           >
             {choice}
           </button>

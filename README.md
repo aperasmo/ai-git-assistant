@@ -164,7 +164,7 @@ In the commit wizard, enable AI for the repository and choose a commit-message s
 
 Add a fine-grained GitHub token in **Settings** for the target repository with **Repository permissions -> Contents -> Read and write** and **Pull requests -> Read and write**.
 
-Phase 7.7 includes a guided **Release manager** flow in the WRITE command bar. Choose **Release manager** to select an existing tag or type a new one, enter the title, write markdown release notes in the larger description editor, and attach one or more installer assets.
+Phase 7.7 includes a guided **Release manager** flow in the WRITE command bar. Choose **Release manager**, then select **Create new draft** or **Edit existing draft**, select an existing tag or type a new one, enter the title, write markdown release notes in the larger description editor, and attach one or more installer assets.
 
 The app creates a new GitHub draft release if the tag has no draft yet. If a draft already exists for that tag, the app updates that draft and uploads only the new selected assets. Existing asset filenames are reported and skipped instead of being replaced silently.
 

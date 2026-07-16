@@ -1299,10 +1299,9 @@ export default function App() {
       id: stepId,
       kind: "wizard_step",
       stepKind: "option_select",
-      prompt: "Release tag",
+      prompt: "Release action",
       status: "active",
-      choices: snapshot?.localTags ?? [],
-      initialValue: snapshot?.localTags?.[0] ?? "",
+      choices: ["Create new draft", "Edit existing draft"],
     });
   }
 
@@ -1548,6 +1547,7 @@ export default function App() {
         const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: releaseData };
         activeWizardRef.current = next;
         const assets = releaseData.assetPaths ?? [];
+        const releaseModeLabel = releaseData.releaseMode === "edit" ? "Edit existing draft" : "Create new draft";
         appendTranscriptEntry(repositoryId, {
           id: nextStepId,
           kind: "wizard_step",
@@ -1556,11 +1556,14 @@ export default function App() {
           status: "active",
           confirmLines: [
             `Remote: ${remoteName} (${snapshot?.remoteUrls?.[remoteName] ?? "—"})`,
+            `Action: ${releaseModeLabel}`,
             `Tag: ${releaseData.tagName}`,
             `Title: ${releaseData.releaseTitle}`,
             `Assets (${assets.length}): ${assets.map((path) => path.split(/[\\/]/).pop() ?? path).join(", ")}`,
             "Draft: yes",
-            "Mode: create a new draft, or update the existing draft for this tag",
+            releaseData.releaseMode === "edit"
+              ? "Mode: update the existing draft for this tag and add new assets"
+              : "Mode: create a new draft; if a draft already exists for this tag, update it instead",
             ...gitCmds("GitHub API: create or update draft release", `GitHub API: upload new selected asset(s)`),
           ],
         });
@@ -1585,6 +1588,22 @@ export default function App() {
           ],
         });
       } else if (wizard.flowId === "draft_release") {
+        if (!wizard.data.releaseMode) {
+          const releaseMode = choiceData.releaseMode ?? (choiceLabel.toLowerCase().includes("edit") ? "edit" : "create");
+          const releaseData: WizardData = { ...wizard.data, releaseMode };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "option_select", data: releaseData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "option_select",
+            prompt: "Release tag",
+            status: "active",
+            choices: snapshot?.localTags ?? [],
+            initialValue: snapshot?.localTags?.[0] ?? "",
+          });
+          return;
+        }
         const releaseData: WizardData = { ...wizard.data, ...choiceData, tagName: choiceData.tagName ?? choiceLabel };
         const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: releaseData };
         activeWizardRef.current = next;
