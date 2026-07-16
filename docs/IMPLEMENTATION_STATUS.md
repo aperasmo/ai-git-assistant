@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last updated:** 16 July 2026  
+**Last updated:** 17 July 2026  
 **Current state:** Phase 7.6 cross-platform hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; AppImage and macOS packaging remain pending.
 
 ---
@@ -105,6 +105,8 @@
 - **Linux `.deb` packaging:** Ubuntu 22.04 builds the frontend, passes sidecar tests, builds the sidecar binary, and bundles the Debian package line; the next release build will emit `0.7.6`.
 - **GitHub push-auth recovery:** GitHub write-permission failures now explain the fine-grained token requirement and offer a push-only retry so an existing local commit is not duplicated.
 - **Divergent-branch recovery:** Fast-forward pull failures now explain the cross-machine divergence and offer fetch, diff, or a reviewed upstream merge.
+- **One-command installer builds:** `npm run installer` runs sidecar tests, builds the sidecar binary, and builds the native installer for the current host OS.
+- **Multi-platform draft releases:** GitHub draft releases can select an existing tag or enter a new tag, use a larger markdown description editor, and upload multiple installer assets in one draft.
 
 ### Post-launch fixes
 

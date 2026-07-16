@@ -8,7 +8,7 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.7.6 - Phase 7.6** improves Guided Recovery for cross-machine divergent branches found during Linux verification. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates for untracked runtime files, first-class Git identity setup before committing, reviewed upstream setup, push-only retry guidance, and explicit upstream merge recovery when fast-forward pull is blocked.
+**0.7.6 - Phase 7.6** improves Guided Recovery for cross-machine divergent branches found during Linux verification. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, one-command installer builds, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates for untracked runtime files, first-class Git identity setup before committing, reviewed upstream setup, push-only retry guidance, explicit upstream merge recovery when fast-forward pull is blocked, and a polished multi-asset GitHub draft release flow.
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
 
@@ -164,9 +164,9 @@ In the commit wizard, enable AI for the repository and choose a commit-message s
 
 Add a fine-grained GitHub token in **Settings** for the target repository with **Repository permissions -> Contents -> Read and write** and **Pull requests -> Read and write**.
 
-Phase 4.2 includes a guided **Draft release** flow in the WRITE command bar. Choose **Draft release** to enter the tag, title, description, and installer asset.
+Phase 4.2 includes a guided **Draft release** flow in the WRITE command bar. Choose **Draft release** to select an existing tag or type a new one, enter the title, write markdown release notes in the larger description editor, and attach one or more installer assets.
 
-The app creates a new GitHub draft release and uploads one asset only after you confirm the final wizard step. Updating existing releases, replacing assets, and retargeting existing tags are intentionally not part of the current flow.
+The app creates a new GitHub draft release and uploads the selected assets only after you confirm the final wizard step. Updating existing releases, replacing assets, and retargeting existing tags are intentionally not part of the current flow.
 
 Phase 6.1 adds a guided **Draft PR** flow in the WRITE command bar. Choose **Draft PR**, enter the base branch, optionally generate the title/body/checklist with AI, review or edit the text, then confirm the readiness summary. GitHub repositories create draft Pull Requests. GitLab repositories create draft Merge Requests. The app checks that the branch is named, the base differs from the current branch, conflicts are resolved, local commits are pushed, and the provider can see the head branch.
 
@@ -202,17 +202,31 @@ Phase 7.6 continues Mac and Linux support by removing Windows-only build assumpt
 | macOS | Build path prepared; signed/notarized release still pending |
 | Linux | Ubuntu 22.04 `.deb` packaging verified; AppImage still pending because the downloader timed out |
 
-Portable build commands:
+One-command installer builds:
 
 ```powershell
-npm run sidecar:build
+npm run installer
+```
+
+`npm run installer` runs the sidecar tests, builds the sidecar binary, then builds the native installer for the host OS. The explicit variants are available when you want to be clear:
+
+```powershell
+npm run installer:windows
+npm run installer:linux
+npm run installer:mac
+```
+
+Current bundle defaults are Windows NSIS, Linux `.deb`, and macOS `.dmg`. Each OS still needs to build on its own host or CI runner because Tauri, PyInstaller, WebView dependencies, signing, and installer tooling are platform-specific.
+
+Advanced lower-level commands are still available:
+
+```powershell
 npm run sidecar:test
+npm run sidecar:build
 npm run tauri:build:windows
 npm run tauri:build:mac
 npm run tauri:build:linux
 ```
-
-Each OS still needs to build on its own host or CI runner because Tauri, PyInstaller, WebView dependencies, signing, and installer tooling are platform-specific.
 
 Source builds require Node 20+, Rust stable, Python 3.12+, and Git 2.25+.
 

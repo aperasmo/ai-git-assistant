@@ -126,7 +126,7 @@ export const desktopApi = {
 
   pickCloneTarget: () => invoke<string | null>("pick_clone_target"),
 
-  pickReleaseAsset: () => invoke<string | null>("pick_release_asset"),
+  pickReleaseAsset: () => invoke<string[]>("pick_release_asset"),
 
   cloneRepository: (url: string, parentPath: string, folderName?: string) =>
     invoke<Repository>("clone_repository", { url, parentPath, folderName }),

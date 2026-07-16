@@ -66,6 +66,7 @@ export interface WizardData {
   releaseTitle?: string;
   releaseBody?: string;
   assetPath?: string;
+  assetPaths?: string[];
   prerelease?: boolean;
   prBaseBranch?: string;
   prTitle?: string;

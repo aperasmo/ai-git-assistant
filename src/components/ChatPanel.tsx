@@ -27,7 +27,7 @@ interface ChatPanelProps {
   onAddToGitignore: (paths: string[]) => Promise<string[]>;
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
-  onPickReleaseAsset: () => Promise<string | null>;
+  onPickReleaseAsset: () => Promise<string[]>;
   onRecoveryAction: (option: RecoveryOption) => void;
 }
 
@@ -292,7 +292,7 @@ function TranscriptItem({
   onAddToGitignore: (paths: string[]) => Promise<string[]>;
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
-  onPickReleaseAsset: () => Promise<string | null>;
+  onPickReleaseAsset: () => Promise<string[]>;
   onRecoveryAction: (option: RecoveryOption) => void;
 }) {
   if (entry.kind === "user") {

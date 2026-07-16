@@ -300,12 +300,16 @@ pub async fn pick_clone_target(app: AppHandle) -> Result<Option<String>, String>
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn pick_release_asset(app: AppHandle) -> Result<Option<String>, String> {
-    let selected = app.dialog().file().blocking_pick_file();
-    Ok(selected.and_then(|fp| match fp {
-        FilePath::Path(path) => Some(path.to_string_lossy().into_owned()),
-        FilePath::Url(_) => None,
-    }))
+pub async fn pick_release_asset(app: AppHandle) -> Result<Vec<String>, String> {
+    let selected = app.dialog().file().blocking_pick_files();
+    Ok(selected
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|fp| match fp {
+            FilePath::Path(path) => Some(path.to_string_lossy().into_owned()),
+            FilePath::Url(_) => None,
+        })
+        .collect())
 }
 
 #[tauri::command(rename_all = "camelCase")]

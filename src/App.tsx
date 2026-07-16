@@ -1294,13 +1294,15 @@ export default function App() {
     }
 
     const stepId = createTranscriptId();
-    activeWizardRef.current = { flowId: "draft_release", currentStepId: stepId, currentStepKind: "text_input", data: {} };
+    activeWizardRef.current = { flowId: "draft_release", currentStepId: stepId, currentStepKind: "option_select", data: {} };
     appendTranscriptEntry(repositoryId, {
       id: stepId,
       kind: "wizard_step",
-      stepKind: "text_input",
-      prompt: "Release tag, for example v0.6.0",
+      stepKind: "option_select",
+      prompt: "Release tag",
       status: "active",
+      choices: snapshot?.localTags ?? [],
+      initialValue: snapshot?.localTags?.[0] ?? "",
     });
   }
 
@@ -1416,18 +1418,7 @@ export default function App() {
         });
       } else if (wizard.flowId === "draft_release") {
         const value = (choiceData.message ?? "").trim();
-        if (!wizard.data.tagName) {
-          const releaseData: WizardData = { ...wizard.data, tagName: value };
-          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: releaseData };
-          activeWizardRef.current = next;
-          appendTranscriptEntry(repositoryId, {
-            id: nextStepId,
-            kind: "wizard_step",
-            stepKind: "text_input",
-            prompt: "Release title",
-            status: "active",
-          });
-        } else if (!wizard.data.releaseTitle) {
+        if (!wizard.data.releaseTitle) {
           const releaseData: WizardData = { ...wizard.data, releaseTitle: value };
           const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: releaseData };
           activeWizardRef.current = next;
@@ -1446,7 +1437,7 @@ export default function App() {
             id: nextStepId,
             kind: "wizard_step",
             stepKind: "asset_pick",
-            prompt: "Choose the release asset",
+            prompt: "Choose release assets",
             status: "active",
           });
         }
@@ -1552,10 +1543,11 @@ export default function App() {
       }
     } else if (wizard.currentStepKind === "asset_pick") {
       if (wizard.flowId === "draft_release") {
-        const releaseData: WizardData = { ...updatedData, assetPath: choiceData.assetPath ?? updatedData.assetPath };
+        const releaseData: WizardData = { ...updatedData, assetPaths: choiceData.assetPaths ?? updatedData.assetPaths ?? [] };
         const remoteName = githubRemote(snapshot)?.remote ?? "origin";
         const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: releaseData };
         activeWizardRef.current = next;
+        const assets = releaseData.assetPaths ?? [];
         appendTranscriptEntry(repositoryId, {
           id: nextStepId,
           kind: "wizard_step",
@@ -1566,9 +1558,9 @@ export default function App() {
             `Remote: ${remoteName} (${snapshot?.remoteUrls?.[remoteName] ?? "—"})`,
             `Tag: ${releaseData.tagName}`,
             `Title: ${releaseData.releaseTitle}`,
-            `Asset: ${releaseData.assetPath}`,
+            `Assets (${assets.length}): ${assets.map((path) => path.split(/[\\/]/).pop() ?? path).join(", ")}`,
             "Draft: yes",
-            ...gitCmds("GitHub API: create draft release", "GitHub API: upload selected asset"),
+            ...gitCmds("GitHub API: create draft release", `GitHub API: upload ${assets.length} selected asset(s)`),
           ],
         });
       }
@@ -1590,6 +1582,18 @@ export default function App() {
             `Current: ${snapshot?.branch ?? "unknown"}`,
             ...gitCmds(`git switch ${targetBranch}`),
           ],
+        });
+      } else if (wizard.flowId === "draft_release") {
+        const releaseData: WizardData = { ...wizard.data, ...choiceData, tagName: choiceData.tagName ?? choiceLabel };
+        const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: releaseData };
+        activeWizardRef.current = next;
+        appendTranscriptEntry(repositoryId, {
+          id: nextStepId,
+          kind: "wizard_step",
+          stepKind: "text_input",
+          prompt: "Release title",
+          status: "active",
+          initialValue: `Release ${releaseData.tagName}`,
         });
       } else {
         const currentBranch = snapshot?.branch ?? "main";
@@ -1638,7 +1642,7 @@ export default function App() {
           tagName: wizard.data.tagName ?? "",
           title: wizard.data.releaseTitle ?? "",
           body: wizard.data.releaseBody ?? "",
-          assetPath: wizard.data.assetPath ?? null,
+          assetPaths: wizard.data.assetPaths ?? [],
           prerelease: false,
         });
         if (activeRepositoryIdRef.current !== repositoryId) return;

@@ -131,6 +131,8 @@ pub struct RepositorySnapshot {
     pub remote_providers: Vec<RemoteProviderInfo>,
     #[serde(default)]
     pub local_branches: Vec<Value>,
+    #[serde(default)]
+    pub local_tags: Vec<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -263,7 +265,17 @@ pub struct DraftGitHubReleaseRequest {
     pub title: String,
     pub body: String,
     pub asset_path: Option<String>,
+    #[serde(default)]
+    pub asset_paths: Vec<String>,
     pub prerelease: bool,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseAssetUpload {
+    pub name: String,
+    pub url: Option<String>,
+    pub sha256: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -275,6 +287,8 @@ pub struct DraftGitHubReleaseResponse {
     pub asset_url: Option<String>,
     pub asset_name: Option<String>,
     pub asset_sha256: Option<String>,
+    #[serde(default)]
+    pub assets: Vec<ReleaseAssetUpload>,
     pub title: String,
     pub summary: String,
     pub content: String,

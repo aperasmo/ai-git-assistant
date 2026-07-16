@@ -43,6 +43,7 @@ from app.schemas.repositories import (
     ReadActionRequest,
     ReadActionResult,
     RecentCommit,
+    ReleaseAssetUpload,
     RepositoryResponse,
     RepositorySnapshot,
 )
@@ -748,11 +749,21 @@ class RepositoryService:
         repository_ref = self._github_repository_from_snapshot(snapshot)
         self._validate_tag_name(request.tag_name)
 
-        asset_path: Path | None = None
-        if request.asset_path:
-            asset_path = Path(request.asset_path).expanduser()
+        asset_path_values = [path for path in request.asset_paths if path.strip()]
+        if request.asset_path and request.asset_path.strip():
+            asset_path_values.insert(0, request.asset_path)
+
+        asset_paths: list[Path] = []
+        seen_assets: set[str] = set()
+        for asset_path_value in asset_path_values:
+            asset_path = Path(asset_path_value).expanduser()
             if not asset_path.is_file():
                 raise ValidationFailure("The selected release asset does not exist or is not a file.")
+            resolved = str(asset_path.resolve())
+            if resolved in seen_assets:
+                continue
+            seen_assets.add(resolved)
+            asset_paths.append(asset_path)
 
         client = self._github_release_client_factory(token)
         result = client.create_draft_release(
@@ -762,7 +773,8 @@ class RepositoryService:
             body=request.body.strip(),
             target_commitish=snapshot.head_commit or snapshot.branch,
             prerelease=request.prerelease,
-            asset_path=asset_path,
+            asset_paths=asset_paths,
+            asset_path=asset_paths[0] if asset_paths else None,
         )
         latest_snapshot = self.snapshot(repository_id)
         content_lines = [
@@ -772,15 +784,21 @@ class RepositoryService:
             "Draft: yes",
             f"Prerelease: {'yes' if request.prerelease else 'no'}",
         ]
-        if result.asset_name:
+        if result.assets:
             content_lines.extend(
                 [
                     "",
-                    f"Asset: {result.asset_name}",
-                    f"Asset URL: {result.asset_url or '(not returned)'}",
-                    f"SHA-256: {result.asset_sha256}",
+                    f"Assets uploaded: {len(result.assets)}",
                 ]
             )
+            for asset in result.assets:
+                content_lines.extend(
+                    [
+                        f"- {asset.name}",
+                        f"  URL: {asset.url or '(not returned)'}",
+                        f"  SHA-256: {asset.sha256}",
+                    ]
+                )
 
         return DraftGitHubReleaseResponse(
             tag_name=result.tag_name,
@@ -789,8 +807,15 @@ class RepositoryService:
             asset_url=result.asset_url,
             asset_name=result.asset_name,
             asset_sha256=result.asset_sha256,
+            assets=[
+                ReleaseAssetUpload(name=asset.name, url=asset.url, sha256=asset.sha256)
+                for asset in result.assets
+            ],
             title="GitHub Draft Release Created",
-            summary="A draft GitHub release was created and the selected asset was uploaded.",
+            summary=(
+                "A draft GitHub release was created"
+                + (f" and {len(result.assets)} asset(s) were uploaded." if result.assets else ".")
+            ),
             content="\n".join(content_lines),
             snapshot=latest_snapshot,
         )

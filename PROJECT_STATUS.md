@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 16/07/2026
+Last updated: 17/07/2026
 
 ---
 
@@ -127,7 +127,9 @@ These dates mark when the phase or feature set was first added to the project hi
 1. Added Guided Recovery for fast-forward pull failures when local and remote branches have diverged.
 2. Added recovery actions to fetch remote state, view differences, or merge the upstream branch deliberately.
 3. Allowed reviewed merge plans for remote-tracking branches such as `origin/main`.
-4. Updated public docs and metadata for `0.7.6`.
+4. Added a one-command installer build wrapper for the current host OS.
+5. Improved the GitHub draft release flow with existing-tag selection, create-new-tag entry, a larger markdown release description editor, and multiple installer assets.
+6. Updated public docs and metadata for `0.7.6`.
 
 #### Phase 8 - target TBD
 
@@ -501,6 +503,14 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 ## Running the app
 
 ```powershell
+# Build the installer for the current host OS
+npm run installer
+
+# Explicit native installer builds
+npm run installer:windows
+npm run installer:linux
+npm run installer:mac
+
 # First time or after changing Python source
 npm run sidecar:build
 
@@ -518,6 +528,8 @@ npm run tauri:build:linux
 # Start in development mode
 npm run tauri:dev
 ```
+
+`npm run installer` runs sidecar tests, builds the sidecar binary, and then builds the native installer package for the host OS. Windows emits NSIS, Linux emits `.deb`, and macOS emits `.dmg`.
 
 Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.25+.
 

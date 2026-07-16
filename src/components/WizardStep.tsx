@@ -38,7 +38,7 @@ interface WizardStepProps {
   onAddToGitignore?: (paths: string[]) => Promise<string[]>;
   onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft?: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
-  onPickReleaseAsset?: () => Promise<string | null>;
+  onPickReleaseAsset?: () => Promise<string[]>;
 }
 
 export function WizardStep({
@@ -295,7 +295,7 @@ function AssetPickStep({
   busy: boolean;
   onNext: (label: string, data: Partial<WizardData>) => void;
   onCancel: () => void;
-  onPickReleaseAsset?: () => Promise<string | null>;
+  onPickReleaseAsset?: () => Promise<string[]>;
 }) {
   const [value, setValue] = useState("");
   const [picking, setPicking] = useState(false);
@@ -305,33 +305,37 @@ function AssetPickStep({
     setPicking(true);
     try {
       const selected = await onPickReleaseAsset();
-      if (selected) setValue(selected);
+      if (selected.length > 0) {
+        const current = parseAssetPaths(value);
+        const next = [...current, ...selected].filter((path, index, all) => all.indexOf(path) === index);
+        setValue(next.join("\n"));
+      }
     } finally {
       setPicking(false);
     }
   }
 
   function handleNext() {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    onNext(trimmed.split(/[\\/]/).pop() ?? trimmed, { assetPath: trimmed });
+    const assetPaths = parseAssetPaths(value);
+    if (assetPaths.length === 0) return;
+    onNext(assetPaths.length === 1 ? assetName(assetPaths[0]) : `${assetPaths.length} assets`, { assetPaths });
   }
 
   return (
     <div className="wizard-step-card">
       <p className="wizard-step-prompt">{entry.prompt}</p>
       <div className="wizard-asset-row">
-        <input
-          type="text"
-          className="wizard-text-input"
+        <textarea
+          className="wizard-text-input wizard-asset-input"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleNext();
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleNext();
           }}
-          placeholder="Select or paste the asset path..."
+          placeholder="Select or paste installer paths, one per line..."
           disabled={busy || picking}
           autoFocus
+          rows={4}
         />
         <button
           type="button"
@@ -346,7 +350,7 @@ function AssetPickStep({
         <button
           type="button"
           className="wizard-next-button"
-          disabled={busy || picking || !value.trim()}
+          disabled={busy || picking || parseAssetPaths(value).length === 0}
           onClick={handleNext}
         >
           Continue
@@ -362,6 +366,18 @@ function AssetPickStep({
       </div>
     </div>
   );
+}
+
+function parseAssetPaths(value: string): string[] {
+  return value
+    .split(/\r?\n|;/)
+    .map((path) => path.trim())
+    .filter(Boolean)
+    .filter((path, index, all) => all.indexOf(path) === index);
+}
+
+function assetName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path;
 }
 
 function TextInputStep({
@@ -387,6 +403,7 @@ function TextInputStep({
   const [style, setStyle] = useState<CommitMessageStyle>("detailed");
   const isCommitMessage = entry.prompt === "Commit message";
   const isPullRequestTitle = entry.prompt === "Pull request title";
+  const isLongText = isCommitMessage || entry.prompt === "Release description" || entry.prompt === "Pull request description";
   const selectedPaths = isCommitMessage ? entry.choices ?? [] : [];
   const canGenerate = selectedPaths.length > 0 && Boolean(onGenerateCommitMessage);
   const prBaseBranch = isPullRequestTitle ? entry.choices?.[0] ?? "" : "";
@@ -436,15 +453,15 @@ function TextInputStep({
   return (
     <div className="wizard-step-card">
       <p className="wizard-step-prompt">{entry.prompt}</p>
-      {isCommitMessage ? (
+      {isLongText ? (
         <textarea
-          className="wizard-text-input wizard-textarea-input"
+          className={entry.prompt === "Release description" ? "wizard-text-input wizard-textarea-input wizard-release-description-input" : "wizard-text-input wizard-textarea-input"}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Type here..."
+          placeholder={entry.prompt === "Release description" ? "Markdown release notes..." : "Type here..."}
           disabled={busy}
           autoFocus
-          rows={receipt?.body.length ? 6 : 3}
+          rows={entry.prompt === "Release description" ? 14 : receipt?.body.length ? 6 : 3}
         />
       ) : (
         <input
@@ -587,9 +604,42 @@ function OptionSelectStep({
   onNext: (label: string, data: Partial<WizardData>) => void;
   onCancel: () => void;
 }) {
+  const isReleaseTag = entry.prompt === "Release tag";
+  const [newTagName, setNewTagName] = useState(entry.initialValue ?? "");
+
+  function chooseTag(tagName: string) {
+    const trimmed = tagName.trim();
+    if (!trimmed) return;
+    onNext(trimmed, { tagName: trimmed });
+  }
+
   return (
     <div className="wizard-step-card">
       <p className="wizard-step-prompt">{entry.prompt}</p>
+      {isReleaseTag && (
+        <div className="wizard-tag-create-row">
+          <input
+            type="text"
+            className="wizard-text-input"
+            value={newTagName}
+            onChange={(e) => setNewTagName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") chooseTag(newTagName);
+            }}
+            placeholder="Search or create a new tag, for example v0.7.6"
+            disabled={busy}
+            autoFocus
+          />
+          <button
+            type="button"
+            className="wizard-browse-button"
+            disabled={busy || !newTagName.trim()}
+            onClick={() => chooseTag(newTagName)}
+          >
+            Use tag
+          </button>
+        </div>
+      )}
       <div className="wizard-option-grid">
         {(entry.choices ?? []).map((choice) => (
           <button
@@ -597,12 +647,15 @@ function OptionSelectStep({
             type="button"
             className="wizard-option-button"
             disabled={busy}
-            onClick={() => onNext(choice, { remote: choice })}
+            onClick={() => (isReleaseTag ? chooseTag(choice) : onNext(choice, { remote: choice }))}
           >
             {choice}
           </button>
         ))}
       </div>
+      {isReleaseTag && (entry.choices ?? []).length === 0 && (
+        <p className="wizard-empty-hint">No local tags found. Enter a new release tag above.</p>
+      )}
       <div className="wizard-step-actions">
         <button
           type="button"

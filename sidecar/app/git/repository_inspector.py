@@ -198,6 +198,7 @@ class RepositoryInspector:
         remote_urls = client.remote_url_map()
         remote_providers = self._detect_remote_providers(remote_names, remote_urls)
         local_branches = self._parse_branch_list(client.branch_list())
+        local_tags = self._parse_tag_list(client.tag_list())
 
         snapshot = RepositorySnapshot(
             repository_id=repository_id,
@@ -217,6 +218,7 @@ class RepositoryInspector:
             remote_urls=remote_urls,
             remote_providers=remote_providers,
             local_branches=local_branches,
+            local_tags=local_tags,
             fingerprint=self._fingerprint(
                 head=head,
                 branch=branch,
@@ -270,6 +272,17 @@ class RepositoryInspector:
             upstream = fields[2] if len(fields) > 2 and fields[2] else None
             branches.append(BranchInfo(name=name, is_current=head_marker == "*", upstream=upstream))
         return branches
+
+    @staticmethod
+    def _parse_tag_list(raw: str) -> list[str]:
+        tags: list[str] = []
+        for line in raw.splitlines():
+            if not line:
+                continue
+            tag_name = line.split("\t", 1)[0].strip()
+            if tag_name:
+                tags.append(tag_name)
+        return tags
 
     @staticmethod
     def _find_git_metadata(path: Path) -> Path | None:

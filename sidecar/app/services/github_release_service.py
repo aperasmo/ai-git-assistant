@@ -5,6 +5,7 @@ import mimetypes
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 from urllib.parse import quote
 
 import httpx
@@ -34,6 +35,14 @@ class GitHubDraftReleaseResult:
     asset_url: str | None
     asset_name: str | None
     asset_sha256: str | None
+    assets: tuple["GitHubReleaseAssetResult", ...] = ()
+
+
+@dataclass(frozen=True)
+class GitHubReleaseAssetResult:
+    name: str
+    url: str | None
+    sha256: str | None
 
 
 @dataclass(frozen=True)
@@ -83,8 +92,10 @@ class GitHubReleaseClient:
         body: str,
         target_commitish: str | None,
         prerelease: bool,
-        asset_path: Path | None,
+        asset_paths: Sequence[Path] | None = None,
+        asset_path: Path | None = None,
     ) -> GitHubDraftReleaseResult:
+        upload_paths = tuple(asset_paths or (() if asset_path is None else (asset_path,)))
         headers = {
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self._token}",
@@ -108,10 +119,8 @@ class GitHubReleaseClient:
                 self._raise_for_github_error(release_response)
                 release = release_response.json()
 
-                asset_url = None
-                asset_name = None
-                asset_sha256 = None
-                if asset_path is not None:
+                uploaded_assets: list[GitHubReleaseAssetResult] = []
+                for asset_path in upload_paths:
                     asset_name = asset_path.name
                     asset_sha256 = _sha256_file(asset_path)
                     upload_url = (
@@ -137,16 +146,25 @@ class GitHubReleaseClient:
                     self._raise_for_github_error(upload_response)
                     asset = upload_response.json()
                     asset_url = asset.get("browser_download_url")
+                    uploaded_assets.append(
+                        GitHubReleaseAssetResult(
+                            name=asset_name,
+                            url=str(asset_url) if asset_url else None,
+                            sha256=asset_sha256,
+                        )
+                    )
 
         except httpx.HTTPError as exc:
             raise ValidationFailure(f"GitHub release request failed: {exc}") from exc
 
+        first_asset = uploaded_assets[0] if uploaded_assets else None
         return GitHubDraftReleaseResult(
             tag_name=tag_name,
             release_url=str(release.get("html_url") or ""),
-            asset_url=asset_url,
-            asset_name=asset_name,
-            asset_sha256=asset_sha256,
+            asset_url=first_asset.url if first_asset else None,
+            asset_name=first_asset.name if first_asset else None,
+            asset_sha256=first_asset.sha256 if first_asset else None,
+            assets=tuple(uploaded_assets),
         )
 
     def create_draft_pull_request(

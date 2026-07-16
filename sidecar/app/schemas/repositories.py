@@ -128,6 +128,7 @@ class RepositorySnapshot(ApiModel):
     remote_urls: dict[str, str] = Field(default_factory=dict)
     remote_providers: list[RemoteProviderInfo] = Field(default_factory=list)
     local_branches: list[BranchInfo] = Field(default_factory=list)
+    local_tags: list[str] = Field(default_factory=list)
 
 
 class ReadAction(StrEnum):
@@ -327,7 +328,14 @@ class DraftGitHubReleaseRequest(ApiModel):
     title: str = Field(min_length=1, max_length=255)
     body: str = Field(default="", max_length=20_000)
     asset_path: str | None = Field(default=None, max_length=4096)
+    asset_paths: list[str] = Field(default_factory=list, max_length=10)
     prerelease: bool = False
+
+
+class ReleaseAssetUpload(ApiModel):
+    name: str
+    url: str | None = None
+    sha256: str | None = None
 
 
 class DraftGitHubReleaseResponse(ApiModel):
@@ -337,6 +345,7 @@ class DraftGitHubReleaseResponse(ApiModel):
     asset_url: str | None = None
     asset_name: str | None = None
     asset_sha256: str | None = None
+    assets: list[ReleaseAssetUpload] = Field(default_factory=list)
     title: str
     summary: str
     content: str

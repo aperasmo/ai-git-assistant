@@ -2,7 +2,7 @@
 
 ## 0.7.6 - Phase 7.6
 
-Improves Guided Recovery for cross-machine divergent branches found during Linux verification.
+Improves Guided Recovery for cross-machine divergent branches found during Linux verification and polishes the release publishing flow for multi-platform assets.
 
 ### Shipped
 
@@ -10,12 +10,16 @@ Improves Guided Recovery for cross-machine divergent branches found during Linux
 - Recovery can fetch remote state, show differences, or prepare a reviewed merge of the upstream branch.
 - Merge planning now accepts remote-tracking branches such as `origin/main`.
 - The app keeps fast-forward-only pull as the default, so merge commits remain explicit and reviewed.
+- Added `npm run installer` as a one-command native installer build wrapper for the current host OS.
+- Draft releases can select an existing local tag or type a new tag before release details.
+- Release descriptions now use a larger markdown-friendly editor.
+- Draft releases can attach multiple installer assets, such as Windows `.exe` and Linux `.deb`, in one release.
 
 ### Verification
 
 - `npm run build`
 - `cargo check`
-- `npm run sidecar:test`
+- focused release flow tests for single and multiple GitHub release assets
 
 ## 0.7.5 - Phase 7.5
 

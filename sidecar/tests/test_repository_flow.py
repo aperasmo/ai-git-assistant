@@ -962,6 +962,90 @@ def test_draft_github_release_uses_configured_token_and_uploads_asset(
     assert calls[0]["asset_path"] == asset
 
 
+def test_draft_github_release_uploads_multiple_assets(
+    app_client,
+    auth_headers,
+    git_repository,
+    tmp_path,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+    from app.services.github_release_service import GitHubDraftReleaseResult, GitHubReleaseAssetResult
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+    windows_asset = tmp_path / "AI Git Assistant_0.7.6_x64-setup.exe"
+    linux_asset = tmp_path / "AI Git Assistant_0.7.6_amd64.deb"
+    windows_asset.write_bytes(b"windows-installer")
+    linux_asset.write_bytes(b"linux-installer")
+
+    calls: list[dict] = []
+
+    class FakeGitHubReleaseClient:
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        def create_draft_release(self, **kwargs):
+            calls.append({"token": self.token, **kwargs})
+            assets = tuple(
+                GitHubReleaseAssetResult(
+                    name=asset_path.name,
+                    url=f"https://github.com/example/demo-repository/releases/download/v0.7.6/{asset_path.name}",
+                    sha256=f"sha-{index}",
+                )
+                for index, asset_path in enumerate(kwargs["asset_paths"], start=1)
+            )
+            return GitHubDraftReleaseResult(
+                tag_name=kwargs["tag_name"],
+                release_url="https://github.com/example/demo-repository/releases/tag/v0.7.6",
+                asset_url=assets[0].url,
+                asset_name=assets[0].name,
+                asset_sha256=assets[0].sha256,
+                assets=assets,
+            )
+
+    app_client.app.state.repository_service._github_release_client_factory = FakeGitHubReleaseClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/github/releases/draft",
+        headers=auth_headers,
+        json={
+            "tagName": "v0.7.6",
+            "title": "Release v0.7.6 - Linux Preview",
+            "body": "Release notes",
+            "assetPaths": [str(windows_asset), str(linux_asset)],
+            "prerelease": False,
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["repository"] == "example/demo-repository"
+    assert [asset["name"] for asset in body["assets"]] == [windows_asset.name, linux_asset.name]
+    assert body["assetName"] == windows_asset.name
+    assert "Assets uploaded: 2" in body["content"]
+    assert calls[0]["asset_path"] == windows_asset
+    assert calls[0]["asset_paths"] == [windows_asset, linux_asset]
+
+
 def test_draft_github_release_explains_non_github_provider(
     app_client,
     auth_headers,

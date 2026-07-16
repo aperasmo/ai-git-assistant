@@ -16,6 +16,10 @@
     "sidecar:build": "node ./scripts/build-sidecar.mjs",
     "sidecar:test": "node ./scripts/test-sidecar.mjs",
     "sidecar:test:install": "node ./scripts/test-sidecar.mjs --install-dependencies",
+    "installer": "node ./scripts/build-installer.mjs",
+    "installer:windows": "node ./scripts/build-installer.mjs --target windows",
+    "installer:linux": "node ./scripts/build-installer.mjs --target linux",
+    "installer:mac": "node ./scripts/build-installer.mjs --target mac",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
   },

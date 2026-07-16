@@ -210,6 +210,7 @@ export interface RepositorySnapshot {
   remoteUrls: Record<string, string>;
   remoteProviders: RemoteProviderInfo[];
   localBranches: BranchInfo[];
+  localTags: string[];
 }
 
 export interface ReadActionRequest {
@@ -344,7 +345,14 @@ export interface DraftGitHubReleaseRequest {
   title: string;
   body: string;
   assetPath?: string | null;
+  assetPaths?: string[];
   prerelease: boolean;
+}
+
+export interface ReleaseAssetUpload {
+  name: string;
+  url?: string | null;
+  sha256?: string | null;
 }
 
 export interface DraftGitHubReleaseResponse {
@@ -354,6 +362,7 @@ export interface DraftGitHubReleaseResponse {
   assetUrl?: string | null;
   assetName?: string | null;
   assetSha256?: string | null;
+  assets: ReleaseAssetUpload[];
   title: string;
   summary: string;
   content: string;
