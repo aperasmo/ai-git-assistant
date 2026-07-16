@@ -4,8 +4,10 @@ npm-debug.log*
 *.tsbuildinfo
 tsbuildinfo/
 src-tauri/target/
-src-tauri/binaries/*.exe
+src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
+.venv/
+.python-version
 sidecar/.venv/
 sidecar/.pytest_cache/
 sidecar/.pytest-tmp/
