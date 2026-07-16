@@ -262,6 +262,38 @@ export default function App() {
   ) {
     const lower = message.toLowerCase();
 
+    if (
+      lower.includes("write access to repository not granted") ||
+      (lower.includes("repository not found") && lower.includes("push")) ||
+      (lower.includes("authentication failed") && lower.includes("push"))
+    ) {
+      appendRecoveryEntry(
+        repositoryId,
+        "GitHub rejected the push",
+        "The local commit may already exist, but the remote did not accept the push.",
+        "For GitHub HTTPS remotes, use a fine-grained token that has repository access and Contents: Read and write. After updating the Git credential or saved token, retry push from the app.",
+        [
+          {
+            label: "Retry push",
+            description: "Push the current branch again without creating another commit.",
+            action: "retry_push",
+            recommended: true,
+          },
+          {
+            label: "Open Settings",
+            description: "Check the GitHub token guidance and saved platform token.",
+            action: "open_settings",
+          },
+          {
+            label: "Inspect remotes",
+            description: "Verify which GitHub remote this repo is using.",
+            action: "show_remotes",
+          },
+        ],
+      );
+      return;
+    }
+
     if (lower.includes("author identity unknown")) {
       appendRecoveryEntry(
         repositoryId,
@@ -1982,6 +2014,11 @@ export default function App() {
 
     if (option.action === "pull_latest") {
       void runWizardFlow("pull");
+      return;
+    }
+
+    if (option.action === "retry_push") {
+      void submitMessage("push");
       return;
     }
 

@@ -340,8 +340,9 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
           <section className="settings-section">
             <p className="settings-section-heading">GITHUB PLATFORM ACTIONS</p>
             <p className="settings-hint">
-              Required for drafting GitHub releases and pull requests. Use a fine-grained token scoped
-              to the repository with Contents read/write and Pull requests read/write access.
+              Required for drafting GitHub releases and pull requests. For GitHub push access, use a
+              fine-grained token scoped to the repository with Contents: Read and write. Pull request
+              actions also need Pull requests: Read and write.
             </p>
             <label className="settings-label" htmlFor="github-token-input">
               GitHub token{githubSettings?.tokenSet ? " (token stored - enter a new one to replace)" : ""}

@@ -115,6 +115,13 @@ These dates mark when the phase or feature set was first added to the project hi
 3. Added recovery guidance for no upstream, existing remote setup, missing Git author identity, and accidentally selecting the app data repository.
 4. Updated public docs and metadata for `0.7.4`.
 
+#### Phase 7.5 - 16/07/2026
+
+1. Added GitHub push-auth recovery when the remote rejects a push because the token lacks repository write permission.
+2. Added a push-only retry action so an already-created local commit can be pushed without creating another commit.
+3. Updated Settings guidance to call out fine-grained GitHub token repository access and `Contents: Read and write`.
+4. Updated public docs and metadata for `0.7.5`.
+
 #### Phase 8 - target TBD
 
 1. Planned team context and conventions.

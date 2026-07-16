@@ -414,6 +414,7 @@ export interface CancelActionPlanResponse {
 
 export type RecoveryActionKind =
   | "set_upstream"
+  | "retry_push"
   | "pull_latest"
   | "show_remotes"
   | "open_settings"

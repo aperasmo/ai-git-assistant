@@ -1,5 +1,22 @@
 # Release Notes
 
+## 0.7.5 - Phase 7.5
+
+Improves Guided Recovery for GitHub push authentication failures found during Linux verification.
+
+### Shipped
+
+- Added a **GitHub rejected the push** recovery card for write/auth failures during push.
+- Recovery explains that fine-grained GitHub tokens need repository access and **Contents: Read and write**.
+- Added a **Retry push** recovery action that pushes the current branch without creating another commit.
+- Updated Settings copy so GitHub token guidance matches the failure users see in real workflows.
+
+### Verification
+
+- `npm run build`
+- `cargo check`
+- `npm run sidecar:test`
+
 ## 0.7.4 - Phase 7.4
 
 Adds Guided Recovery for common Git setup walls found during Linux verification.
