@@ -20,6 +20,7 @@ import type {
   GeneratePullRequestDraftResponse,
   GitInstallationStatus,
   GitHubSettings,
+  GitIdentitySettings,
   GitLabSettings,
   LLMSettings,
   LocalActionPlan,
@@ -28,6 +29,7 @@ import type {
   Repository,
   RepositorySnapshot,
   UpdateGitHubSettingsRequest,
+  UpdateGitIdentityRequest,
   UpdateGitLabSettingsRequest,
   UpdateLLMSettingsRequest,
 } from "./types";
@@ -138,6 +140,11 @@ export const desktopApi = {
 
   updateGithubSettings: (request: UpdateGitHubSettingsRequest) =>
     invoke<GitHubSettings>("update_github_settings", { request }),
+
+  getGitIdentitySettings: () => invoke<GitIdentitySettings>("get_git_identity_settings"),
+
+  updateGitIdentitySettings: (request: UpdateGitIdentityRequest) =>
+    invoke<GitIdentitySettings>("update_git_identity_settings", { request }),
 
   getGitlabSettings: () => invoke<GitLabSettings>("get_gitlab_settings"),
 

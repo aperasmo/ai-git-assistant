@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 15/07/2026
+Last updated: 16/07/2026
 
 ---
 
@@ -100,6 +100,20 @@ These dates mark when the phase or feature set was first added to the project hi
 2. Limited ignore writes to untracked files and listed the exact `.gitignore` entries written.
 3. De-duplicated `.gitignore` entries across existing file content and the current request.
 4. Verified Ubuntu 22.04 Linux `.deb` packaging after sidecar tests and sidecar build passed.
+
+#### Phase 7.3 - 16/07/2026
+
+1. Added Git Author Identity settings for global Git `user.name` and `user.email`.
+2. Improved Settings with a wider two-column layout and scrollable small-screen behavior for Linux VMs.
+3. Auto-closes the ignore-file wizard step when ignored files leave no remaining changed files to choose.
+4. Updated public docs and metadata for `0.7.3`.
+
+#### Phase 7.4 - 16/07/2026
+
+1. Added Guided Recovery / Next Step Assistant cards for common Git blockers.
+2. Added a reviewed `set_upstream` plan so branches can track `origin/main` or the current branch remote from inside the app.
+3. Added recovery guidance for no upstream, existing remote setup, missing Git author identity, and accidentally selecting the app data repository.
+4. Updated public docs and metadata for `0.7.4`.
 
 #### Phase 8 - target TBD
 
@@ -450,6 +464,8 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Auto-detect `python` / `python3` for sidecar build and test scripts.
 - [x] Add Gitignore Assistant support for selected untracked runtime files.
 - [x] Build and verify Linux `.deb` packaging on Ubuntu 22.04.
+- [x] Add Settings support for global Git author identity on new machines.
+- [x] Make Settings usable on shorter Linux VM screens with scrollable responsive layout.
 - [ ] Build and verify macOS `.app` / `.dmg` packaging.
 - [ ] Add Apple code signing and notarization path.
 - [ ] Build and verify Linux AppImage packaging.

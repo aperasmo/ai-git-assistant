@@ -46,6 +46,23 @@ pub struct UpdateGitLabSettingsRequest {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitIdentitySettings {
+    pub user_name: Option<String>,
+    pub user_email: Option<String>,
+    pub configured: bool,
+    pub git_available: bool,
+    pub message: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateGitIdentityRequest {
+    pub user_name: Option<String>,
+    pub user_email: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SetExternalLLMRequest {
     pub allowed: bool,
 }

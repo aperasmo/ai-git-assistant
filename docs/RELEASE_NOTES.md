@@ -1,5 +1,42 @@
 # Release Notes
 
+## 0.7.4 - Phase 7.4
+
+Adds Guided Recovery for common Git setup walls found during Linux verification.
+
+### Shipped
+
+- Added a **Next Step Assistant** transcript card for recoverable Git blockers.
+- Pulling without upstream now recommends setting upstream before retrying pull.
+- Existing-remotes flow now recommends pull, remote inspection, or intentionally adding another remote.
+- Missing Git author identity errors now point users directly to Settings.
+- Added a reviewed `set_upstream` plan so users can run `git branch --set-upstream-to origin/main main` from the app.
+- Status on the app data folder can recommend switching to the real source repository when both are registered.
+
+### Verification
+
+- `npm run build`
+- `cargo check`
+- `npm run sidecar:test`
+
+## 0.7.3 - Phase 7.3
+
+Adds Git author identity setup and improves Settings usability on shorter Linux VM screens.
+
+### Shipped
+
+- Added **Git Author Identity** fields in Settings for global `user.name` and `user.email`.
+- Saved Git identity through Tauri using `git config --global`, matching the standard CLI setup.
+- Settings now uses a wider two-column layout when space allows and a scrollable single-column layout on smaller screens.
+- The Gitignore Assistant file picker auto-closes when all selected untracked files have been ignored and no changed files remain.
+- Public docs now call out Git identity setup as part of first-machine onboarding.
+
+### Verification
+
+- `npm run build`
+- `cargo check`
+- `npm run sidecar:test`
+
 ## 0.7.2 - Phase 7.2
 
 Adds a Gitignore Assistant slice and confirms the first Ubuntu Linux package build.

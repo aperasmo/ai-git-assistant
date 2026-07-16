@@ -8,7 +8,7 @@ AI Git Assistant is a Windows desktop app that turns what you want to do into th
 
 ## Current release
 
-**0.7.2 - Phase 7.2** adds the Gitignore Assistant and confirms the first Linux `.deb` packaging path. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, and guided `.gitignore` updates for untracked runtime files.
+**0.7.4 - Phase 7.4** adds Guided Recovery / Next Step Assistant cards for common Git setup walls found during Linux verification. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates for untracked runtime files, first-class Git identity setup before committing, and reviewed upstream setup from inside the app.
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
 
@@ -24,6 +24,8 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 - **Gives you Git-client visibility** - inspect diffs, history, blame, branches, stashes, remotes, tags, and conflicts
 - **Detects repository providers** - the right panel labels GitHub, GitLab, Bitbucket, Azure DevOps, local-only, and mixed-provider remotes
 - **Helps ignore local noise** - selected untracked runtime files can be added to `.gitignore` from the file picker
+- **Sets Git author identity** - configure global `user.name` and `user.email` from Settings before your first commit on a machine
+- **Guides blocked workflows** - when Git needs upstream tracking, author identity, or a better repository selection, the app recommends the next step
 - **Connects to an AI provider** (optional) so it can understand requests the built-in patterns don't cover
 - **Safe by design** - no force pushes, no hard resets, no surprises
 
@@ -71,7 +73,18 @@ That's it. No Python, no Node.js, nothing else to install.
 Click **+ Add** in the left sidebar and select your project folder.
 The app automatically reads your branches, changed files, and remote connections.
 
-### 2 - Run a command using the command bar
+### 2 - Set your Git author identity
+
+Open **Settings** and fill in **Git Author Identity** once per machine. This saves the same global Git values as:
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+```
+
+Git requires these values before the app can create commits.
+
+### 3 - Run a command using the command bar
 
 The bar at the bottom has two rows of buttons:
 
@@ -82,7 +95,7 @@ The bar at the bottom has two rows of buttons:
 
 Click any button and the app walks you through it step by step.
 
-### 3 - Or just type what you want
+### 4 - Or just type what you want
 
 Use the text box at the very bottom. Examples that work right away:
 
@@ -96,9 +109,10 @@ blame README.md
 show stashes
 show remotes
 show tags
-show tag v0.7.2
+show tag v0.7.4
 show conflicts
 review status
+set upstream to origin/main
 commit all my changes with message "Fix login bug"
 push and commit everything with message "Add dark mode"
 stage changes then commit and push with message "Update readme"
@@ -106,8 +120,8 @@ switch to main
 create branch feature/new-login
 stash my changes
 merge feature/new-login
-create tag v0.7.2 with message "Release v0.7.2"
-push tag v0.7.2
+create tag v0.7.4 with message "Release v0.7.4"
+push tag v0.7.4
 ```
 
 The app turns your sentence into a Git plan and shows it to you before doing anything.
@@ -180,7 +194,7 @@ Provider-specific platform features are guarded by the selected repository's rem
 
 ## Cross-platform status
 
-Phase 7.2 begins Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing the first Ubuntu verification blockers, and confirming Ubuntu `.deb` packaging.
+Phase 7.4 continues Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing Ubuntu verification blockers, confirming Ubuntu `.deb` packaging, adding Git author identity setup in Settings for new machines, and turning common setup blockers into guided next steps.
 
 | Host OS | Status |
 |---|---|
@@ -237,7 +251,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `inspect stash@{0}` | Patch for one stash entry |
 | `show remotes` | Configured remote URLs |
 | `show tags` | Local release tags |
-| `show tag v0.7.2` | Inspect one tag |
+| `show tag v0.7.4` | Inspect one tag |
 | `history README.md` | File-specific commit history |
 | `blame README.md` | Line authorship for one file |
 | `show conflicts` | Conflict files and resolution guidance |
@@ -263,9 +277,9 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `merge feature/name` | Merge a local branch with guided conflict handling |
 | `continue merge` | Commit a resolved merge |
 | `abort merge` | Abort an in-progress merge |
-| `create tag v0.7.2 with message "Release v0.7.2"` | Create an annotated local tag |
-| `push tag v0.7.2` | Push one explicit tag to the remote |
-| `delete tag v0.7.2` | Delete a local tag after approval |
+| `create tag v0.7.4 with message "Release v0.7.4"` | Create an annotated local tag |
+| `push tag v0.7.4` | Push one explicit tag to the remote |
+| `delete tag v0.7.4` | Delete a local tag after approval |
 | `draft release` | Create a GitHub draft release and upload one asset |
 | `draft PR` | Create a GitHub draft PR or GitLab draft MR from the current branch |
 | `unstage login.py` | Remove file from staging |

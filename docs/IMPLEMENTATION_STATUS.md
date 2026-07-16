@@ -1,7 +1,7 @@
 # Implementation Status
 
-**Last updated:** 15 July 2026  
-**Current state:** Phase 7.2 cross-platform hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; AppImage and macOS packaging remain pending.
+**Last updated:** 16 July 2026  
+**Current state:** Phase 7.4 cross-platform hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; AppImage and macOS packaging remain pending.
 
 ---
 
@@ -100,7 +100,9 @@
 - **Non-Windows secrets:** Linux/macOS can store AI provider keys, GitHub tokens, and GitLab tokens with portable local encryption while native keychain integration remains planned.
 - **Python command autodetection:** sidecar build/test scripts detect `python` or `python3`, while still allowing explicit `--python`.
 - **Gitignore Assistant:** file-pick wizard steps can add selected untracked files to `.gitignore`, de-duplicate exact entries, refresh the snapshot, and list the written entries in the transcript.
-- **Linux `.deb` packaging:** Ubuntu 22.04 builds the frontend, passes sidecar tests, builds the sidecar binary, and bundles `AI Git Assistant_0.7.1_amd64.deb`; the next release build will emit `0.7.2`.
+- **Git identity setup:** Settings can read and save global Git `user.name` and `user.email` through the standard `git config --global` path before commit workflows run.
+- **Settings usability:** Settings uses a wider two-column layout where possible and scrolls on shorter Linux VM screens.
+- **Linux `.deb` packaging:** Ubuntu 22.04 builds the frontend, passes sidecar tests, builds the sidecar binary, and bundles the Debian package line; the next release build will emit `0.7.4`.
 
 ### Post-launch fixes
 

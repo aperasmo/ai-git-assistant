@@ -63,6 +63,8 @@ pub fn run() {
             commands::settings::update_github_settings,
             commands::settings::get_gitlab_settings,
             commands::settings::update_gitlab_settings,
+            commands::settings::get_git_identity_settings,
+            commands::settings::update_git_identity_settings,
             commands::settings::test_llm_connection,
             commands::settings::set_repository_llm_allowed,
         ])

@@ -193,6 +193,7 @@ class PlanStepKind(StrEnum):
     COMMIT = "commit"
     PUSH = "push"
     PULL = "pull"
+    SET_UPSTREAM = "set_upstream"
     UNSTAGE = "unstage"
     DISCARD = "discard"
     SWITCH = "switch"

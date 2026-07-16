@@ -1027,6 +1027,14 @@ class RepositoryService:
                     completed_steps.append(step.title)
                     continue
 
+                if step.kind is PlanStepKind.SET_UPSTREAM:
+                    self._validate_set_upstream_step_against_current_repository(repository_id, step)
+                    if not step.remote or not step.branch:
+                        raise ValidationFailure("The reviewed plan has no validated upstream target.")
+                    client.set_upstream(step.remote, step.branch)
+                    completed_steps.append(step.title)
+                    continue
+
                 if step.kind is PlanStepKind.UNSTAGE:
                     client.restore_staged(step.paths)
                     completed_steps.append(step.title)
@@ -1695,6 +1703,23 @@ class RepositoryService:
                     "The current branch upstream changed after approval. Request a new plan and review it again."
                 )
 
+    def _validate_set_upstream_step_against_current_repository(
+        self,
+        repository_id: str,
+        step: ActionPlanStep,
+    ) -> None:
+        snapshot = self.snapshot(repository_id)
+        if snapshot.write_blocked_reason:
+            raise ValidationFailure(snapshot.write_blocked_reason)
+        if snapshot.branch != step.branch:
+            raise ValidationFailure(
+                "The checked-out branch changed after approval. Request a new plan and review it again."
+            )
+        if step.remote not in snapshot.remote_names:
+            raise ValidationFailure(
+                f"Remote '{step.remote}' is no longer available. Request a new plan and review it again."
+            )
+
     def _with_plan_metadata(
         self,
         plan: LocalActionPlan,
@@ -1741,6 +1766,9 @@ class RepositoryService:
             elif step.kind is PlanStepKind.PULL:
                 score += 15
                 reasons.append("Updates the working tree from a remote.")
+            elif step.kind is PlanStepKind.SET_UPSTREAM:
+                score += 12
+                reasons.append("Sets upstream tracking for the current branch.")
             elif step.kind is PlanStepKind.DISCARD:
                 score += 80
                 reasons.append("Discards local file changes.")
@@ -2196,6 +2224,12 @@ class RepositoryService:
         elif step_kinds == {PlanStepKind.PULL}:
             title = "Pull completed"
             summary = "Local branch was fast-forwarded to match the upstream."
+        elif step_kinds == {PlanStepKind.SET_UPSTREAM}:
+            upstream_step = next((s for s in plan.steps if s.kind is PlanStepKind.SET_UPSTREAM), None)
+            branch = upstream_step.branch if upstream_step else "current branch"
+            remote = upstream_step.remote if upstream_step else "remote"
+            title = "Upstream configured"
+            summary = f"Local branch '{branch}' now tracks '{remote}/{branch}'."
         elif step_kinds == {PlanStepKind.UNSTAGE}:
             title = "Files unstaged"
             summary = "The selected files were moved back out of the staging area."
@@ -2277,6 +2311,8 @@ class RepositoryService:
                 lines.append(f"Push: {step.branch} → {step.remote}/{step.branch}")
             elif step.kind is PlanStepKind.PULL:
                 lines.append(f"Pull: {step.remote}/{step.branch} → {step.branch}")
+            elif step.kind is PlanStepKind.SET_UPSTREAM:
+                lines.append(f"Upstream: {step.branch} tracks {step.remote}/{step.branch}")
             elif step.kind is PlanStepKind.UNSTAGE:
                 lines.append(f"Unstaged {len(step.paths)} file{'s' if len(step.paths) != 1 else ''}:")
                 lines.extend(f"- {path}" for path in step.paths)

@@ -29,6 +29,12 @@ _PULL_PATTERN = re.compile(
     r"^\s*(?:pull|sync\s+with\s+remote|git\s+pull)(?:\s+from\s+[A-Za-z0-9._/-]+)?\s*[.!?]*$",
     re.IGNORECASE,
 )
+_SET_UPSTREAM_PATTERN = re.compile(
+    r"^\s*(?:set\s+upstream|set\s+tracking|track\s+remote)"
+    r"(?:\s+(?:to|as))?\s+"
+    r"(?:(?P<remote>[A-Za-z0-9._-]+)\/)?(?P<branch>[A-Za-z0-9._/-]+)\s*[.!?]*$",
+    re.IGNORECASE,
+)
 _UNSTAGE_PATTERN = re.compile(
     r"^\s*unstage\s+(?P<paths>.+?)\s*[.!?]*$",
     re.IGNORECASE | re.DOTALL,
@@ -253,6 +259,16 @@ class LocalActionPlanner:
         pull_match = _PULL_PATTERN.match(raw_message)
         if pull_match:
             return self._plan_pull(repository_id, raw_message, snapshot)
+
+        set_upstream_match = _SET_UPSTREAM_PATTERN.match(raw_message)
+        if set_upstream_match:
+            return self._plan_set_upstream(
+                repository_id,
+                raw_message,
+                snapshot,
+                set_upstream_match.group("remote"),
+                set_upstream_match.group("branch"),
+            )
 
         unstage_match = _UNSTAGE_PATTERN.match(raw_message)
         if unstage_match:
@@ -662,6 +678,9 @@ class LocalActionPlanner:
             raise ValidationFailure("Pull is unavailable because the repository is in detached HEAD state.")
 
         if not remote or not upstream:
+            likely_remote = "origin" if "origin" in snapshot.remote_names else (
+                snapshot.remote_names[0] if len(snapshot.remote_names) == 1 else None
+            )
             return LocalActionPlan(
                 matched=True,
                 repository_id=repository_id,
@@ -674,9 +693,20 @@ class LocalActionPlanner:
                         title="No upstream configured",
                         detail=(
                             f"'{branch}' has no tracking upstream. "
-                            "Push the branch first or run fetch to sync remote tracking references."
+                            + (
+                                f"Set the upstream to {likely_remote}/{branch}, then pull latest."
+                                if likely_remote else
+                                "Connect a remote first, then set upstream before pulling."
+                            )
                         ),
+                        remote=likely_remote,
                         branch=branch,
+                        command_preview=(
+                            self._command_preview(
+                                "git", "branch", "--set-upstream-to", f"{likely_remote}/{branch}", branch
+                            )
+                            if likely_remote else None
+                        ),
                     )
                 ],
                 explanation=f"'{branch}' has no configured upstream to pull from.",
@@ -725,6 +755,90 @@ class LocalActionPlanner:
                     branch=branch,
                     behind=commits,
                     command_preview=self._command_preview("git", "pull", "--ff-only"),
+                )
+            ],
+        )
+
+    def _plan_set_upstream(
+        self,
+        repository_id: str,
+        message: str,
+        snapshot: RepositorySnapshot,
+        requested_remote: str | None,
+        requested_branch: str,
+    ) -> LocalActionPlan:
+        self._ensure_writes_allowed(snapshot)
+        current_branch = snapshot.branch
+        if not current_branch:
+            raise ValidationFailure("Upstream setup is unavailable because the repository is in detached HEAD state.")
+
+        remote_names = snapshot.remote_names
+        if not remote_names:
+            raise ValidationFailure("Upstream setup is unavailable because no Git remote is configured.")
+
+        remote = requested_remote
+        branch = self._normalise_requested_branch(requested_branch, requested_remote or "origin")
+        if branch is None:
+            branch = current_branch
+
+        if remote is None:
+            if "origin" in remote_names:
+                remote = "origin"
+            elif len(remote_names) == 1:
+                remote = remote_names[0]
+            else:
+                names = ", ".join(remote_names)
+                raise ValidationFailure(
+                    f"Multiple remotes are configured ({names}). Specify the target, e.g. 'set upstream to origin/{current_branch}'."
+                )
+
+        if remote not in remote_names:
+            raise ValidationFailure(f"Remote '{remote}' is not configured for this repository.")
+
+        if branch != current_branch:
+            raise ValidationFailure(
+                f"You are currently on '{current_branch}'. Set upstream for the checked-out branch, "
+                f"for example 'set upstream to {remote}/{current_branch}'."
+            )
+
+        if snapshot.upstream_remote == remote and snapshot.upstream_branch == f"{remote}/{branch}":
+            return LocalActionPlan(
+                matched=True,
+                repository_id=repository_id,
+                message=message,
+                plan_kind=PlanKind.INFO,
+                requires_confirmation=False,
+                steps=[
+                    ActionPlanStep(
+                        kind=PlanStepKind.SET_UPSTREAM,
+                        title="Upstream already configured",
+                        detail=f"'{branch}' already tracks '{remote}/{branch}'.",
+                        remote=remote,
+                        branch=branch,
+                        command_preview=self._command_preview(
+                            "git", "branch", "--set-upstream-to", f"{remote}/{branch}", branch
+                        ),
+                    )
+                ],
+                explanation=f"'{branch}' already tracks '{remote}/{branch}'.",
+            )
+
+        return self._write_plan(
+            repository_id=repository_id,
+            message=message,
+            steps=[
+                ActionPlanStep(
+                    kind=PlanStepKind.SET_UPSTREAM,
+                    title=f"Set upstream to {remote}/{branch}",
+                    detail=(
+                        f"Tell Git that local branch '{branch}' should pull from and push to "
+                        f"'{remote}/{branch}'. This does not publish commits."
+                    ),
+                    remote=remote,
+                    branch=branch,
+                    command_preview=self._command_preview(
+                        "git", "branch", "--set-upstream-to", f"{remote}/{branch}", branch
+                    ),
                 )
             ],
         )

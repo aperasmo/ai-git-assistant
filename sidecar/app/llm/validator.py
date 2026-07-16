@@ -5,7 +5,7 @@ from app.schemas.repositories import ActionPlanStep, PlanStepKind, RepositorySna
 
 _WILDCARD_SENTINELS = frozenset([".", "*", "all", "**", "./", "*.*"])
 _KINDS_REQUIRING_PATHS = frozenset([PlanStepKind.STAGE, PlanStepKind.UNSTAGE, PlanStepKind.DISCARD])
-_KINDS_REQUIRING_REMOTE = frozenset([PlanStepKind.PUSH, PlanStepKind.PULL])
+_KINDS_REQUIRING_REMOTE = frozenset([PlanStepKind.PUSH, PlanStepKind.PULL, PlanStepKind.SET_UPSTREAM])
 _KINDS_REQUIRING_STASH_REF = frozenset([PlanStepKind.STASH_APPLY, PlanStepKind.STASH_DROP])
 _KINDS_REQUIRING_TAG = frozenset([
     PlanStepKind.CREATE_TAG,
@@ -17,6 +17,7 @@ _KINDS_REQUIRING_BRANCH = frozenset([
     PlanStepKind.CREATE_BRANCH,
     PlanStepKind.DELETE_BRANCH,
     PlanStepKind.MERGE,
+    PlanStepKind.SET_UPSTREAM,
 ])
 
 

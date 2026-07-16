@@ -352,6 +352,9 @@ class GitClient:
     def pull_ff_only(self) -> GitResult:
         return self.run(["pull", "--ff-only"], timeout_seconds=60)
 
+    def set_upstream(self, remote: str, branch: str) -> GitResult:
+        return self.run(["branch", "--set-upstream-to", f"{remote}/{branch}", branch])
+
     def restore_staged(self, paths: Sequence[str]) -> GitResult:
         if not paths:
             raise GitCommandError("No file paths were selected for unstaging.")

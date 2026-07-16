@@ -34,6 +34,7 @@ import type {
   GitInstallationStatus,
   LocalActionPlan,
   ReadAction,
+  RecoveryOption,
   Repository,
   RepositorySnapshot,
 } from "./lib/types";
@@ -190,6 +191,168 @@ export default function App() {
     },
     [],
   );
+
+  const appendRecoveryEntry = useCallback(
+    (
+      repositoryId: string,
+      title: string,
+      summary: string,
+      detail: string,
+      options: RecoveryOption[],
+    ) => {
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "recovery",
+        title,
+        summary,
+        detail,
+        options,
+      });
+    },
+    [appendTranscriptEntry],
+  );
+
+  function preferredRemote(currentSnapshot: RepositorySnapshot | null): string | null {
+    const remotes = currentSnapshot?.remoteNames ?? [];
+    if (remotes.includes("origin")) return "origin";
+    return remotes[0] ?? null;
+  }
+
+  function findLikelySourceRepository(currentRepositoryId: string): Repository | null {
+    const current = repositories.find((repository) => repository.id === currentRepositoryId);
+    if (!current) return null;
+    const looksLikeAppData =
+      current.displayName === ".ai-git-assistant" ||
+      current.pathLabel.replaceAll("\\", "/").endsWith("/.ai-git-assistant");
+    if (!looksLikeAppData) return null;
+    return (
+      repositories.find(
+        (repository) =>
+          repository.id !== currentRepositoryId &&
+          repository.displayName === "ai-git-assistant",
+      ) ?? null
+    );
+  }
+
+  function appendRepositoryChoiceRecovery(repositoryId: string) {
+    const sourceRepository = findLikelySourceRepository(repositoryId);
+    if (!sourceRepository) return;
+
+    appendRecoveryEntry(
+      repositoryId,
+      "This looks like the app data folder",
+      "The selected repository is the local app database folder, not the AI Git Assistant source folder.",
+      "For source-code commits, pulls, and builds, switch to the repository named ai-git-assistant.",
+      [
+        {
+          label: `Switch to ${sourceRepository.displayName}`,
+          description: sourceRepository.pathLabel,
+          action: "switch_repository",
+          repositoryId: sourceRepository.id,
+          recommended: true,
+        },
+      ],
+    );
+  }
+
+  function appendRecoveryForError(
+    repositoryId: string,
+    message: string,
+    currentSnapshot: RepositorySnapshot | null = snapshot,
+  ) {
+    const lower = message.toLowerCase();
+
+    if (lower.includes("author identity unknown")) {
+      appendRecoveryEntry(
+        repositoryId,
+        "Git author identity is missing",
+        "Git cannot create a commit until user.name and user.email are configured.",
+        "Open Settings, fill Git Author Identity, save it, then run Commit & push again.",
+        [
+          {
+            label: "Open Settings",
+            description: "Set global Git name and email from inside the app.",
+            action: "open_settings",
+            recommended: true,
+          },
+        ],
+      );
+      return;
+    }
+
+    if (
+      lower.includes("no tracking information") ||
+      lower.includes("no configured upstream") ||
+      lower.includes("no upstream configured")
+    ) {
+      const remote = preferredRemote(currentSnapshot);
+      const branch = currentSnapshot?.branch ?? "main";
+      if (remote) {
+        appendRecoveryEntry(
+          repositoryId,
+          "Set upstream before pulling",
+          `Local branch '${branch}' does not know which remote branch it should track.`,
+          `Set upstream to ${remote}/${branch}. This only updates branch tracking; it does not push or pull files.`,
+          [
+            {
+              label: `Set upstream to ${remote}/${branch}`,
+              description: "Configure tracking, then you can pull latest.",
+              action: "set_upstream",
+              recommended: true,
+            },
+            {
+              label: "Inspect remotes",
+              description: "See which remotes are configured first.",
+              action: "show_remotes",
+            },
+          ],
+        );
+      } else {
+        appendRecoveryEntry(
+          repositoryId,
+          "Connect a remote first",
+          "This branch has no upstream and the repository has no configured remotes.",
+          "Add a remote URL, then set upstream or push with upstream tracking.",
+          [
+            {
+              label: "Connect remote",
+              description: "Add origin or another Git remote.",
+              action: "connect_remote_anyway",
+              recommended: true,
+            },
+          ],
+        );
+      }
+      return;
+    }
+
+    if (lower.includes("remote origin already exists") || lower.includes("remote") && lower.includes("already exists")) {
+      appendRecoveryEntry(
+        repositoryId,
+        "Remote already exists",
+        "This repository already has a remote configured.",
+        "If your goal is to update this repository, pull latest. Add another remote only if you need a second remote.",
+        [
+          {
+            label: "Pull latest",
+            description: "Update from the configured upstream.",
+            action: "pull_latest",
+            recommended: true,
+          },
+          {
+            label: "Inspect remotes",
+            description: "Show remote names and URLs.",
+            action: "show_remotes",
+          },
+          {
+            label: "Add another remote",
+            description: "Continue remote setup anyway.",
+            action: "connect_remote_anyway",
+          },
+        ],
+      );
+    }
+  }
 
   const markWizardStepDone = useCallback(
     (repositoryId: string, stepId: string, chosenLabel: string) => {
@@ -481,15 +644,20 @@ export default function App() {
         content: nextResult.content,
         contentKind: nextResult.contentKind,
       });
+      if (action === "status") {
+        appendRepositoryChoiceRecovery(repositoryId);
+      }
 
       await loadRepositories();
     } catch (cause) {
       if (activeRepositoryIdRef.current === repositoryId) {
+        const message = toErrorMessage(cause, "Git request could not be completed.");
         appendTranscriptEntry(repositoryId, {
           id: createTranscriptId(),
           kind: "error",
-          message: toErrorMessage(cause, "Git request could not be completed."),
+          message,
         });
+        appendRecoveryForError(repositoryId, message);
       }
     } finally {
       setBusy(false);
@@ -599,11 +767,13 @@ export default function App() {
       await loadRepositories();
     } catch (cause) {
       if (activeRepositoryIdRef.current === repositoryId) {
+        const errorMessage = toErrorMessage(cause, "Git request could not be completed.");
         appendTranscriptEntry(repositoryId, {
           id: createTranscriptId(),
           kind: "error",
-          message: toErrorMessage(cause, "Git request could not be completed."),
+          message: errorMessage,
         });
+        appendRecoveryForError(repositoryId, errorMessage);
       }
     } finally {
       setBusy(false);
@@ -635,14 +805,16 @@ export default function App() {
     } catch (cause) {
       if (activeRepositoryIdRef.current === repositoryId) {
         updatePlanStatus(repositoryId, planId, "failed");
+        const errorMessage = toErrorMessage(
+          cause,
+          "The approved Git plan could not be completed. Review the repository status before trying again.",
+        );
         appendTranscriptEntry(repositoryId, {
           id: createTranscriptId(),
           kind: "error",
-          message: toErrorMessage(
-            cause,
-            "The approved Git plan could not be completed. Review the repository status before trying again.",
-          ),
+          message: errorMessage,
         });
+        appendRecoveryForError(repositoryId, errorMessage);
       }
     } finally {
       setBusy(false);
@@ -712,11 +884,13 @@ export default function App() {
         await loadRepositories();
       } catch (cause) {
         if (activeRepositoryIdRef.current === repositoryId) {
+          const errorMessage = toErrorMessage(cause, "Git request could not be completed.");
           appendTranscriptEntry(repositoryId, {
             id: createTranscriptId(),
             kind: "error",
-            message: toErrorMessage(cause, "Git request could not be completed."),
+            message: errorMessage,
           });
+          appendRecoveryForError(repositoryId, errorMessage);
         }
       } finally {
         setBusy(false);
@@ -877,6 +1051,53 @@ export default function App() {
   function startPullWizard(repositoryId: string) {
     const remote = snapshot?.upstreamRemote ?? snapshot?.remoteNames?.[0] ?? "origin";
     const branch = snapshot?.branch ?? "main";
+
+    if (!snapshot?.upstreamRemote || !snapshot?.upstreamBranch) {
+      const targetRemote = preferredRemote(snapshot);
+      if (targetRemote) {
+        appendRecoveryEntry(
+          repositoryId,
+          "Set upstream before pulling",
+          `Branch '${branch}' has a remote, but it is not tracking a remote branch yet.`,
+          `Set upstream to ${targetRemote}/${branch}. After that, Pull latest will know exactly where to pull from.`,
+          [
+            {
+              label: `Set upstream to ${targetRemote}/${branch}`,
+              description: "Configure tracking without pushing or pulling files.",
+              action: "set_upstream",
+              recommended: true,
+            },
+            {
+              label: "Inspect remotes",
+              description: "Show configured remotes and URLs first.",
+              action: "show_remotes",
+            },
+          ],
+        );
+      } else {
+        appendRecoveryEntry(
+          repositoryId,
+          "Connect a remote before pulling",
+          "This repository has no remote, so there is nowhere to pull from yet.",
+          "Connect a GitHub, GitLab, or other Git remote, then pull latest after upstream tracking is configured.",
+          [
+            {
+              label: "Connect remote",
+              description: "Start the remote setup wizard.",
+              action: "connect_remote_anyway",
+              recommended: true,
+            },
+          ],
+        );
+      }
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "wizard_menu",
+        variant: "compact",
+      });
+      return;
+    }
+
     const stepId = createTranscriptId();
     activeWizardRef.current = { flowId: "pull", currentStepId: stepId, currentStepKind: "confirm", data: { remote, branch } };
     appendTranscriptEntry(repositoryId, {
@@ -930,9 +1151,44 @@ export default function App() {
     return ["", ...cmds.map((c) => `$ ${c}`)];
   }
 
-  function startConnectRemoteWizard() {
+  function startConnectRemoteWizard(force = false) {
     const repositoryId = activeRepositoryId;
     if (!repositoryId) return;
+
+    if (!force && (snapshot?.remoteNames ?? []).length > 0) {
+      const remotes = snapshot?.remoteNames ?? [];
+      appendRecoveryEntry(
+        repositoryId,
+        "Remote already configured",
+        `This repository already has remote${remotes.length === 1 ? "" : "s"}: ${remotes.join(", ")}.`,
+        "If your goal is to update the local repo, pull latest. Add another remote only when you really want multiple remotes.",
+        [
+          {
+            label: "Pull latest",
+            description: "Update from the configured upstream.",
+            action: "pull_latest",
+            recommended: true,
+          },
+          {
+            label: "Inspect remotes",
+            description: "Show remote names and URLs.",
+            action: "show_remotes",
+          },
+          {
+            label: "Add another remote",
+            description: "Continue remote setup anyway.",
+            action: "connect_remote_anyway",
+          },
+        ],
+      );
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "wizard_menu",
+        variant: "compact",
+      });
+      return;
+    }
+
     const stepId = createTranscriptId();
     activeWizardRef.current = { flowId: "connect_remote", currentStepId: stepId, currentStepKind: "text_input", data: {} };
     appendTranscriptEntry(repositoryId, {
@@ -1394,11 +1650,13 @@ export default function App() {
       await loadRepositories();
     } catch (cause) {
       if (activeRepositoryIdRef.current === repositoryId) {
+        const errorMessage = toErrorMessage(cause, "Wizard execution failed.");
         appendTranscriptEntry(repositoryId, {
           id: createTranscriptId(),
           kind: "error",
-          message: toErrorMessage(cause, "Wizard execution failed."),
+          message: errorMessage,
         });
+        appendRecoveryForError(repositoryId, errorMessage);
       }
     } finally {
       setBusy(false);
@@ -1704,6 +1962,61 @@ export default function App() {
     }));
   }
 
+  function onRecoveryAction(option: RecoveryOption) {
+    if (busy || activePendingPlan) return;
+
+    if (option.action === "switch_repository" && option.repositoryId) {
+      selectRepository(option.repositoryId);
+      return;
+    }
+
+    if (option.action === "open_settings") {
+      setSettingsOpen(true);
+      return;
+    }
+
+    if (option.action === "show_remotes") {
+      void runAction("remotes");
+      return;
+    }
+
+    if (option.action === "pull_latest") {
+      void runWizardFlow("pull");
+      return;
+    }
+
+    if (option.action === "connect_remote_anyway") {
+      startConnectRemoteWizard(true);
+      return;
+    }
+
+    if (option.action === "set_upstream") {
+      const remote = preferredRemote(snapshot);
+      const branch = snapshot?.branch ?? "main";
+      if (!remote) {
+        const repositoryId = activeRepositoryId;
+        if (repositoryId) {
+          appendRecoveryEntry(
+            repositoryId,
+            "Connect a remote first",
+            "There is no remote available to use as an upstream.",
+            "Add a remote URL, then return to Pull latest.",
+            [
+              {
+                label: "Connect remote",
+                description: "Start remote setup.",
+                action: "connect_remote_anyway",
+                recommended: true,
+              },
+            ],
+          );
+        }
+        return;
+      }
+      void submitMessage(`set upstream to ${remote}/${branch}`);
+    }
+  }
+
   // Auto-launch tour on first visit; skip during startup.
   useEffect(() => {
     if (bootstrap?.sidecarStatus === "ready" && !localStorage.getItem("aga-tour-v1")) {
@@ -1790,6 +2103,7 @@ export default function App() {
           onGenerateCommitMessage={generateCommitMessage}
           onGeneratePullRequestDraft={generatePullRequestDraft}
           onPickReleaseAsset={desktopApi.pickReleaseAsset}
+          onRecoveryAction={onRecoveryAction}
         />
 
         <RepositoryContextPanel

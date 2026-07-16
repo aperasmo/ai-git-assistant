@@ -291,6 +291,33 @@ def test_pull_with_no_upstream_returns_info():
     plan = planner.plan("repo-1", "pull", snapshot)
     assert plan.plan_kind == "info"
     assert "no upstream" in plan.steps[0].title.lower()
+    assert plan.steps[0].remote == "origin"
+    assert plan.steps[0].branch == "dev_1"
+    assert "branch --set-upstream-to origin/dev_1 dev_1" in (plan.steps[0].command_preview or "")
+
+
+def test_set_upstream_creates_reviewable_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot_no_upstream()
+
+    plan = planner.plan("repo-1", "set upstream to origin/dev_1", snapshot)
+
+    assert plan.matched is True
+    assert plan.plan_kind == "write"
+    assert plan.requires_confirmation is True
+    step = plan.steps[0]
+    assert step.kind.value == "set_upstream"
+    assert step.remote == "origin"
+    assert step.branch == "dev_1"
+    assert "branch --set-upstream-to origin/dev_1 dev_1" in (step.command_preview or "")
+
+
+def test_set_upstream_rejects_different_checked_out_branch():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot_no_upstream()
+
+    with pytest.raises(ValidationFailure, match="currently on 'dev_1'"):
+        planner.plan("repo-1", "set upstream to origin/main", snapshot)
 
 
 def test_pull_diverged_raises_error():

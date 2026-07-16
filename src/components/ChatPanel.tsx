@@ -5,6 +5,7 @@ import type {
   GeneratePullRequestDraftResponse,
   CommitMessageStyle,
   LocalActionPlan,
+  RecoveryOption,
 } from "../lib/types";
 import type { WizardData, WizardFlowId } from "../lib/flows";
 import { CommandBar } from "./CommandBar";
@@ -27,6 +28,7 @@ interface ChatPanelProps {
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset: () => Promise<string | null>;
+  onRecoveryAction: (option: RecoveryOption) => void;
 }
 
 function statusLabel(status: "pending" | "executed" | "cancelled" | "failed") {
@@ -277,6 +279,7 @@ function TranscriptItem({
   onGenerateCommitMessage,
   onGeneratePullRequestDraft,
   onPickReleaseAsset,
+  onRecoveryAction,
 }: {
   entry: ChatTranscriptEntry;
   busy: boolean;
@@ -290,6 +293,7 @@ function TranscriptItem({
   onGenerateCommitMessage: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
   onPickReleaseAsset: () => Promise<string | null>;
+  onRecoveryAction: (option: RecoveryOption) => void;
 }) {
   if (entry.kind === "user") {
     return (
@@ -318,6 +322,35 @@ function TranscriptItem({
       <section className="error-card">
         <strong>Request could not be completed</strong>
         <p>{entry.message}</p>
+      </section>
+    );
+  }
+
+  if (entry.kind === "recovery") {
+    return (
+      <section className="recovery-card">
+        <div className="recovery-card-heading">
+          <span>NEXT STEP ASSISTANT</span>
+          <strong>{entry.title}</strong>
+        </div>
+        <p>{entry.summary}</p>
+        <p>{entry.detail}</p>
+        {entry.options.length > 0 && (
+          <div className="recovery-actions">
+            {entry.options.map((option) => (
+              <button
+                key={`${option.action}-${option.label}`}
+                type="button"
+                className={option.recommended ? "recovery-action-primary" : "recovery-action"}
+                disabled={busy}
+                onClick={() => onRecoveryAction(option)}
+              >
+                <strong>{option.label}</strong>
+                <span>{option.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
     );
   }
@@ -371,6 +404,7 @@ export function ChatPanel({
   onGenerateCommitMessage,
   onGeneratePullRequestDraft,
   onPickReleaseAsset,
+  onRecoveryAction,
 }: ChatPanelProps) {
   const [message, setMessage] = useState("");
   const endOfTranscriptRef = useRef<HTMLDivElement | null>(null);
@@ -428,6 +462,7 @@ export function ChatPanel({
                   onGenerateCommitMessage={onGenerateCommitMessage}
                   onGeneratePullRequestDraft={onGeneratePullRequestDraft}
                   onPickReleaseAsset={onPickReleaseAsset}
+                  onRecoveryAction={onRecoveryAction}
                 />
               ))}
             </div>

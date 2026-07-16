@@ -22,6 +22,19 @@ export interface UpdateGitHubSettingsRequest {
   token?: string | null;
 }
 
+export interface GitIdentitySettings {
+  userName?: string | null;
+  userEmail?: string | null;
+  configured: boolean;
+  gitAvailable: boolean;
+  message: string;
+}
+
+export interface UpdateGitIdentityRequest {
+  userName?: string | null;
+  userEmail?: string | null;
+}
+
 export type SidecarStatus = "starting" | "ready" | "failed" | "stopped";
 export type GitStatusKind = "checking" | "available" | "missing" | "failed";
 
@@ -48,6 +61,7 @@ export type PlanStepKind =
   | "commit"
   | "push"
   | "pull"
+  | "set_upstream"
   | "unstage"
   | "discard"
   | "switch"
@@ -398,6 +412,22 @@ export interface CancelActionPlanResponse {
   cancelled: boolean;
 }
 
+export type RecoveryActionKind =
+  | "set_upstream"
+  | "pull_latest"
+  | "show_remotes"
+  | "open_settings"
+  | "switch_repository"
+  | "connect_remote_anyway";
+
+export interface RecoveryOption {
+  label: string;
+  description: string;
+  action: RecoveryActionKind;
+  repositoryId?: string;
+  recommended?: boolean;
+}
+
 export type ChatTranscriptEntry =
   | {
       id: string;
@@ -416,6 +446,14 @@ export type ChatTranscriptEntry =
       id: string;
       kind: "error";
       message: string;
+    }
+  | {
+      id: string;
+      kind: "recovery";
+      title: string;
+      summary: string;
+      detail: string;
+      options: RecoveryOption[];
     }
   | {
       id: string;
