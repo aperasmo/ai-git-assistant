@@ -135,8 +135,10 @@ These dates mark when the phase or feature set was first added to the project hi
 
 1. Added Release Manager behavior with explicit Create new draft and Edit existing draft choices.
 2. Enabled cross-machine release assembly: Windows can upload the `.exe`, Linux can update the same draft with the `.deb`.
-3. Added duplicate asset detection so existing asset filenames are reported and skipped instead of replaced silently.
-4. Updated public docs and metadata for `0.7.7`.
+3. Added existing-draft retrieval so Edit mode preloads the current release title, notes, URL, and uploaded assets.
+4. Shows already-attached assets inside the release asset picker before the user selects new installer files.
+5. Added duplicate asset detection so existing asset filenames are reported and skipped instead of replaced silently.
+6. Updated public docs and metadata for `0.7.7`.
 
 #### Phase 8 - target TBD
 

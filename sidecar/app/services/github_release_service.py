@@ -48,6 +48,15 @@ class GitHubReleaseAssetResult:
 
 
 @dataclass(frozen=True)
+class GitHubDraftReleaseDetails:
+    tag_name: str
+    title: str
+    body: str
+    release_url: str
+    assets: tuple[GitHubReleaseAssetResult, ...] = ()
+
+
+@dataclass(frozen=True)
 class GitHubDraftPullRequestResult:
     number: int
     pull_request_url: str
@@ -215,6 +224,57 @@ class GitHubReleaseClient:
             action=release_action,
         )
 
+    def get_draft_release(
+        self,
+        *,
+        repository: GitHubRepositoryRef,
+        tag_name: str,
+    ) -> GitHubDraftReleaseDetails:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self._token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        try:
+            with httpx.Client(timeout=self._timeout, follow_redirects=True) as client:
+                release = self._find_release_by_tag(
+                    client=client,
+                    headers=headers,
+                    repository=repository,
+                    tag_name=tag_name,
+                )
+                if release is None:
+                    raise ValidationFailure(
+                        f"No GitHub draft release was found for tag '{tag_name}'. "
+                        "Choose Create new draft, or create the draft on GitHub first."
+                    )
+                if not bool(release.get("draft")):
+                    raise ValidationFailure(
+                        f"Release tag '{tag_name}' already exists as a published release. "
+                        "Only draft releases can be edited from the app."
+                    )
+
+                assets = tuple(
+                    GitHubReleaseAssetResult(
+                        name=str(asset.get("name") or ""),
+                        url=str(asset.get("browser_download_url") or "") or None,
+                        sha256=None,
+                        status="existing",
+                    )
+                    for asset in self._release_assets(client, headers, release)
+                    if asset.get("name")
+                )
+        except httpx.HTTPError as exc:
+            raise ValidationFailure(f"GitHub release request failed: {exc}") from exc
+
+        return GitHubDraftReleaseDetails(
+            tag_name=str(release.get("tag_name") or tag_name),
+            title=str(release.get("name") or f"Release {tag_name}"),
+            body=str(release.get("body") or ""),
+            release_url=str(release.get("html_url") or ""),
+            assets=assets,
+        )
+
     def _find_release_by_tag(
         self,
         *,
@@ -250,17 +310,16 @@ class GitHubReleaseClient:
         headers: dict[str, str],
         release: dict,
     ) -> list[dict]:
+        assets_url = release.get("assets_url")
+        if assets_url:
+            response = client.get(str(assets_url), headers=headers, params={"per_page": 100})
+            self._raise_for_github_error(response)
+            return [asset for asset in response.json() if isinstance(asset, dict)]
+
         assets = release.get("assets")
         if isinstance(assets, list):
             return [asset for asset in assets if isinstance(asset, dict)]
-
-        assets_url = release.get("assets_url")
-        if not assets_url:
-            return []
-
-        response = client.get(str(assets_url), headers=headers, params={"per_page": 100})
-        self._raise_for_github_error(response)
-        return [asset for asset in response.json() if isinstance(asset, dict)]
+        return []
 
     def create_draft_pull_request(
         self,

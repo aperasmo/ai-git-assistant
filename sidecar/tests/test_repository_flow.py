@@ -1134,6 +1134,143 @@ def test_draft_github_release_can_update_existing_draft(
     assert "Already on draft: 1" in body["content"]
 
 
+def test_get_github_draft_release_returns_existing_details(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+    from app.services.github_release_service import GitHubDraftReleaseDetails, GitHubReleaseAssetResult
+
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/example/demo-repository.git"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+
+    class FakeGitHubReleaseClient:
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        def get_draft_release(self, **kwargs):
+            return GitHubDraftReleaseDetails(
+                tag_name=kwargs["tag_name"],
+                title="Release v0.7.7",
+                body="Existing release notes",
+                release_url="https://github.com/example/demo-repository/releases/tag/v0.7.7",
+                assets=(
+                    GitHubReleaseAssetResult(
+                        name="AI Git Assistant_0.7.7_x64-setup.exe",
+                        url="https://github.com/example/demo-repository/releases/download/v0.7.7/windows.exe",
+                        sha256=None,
+                        status="existing",
+                    ),
+                ),
+            )
+
+    app_client.app.state.repository_service._github_release_client_factory = FakeGitHubReleaseClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/github/releases/draft/details",
+        headers=auth_headers,
+        json={"tagName": "v0.7.7"},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["repository"] == "example/demo-repository"
+    assert body["tagName"] == "v0.7.7"
+    assert body["title"] == "Release v0.7.7"
+    assert body["body"] == "Existing release notes"
+    assert body["assets"][0]["name"] == "AI Git Assistant_0.7.7_x64-setup.exe"
+    assert body["assets"][0]["status"] == "existing"
+
+
+def test_github_draft_release_details_reads_assets_url():
+    import httpx
+
+    from app.services.github_release_service import GitHubReleaseClient, GitHubRepositoryRef
+
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if str(request.url).endswith("/releases/tags/v0.7.7"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": 10,
+                    "tag_name": "v0.7.7",
+                    "name": "Release v0.7.7",
+                    "body": "Release notes",
+                    "draft": True,
+                    "html_url": "https://github.com/example/demo-repository/releases/tag/v0.7.7",
+                    "assets_url": "https://api.github.com/repos/example/demo-repository/releases/10/assets",
+                    "assets": [
+                        {
+                            "name": "AI Git Assistant_0.7.7_x64-setup.exe",
+                            "browser_download_url": "embedded-only",
+                        }
+                    ],
+                },
+                request=request,
+            )
+        if str(request.url).startswith("https://api.github.com/repos/example/demo-repository/releases/10/assets"):
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "name": "AI Git Assistant_0.7.7_x64-setup.exe",
+                        "browser_download_url": "https://github.com/example/demo-repository/releases/download/v0.7.7/windows.exe",
+                    },
+                    {
+                        "name": "AI Git Assistant_0.7.7_amd64.deb",
+                        "browser_download_url": "https://github.com/example/demo-repository/releases/download/v0.7.7/linux.deb",
+                    },
+                ],
+                request=request,
+            )
+        return httpx.Response(404, json={"message": "not found"}, request=request)
+
+    transport = httpx.MockTransport(handler)
+    original_client = httpx.Client
+
+    def fake_client(*args, **kwargs):
+        kwargs["transport"] = transport
+        return original_client(*args, **kwargs)
+
+    httpx.Client = fake_client
+    try:
+        details = GitHubReleaseClient("token").get_draft_release(
+            repository=GitHubRepositoryRef(owner="example", repo="demo-repository"),
+            tag_name="v0.7.7",
+        )
+    finally:
+        httpx.Client = original_client
+
+    assert [asset.name for asset in details.assets] == [
+        "AI Git Assistant_0.7.7_x64-setup.exe",
+        "AI Git Assistant_0.7.7_amd64.deb",
+    ]
+    assert any("/releases/10/assets" in url for url in requests)
+
+
 def test_draft_github_release_explains_non_github_provider(
     app_client,
     auth_headers,

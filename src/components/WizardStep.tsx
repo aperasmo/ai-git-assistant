@@ -32,7 +32,7 @@ function composeCommitMessage(subject: string, body: string[]): string {
 interface WizardStepProps {
   entry: WizardStepEntry;
   busy: boolean;
-  onNext: (choiceLabel: string, data: Partial<WizardData>) => void;
+  onNext: (choiceLabel: string, data: Partial<WizardData>) => void | Promise<void>;
   onConfirm: () => void;
   onCancel: () => void;
   onAddToGitignore?: (paths: string[]) => Promise<string[]>;
@@ -117,7 +117,7 @@ function FilePickStep({
 }: {
   entry: WizardStepEntry;
   busy: boolean;
-  onNext: (label: string, data: Partial<WizardData>) => void;
+  onNext: (label: string, data: Partial<WizardData>) => void | Promise<void>;
   onCancel: () => void;
   onAddToGitignore?: (paths: string[]) => Promise<string[]>;
 }) {
@@ -293,12 +293,13 @@ function AssetPickStep({
 }: {
   entry: WizardStepEntry;
   busy: boolean;
-  onNext: (label: string, data: Partial<WizardData>) => void;
+  onNext: (label: string, data: Partial<WizardData>) => void | Promise<void>;
   onCancel: () => void;
   onPickReleaseAsset?: () => Promise<string[]>;
 }) {
   const [value, setValue] = useState("");
   const [picking, setPicking] = useState(false);
+  const existingAssets = entry.choices ?? [];
 
   async function handleBrowse() {
     if (!onPickReleaseAsset || picking) return;
@@ -324,6 +325,16 @@ function AssetPickStep({
   return (
     <div className="wizard-step-card">
       <p className="wizard-step-prompt">{entry.prompt}</p>
+      {existingAssets.length > 0 && (
+        <div className="wizard-existing-assets">
+          <span>Already attached</span>
+          <ul>
+            {existingAssets.map((asset) => (
+              <li key={asset}>{asset}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="wizard-asset-row">
         <textarea
           className="wizard-text-input wizard-asset-input"
@@ -390,7 +401,7 @@ function TextInputStep({
 }: {
   entry: WizardStepEntry;
   busy: boolean;
-  onNext: (label: string, data: Partial<WizardData>) => void;
+  onNext: (label: string, data: Partial<WizardData>) => void | Promise<void>;
   onCancel: () => void;
   onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft?: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
@@ -601,7 +612,7 @@ function OptionSelectStep({
 }: {
   entry: WizardStepEntry;
   busy: boolean;
-  onNext: (label: string, data: Partial<WizardData>) => void;
+  onNext: (label: string, data: Partial<WizardData>) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const isReleaseTag = entry.prompt === "Release tag";

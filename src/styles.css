@@ -1029,6 +1029,30 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   align-items: center;
 }
 .wizard-asset-row .wizard-text-input { min-width: 0; }
+.wizard-existing-assets {
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border: 1px solid #27303a;
+  border-radius: 7px;
+  background: #11161d;
+}
+.wizard-existing-assets span {
+  display: block;
+  margin-bottom: 6px;
+  color: #8d99a8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.wizard-existing-assets ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #cfd6df;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
 .wizard-browse-button {
   flex: 0 0 auto;
   padding: 8px 13px;

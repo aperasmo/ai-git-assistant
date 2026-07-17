@@ -21,7 +21,7 @@ interface ChatPanelProps {
   onApprovePlan: (planId: string) => Promise<void>;
   onCancelPlan: (planId: string) => Promise<void>;
   onWizardSelect: (flowId: WizardFlowId) => void;
-  onWizardNext: (choiceLabel: string, data: Partial<WizardData>) => void;
+  onWizardNext: (choiceLabel: string, data: Partial<WizardData>) => void | Promise<void>;
   onWizardConfirm: () => void;
   onWizardCancel: () => void;
   onAddToGitignore: (paths: string[]) => Promise<string[]>;

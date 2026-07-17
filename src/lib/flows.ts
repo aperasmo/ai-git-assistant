@@ -64,8 +64,12 @@ export interface WizardData {
   branch?: string;
   tagName?: string;
   releaseMode?: "create" | "edit";
+  existingReleaseTitle?: string;
+  existingReleaseBody?: string;
   releaseTitle?: string;
   releaseBody?: string;
+  existingReleaseUrl?: string;
+  existingReleaseAssets?: string[];
   assetPath?: string;
   assetPaths?: string[];
   prerelease?: boolean;

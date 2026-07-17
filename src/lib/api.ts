@@ -20,6 +20,8 @@ import type {
   GeneratePullRequestDraftResponse,
   GitInstallationStatus,
   GitHubSettings,
+  GitHubDraftReleaseDetailsRequest,
+  GitHubDraftReleaseDetailsResponse,
   GitIdentitySettings,
   GitLabSettings,
   LLMSettings,
@@ -111,6 +113,9 @@ export const desktopApi = {
 
   draftGithubRelease: (repositoryId: string, request: DraftGitHubReleaseRequest) =>
     invoke<DraftGitHubReleaseResponse>("draft_github_release", { repositoryId, request }),
+
+  getGithubDraftRelease: (repositoryId: string, request: GitHubDraftReleaseDetailsRequest) =>
+    invoke<GitHubDraftReleaseDetailsResponse>("get_github_draft_release", { repositoryId, request }),
 
   draftGithubPullRequest: (repositoryId: string, request: DraftGitHubPullRequestRequest) =>
     invoke<DraftGitHubPullRequestResponse>("draft_github_pull_request", { repositoryId, request }),

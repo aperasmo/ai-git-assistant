@@ -10,6 +10,7 @@ use crate::{
         DraftGitLabMergeRequestRequest, DraftGitLabMergeRequestResponse,
         DraftGitHubPullRequestRequest, DraftGitHubPullRequestResponse, DraftGitHubReleaseRequest,
         DraftGitHubReleaseResponse, FolderClassification, GenerateChangeSummaryResponse,
+        GitHubDraftReleaseDetailsRequest, GitHubDraftReleaseDetailsResponse,
         GenerateCommitMessageResponse, GeneratePullRequestDraftResponse, LocalActionPlan,
         ReadActionRequest, ReadActionResult, Repository, RepositorySnapshot,
     },
@@ -404,6 +405,22 @@ pub async fn draft_github_release(
         .post(
             &state,
             &format!("/v1/repositories/{repository_id}/github/releases/draft"),
+            &request,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_github_draft_release(
+    repository_id: String,
+    request: GitHubDraftReleaseDetailsRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<GitHubDraftReleaseDetailsResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/github/releases/draft/details"),
             &request,
         )
         .await

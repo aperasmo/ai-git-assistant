@@ -55,6 +55,7 @@ pub fn run() {
             commands::repositories::pick_release_asset,
             commands::repositories::clone_repository,
             commands::repositories::draft_github_release,
+            commands::repositories::get_github_draft_release,
             commands::repositories::draft_github_pull_request,
             commands::repositories::draft_gitlab_merge_request,
             commands::settings::get_llm_settings,

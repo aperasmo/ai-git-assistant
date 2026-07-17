@@ -332,6 +332,10 @@ class DraftGitHubReleaseRequest(ApiModel):
     prerelease: bool = False
 
 
+class GitHubDraftReleaseDetailsRequest(ApiModel):
+    tag_name: str = Field(min_length=1, max_length=255)
+
+
 class ReleaseAssetUpload(ApiModel):
     name: str
     url: str | None = None
@@ -352,6 +356,15 @@ class DraftGitHubReleaseResponse(ApiModel):
     summary: str
     content: str
     snapshot: RepositorySnapshot
+
+
+class GitHubDraftReleaseDetailsResponse(ApiModel):
+    tag_name: str
+    repository: str
+    release_url: str
+    title: str
+    body: str
+    assets: list[ReleaseAssetUpload] = Field(default_factory=list)
 
 
 class DraftGitHubPullRequestRequest(ApiModel):

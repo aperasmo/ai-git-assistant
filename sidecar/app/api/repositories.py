@@ -18,6 +18,8 @@ from app.schemas.repositories import (
     DraftGitHubPullRequestResponse,
     DraftGitHubReleaseRequest,
     DraftGitHubReleaseResponse,
+    GitHubDraftReleaseDetailsRequest,
+    GitHubDraftReleaseDetailsResponse,
     ExecuteActionPlanRequest,
     FolderClassificationResponse,
     GenerateChangeSummaryRequest,
@@ -306,6 +308,19 @@ def draft_github_release(
     request: Request,
 ) -> DraftGitHubReleaseResponse:
     return _service(request).draft_github_release(repository_id, payload)
+
+
+@router.post(
+    "/{repository_id}/github/releases/draft/details",
+    response_model=GitHubDraftReleaseDetailsResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def get_github_draft_release(
+    repository_id: str,
+    payload: GitHubDraftReleaseDetailsRequest,
+    request: Request,
+) -> GitHubDraftReleaseDetailsResponse:
+    return _service(request).get_github_draft_release(repository_id, payload)
 
 
 @router.post(

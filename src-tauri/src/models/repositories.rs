@@ -272,6 +272,12 @@ pub struct DraftGitHubReleaseRequest {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitHubDraftReleaseDetailsRequest {
+    pub tag_name: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReleaseAssetUpload {
     pub name: String,
     pub url: Option<String>,
@@ -297,6 +303,18 @@ pub struct DraftGitHubReleaseResponse {
     pub summary: String,
     pub content: String,
     pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubDraftReleaseDetailsResponse {
+    pub tag_name: String,
+    pub repository: String,
+    pub release_url: String,
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub assets: Vec<ReleaseAssetUpload>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]

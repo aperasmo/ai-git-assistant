@@ -30,6 +30,8 @@ from app.schemas.repositories import (
     DraftGitHubPullRequestResponse,
     DraftGitHubReleaseRequest,
     DraftGitHubReleaseResponse,
+    GitHubDraftReleaseDetailsRequest,
+    GitHubDraftReleaseDetailsResponse,
     GenerateChangeSummaryResponse,
     GeneratePullRequestDraftResponse,
     FolderClassificationResponse,
@@ -833,6 +835,44 @@ class RepositoryService:
             ),
             content="\n".join(content_lines),
             snapshot=latest_snapshot,
+        )
+
+    def get_github_draft_release(
+        self,
+        repository_id: str,
+        request: GitHubDraftReleaseDetailsRequest,
+    ) -> GitHubDraftReleaseDetailsResponse:
+        if self.settings_service is None:
+            raise ValidationFailure("GitHub settings are unavailable.")
+
+        token = self.settings_service.get_raw_github_token()
+        if not token:
+            raise ValidationFailure("No GitHub token is configured. Open Settings and add a token with Contents read access.")
+
+        snapshot = self.snapshot(repository_id)
+        repository_ref = self._github_repository_from_snapshot(snapshot)
+        self._validate_tag_name(request.tag_name)
+
+        client = self._github_release_client_factory(token)
+        details = client.get_draft_release(
+            repository=repository_ref,
+            tag_name=request.tag_name,
+        )
+        return GitHubDraftReleaseDetailsResponse(
+            tag_name=details.tag_name,
+            repository=repository_ref.slug,
+            release_url=details.release_url,
+            title=details.title,
+            body=details.body,
+            assets=[
+                ReleaseAssetUpload(
+                    name=asset.name,
+                    url=asset.url,
+                    sha256=asset.sha256,
+                    status=asset.status,
+                )
+                for asset in details.assets
+            ],
         )
 
     def draft_github_pull_request(

@@ -349,6 +349,10 @@ export interface DraftGitHubReleaseRequest {
   prerelease: boolean;
 }
 
+export interface GitHubDraftReleaseDetailsRequest {
+  tagName: string;
+}
+
 export interface ReleaseAssetUpload {
   name: string;
   url?: string | null;
@@ -369,6 +373,15 @@ export interface DraftGitHubReleaseResponse {
   summary: string;
   content: string;
   snapshot: RepositorySnapshot;
+}
+
+export interface GitHubDraftReleaseDetailsResponse {
+  tagName: string;
+  repository: string;
+  releaseUrl: string;
+  title: string;
+  body: string;
+  assets: ReleaseAssetUpload[];
 }
 
 export interface DraftGitHubPullRequestRequest {

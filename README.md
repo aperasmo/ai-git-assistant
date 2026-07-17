@@ -166,7 +166,7 @@ Add a fine-grained GitHub token in **Settings** for the target repository with *
 
 Phase 7.7 includes a guided **Release manager** flow in the WRITE command bar. Choose **Release manager**, then select **Create new draft** or **Edit existing draft**, select an existing tag or type a new one, enter the title, write markdown release notes in the larger description editor, and attach one or more installer assets.
 
-The app creates a new GitHub draft release if the tag has no draft yet. If a draft already exists for that tag, the app updates that draft and uploads only the new selected assets. Existing asset filenames are reported and skipped instead of being replaced silently.
+The app creates a new GitHub draft release if the tag has no draft yet. If you choose **Edit existing draft**, the app retrieves the existing draft title, release notes, release URL, and uploaded assets from GitHub before you continue. The asset picker shows what is already attached before you browse for new installers. On confirmation, it updates that draft and uploads only the new selected assets. Existing asset filenames are reported and skipped instead of being replaced silently.
 
 Phase 6.1 adds a guided **Draft PR** flow in the WRITE command bar. Choose **Draft PR**, enter the base branch, optionally generate the title/body/checklist with AI, review or edit the text, then confirm the readiness summary. GitHub repositories create draft Pull Requests. GitLab repositories create draft Merge Requests. The app checks that the branch is named, the base differs from the current branch, conflicts are resolved, local commits are pushed, and the provider can see the head branch.
 

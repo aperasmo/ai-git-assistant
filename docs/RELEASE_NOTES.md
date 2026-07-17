@@ -7,6 +7,8 @@ Adds Release Manager behavior for assembling one GitHub release from multiple pl
 ### Shipped
 
 - Release Manager now starts with explicit **Create new draft** and **Edit existing draft** choices.
+- Edit mode retrieves the current draft release title, notes, URL, and uploaded assets before asking for changes.
+- The release asset picker now shows already-attached assets before selecting additional installer files.
 - Draft release flow creates a new draft or updates the existing draft for the selected tag.
 - Windows and Linux installers can be uploaded to the same draft release from their own machines.
 - Existing asset filenames are detected and reported as already present instead of being replaced silently.

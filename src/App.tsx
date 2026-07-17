@@ -1343,7 +1343,7 @@ export default function App() {
     });
   }
 
-  function onWizardNext(choiceLabel: string, choiceData: Partial<WizardData>) {
+  async function onWizardNext(choiceLabel: string, choiceData: Partial<WizardData>) {
     const repositoryId = activeRepositoryId;
     const wizard = activeWizardRef.current;
     if (!repositoryId || !wizard) return;
@@ -1427,6 +1427,7 @@ export default function App() {
             stepKind: "text_input",
             prompt: "Release description",
             status: "active",
+            initialValue: releaseData.releaseBody ?? releaseData.existingReleaseBody,
           });
         } else {
           const releaseData: WizardData = { ...wizard.data, releaseBody: value };
@@ -1438,6 +1439,7 @@ export default function App() {
             stepKind: "asset_pick",
             prompt: "Choose release assets",
             status: "active",
+            choices: releaseData.existingReleaseAssets,
           });
         }
       } else if (wizard.flowId === "draft_pr") {
@@ -1547,6 +1549,7 @@ export default function App() {
         const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: releaseData };
         activeWizardRef.current = next;
         const assets = releaseData.assetPaths ?? [];
+        const existingAssets = releaseData.existingReleaseAssets ?? [];
         const releaseModeLabel = releaseData.releaseMode === "edit" ? "Edit existing draft" : "Create new draft";
         appendTranscriptEntry(repositoryId, {
           id: nextStepId,
@@ -1559,6 +1562,8 @@ export default function App() {
             `Action: ${releaseModeLabel}`,
             `Tag: ${releaseData.tagName}`,
             `Title: ${releaseData.releaseTitle}`,
+            ...(releaseData.existingReleaseUrl ? [`Existing draft: ${releaseData.existingReleaseUrl}`] : []),
+            ...(existingAssets.length > 0 ? [`Existing assets (${existingAssets.length}): ${existingAssets.join(", ")}`] : []),
             `Assets (${assets.length}): ${assets.map((path) => path.split(/[\\/]/).pop() ?? path).join(", ")}`,
             "Draft: yes",
             releaseData.releaseMode === "edit"
@@ -1604,16 +1609,69 @@ export default function App() {
           });
           return;
         }
-        const releaseData: WizardData = { ...wizard.data, ...choiceData, tagName: choiceData.tagName ?? choiceLabel };
+
+        const tagName = choiceData.tagName ?? choiceLabel;
+        let releaseData: WizardData = { ...wizard.data, ...choiceData, tagName };
+        if (releaseData.releaseMode === "edit") {
+          try {
+            setBusy(true);
+            const details = await desktopApi.getGithubDraftRelease(repositoryId, { tagName });
+            if (activeRepositoryIdRef.current !== repositoryId) return;
+            releaseData = {
+              ...releaseData,
+              existingReleaseTitle: details.title,
+              existingReleaseBody: details.body,
+              existingReleaseUrl: details.releaseUrl,
+              existingReleaseAssets: details.assets.map((asset) => asset.name),
+            };
+            appendTranscriptEntry(repositoryId, {
+              id: createTranscriptId(),
+              kind: "result",
+              title: "Existing draft loaded",
+              summary: `${details.assets.length} existing asset${details.assets.length === 1 ? "" : "s"} found for ${details.tagName}.`,
+              content: [
+                `Repository: ${details.repository}`,
+                `Tag: ${details.tagName}`,
+                `Release: ${details.releaseUrl}`,
+                "",
+                "Current title:",
+                details.title,
+                "",
+                "Existing assets:",
+                ...(details.assets.length > 0
+                  ? details.assets.map((asset) => `- ${asset.name}`)
+                  : ["- No assets uploaded yet."]),
+              ].join("\n"),
+            });
+          } catch (cause) {
+            if (activeRepositoryIdRef.current === repositoryId) {
+              appendTranscriptEntry(repositoryId, {
+                id: createTranscriptId(),
+                kind: "error",
+                message: toErrorMessage(cause, "Could not load the existing GitHub draft release."),
+              });
+              activeWizardRef.current = null;
+              appendTranscriptEntry(repositoryId, {
+                id: createTranscriptId(),
+                kind: "wizard_menu",
+                variant: "compact",
+              });
+            }
+            return;
+          } finally {
+            setBusy(false);
+          }
+        }
+
         const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: releaseData };
         activeWizardRef.current = next;
         appendTranscriptEntry(repositoryId, {
           id: nextStepId,
           kind: "wizard_step",
           stepKind: "text_input",
-          prompt: "Release title",
-          status: "active",
-          initialValue: `Release ${releaseData.tagName}`,
+            prompt: "Release title",
+            status: "active",
+          initialValue: releaseData.existingReleaseTitle ?? `Release ${releaseData.tagName}`,
         });
       } else {
         const currentBranch = snapshot?.branch ?? "main";
