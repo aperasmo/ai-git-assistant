@@ -106,7 +106,7 @@
 - **GitHub push-auth recovery:** GitHub write-permission failures now explain the fine-grained token requirement and offer a push-only retry so an existing local commit is not duplicated.
 - **Divergent-branch recovery:** Fast-forward pull failures now explain the cross-machine divergence and offer fetch, diff, or a reviewed upstream merge.
 - **One-command installer builds:** `npm run installer` runs sidecar tests, builds the sidecar binary, and builds the native installer for the current host OS.
-- **Release Manager draft releases:** GitHub draft releases can select an existing tag or enter a new tag, use a larger markdown description editor, retrieve existing draft title/body/assets in Edit mode, show already-attached assets in the asset picker, create a new draft or update an existing draft for that tag, upload multiple installer assets, and report duplicate asset filenames without silently replacing them.
+- **Release Manager draft releases:** GitHub draft releases can select an existing tag or enter a new tag, create the missing GitHub tag ref before saving a new draft, use a larger markdown description editor, retrieve existing draft title/body/assets in Edit mode, show already-attached assets in the asset picker, create a new draft or update an existing draft for that tag, upload multiple installer assets, and report duplicate asset filenames without silently replacing them.
 
 ### Post-launch fixes
 

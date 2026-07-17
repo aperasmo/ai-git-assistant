@@ -1271,6 +1271,82 @@ def test_github_draft_release_details_reads_assets_url():
     assert any("/releases/10/assets" in url for url in requests)
 
 
+def test_github_draft_release_creates_missing_tag_ref_before_draft():
+    import json
+
+    import httpx
+
+    from app.services.github_release_service import GitHubReleaseClient, GitHubRepositoryRef
+
+    requests: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        if request.method == "GET" and request.url.path.endswith("/releases/tags/v0.7.7"):
+            return httpx.Response(404, json={"message": "not found"}, request=request)
+        if request.method == "GET" and request.url.path.endswith("/releases"):
+            return httpx.Response(200, json=[], request=request)
+        if request.method == "GET" and request.url.path.endswith("/git/ref/tags/v0.7.7"):
+            return httpx.Response(404, json={"message": "not found"}, request=request)
+        if request.method == "POST" and request.url.path.endswith("/git/refs"):
+            assert json.loads(request.content.decode("utf-8")) == {
+                "ref": "refs/tags/v0.7.7",
+                "sha": "abc123def456abc123def456abc123def456abcd",
+            }
+            return httpx.Response(
+                201,
+                json={
+                    "ref": "refs/tags/v0.7.7",
+                    "object": {"sha": "abc123def456abc123def456abc123def456abcd"},
+                },
+                request=request,
+            )
+        if request.method == "POST" and request.url.path.endswith("/releases"):
+            return httpx.Response(
+                201,
+                json={
+                    "id": 20,
+                    "tag_name": "v0.7.7",
+                    "name": "Release v0.7.7",
+                    "body": "Release notes",
+                    "draft": True,
+                    "html_url": "https://github.com/example/demo-repository/releases/tag/v0.7.7",
+                    "assets_url": "https://api.github.com/repos/example/demo-repository/releases/20/assets",
+                    "upload_url": "https://uploads.github.com/repos/example/demo-repository/releases/20/assets{?name,label}",
+                },
+                request=request,
+            )
+        if request.method == "GET" and request.url.path.endswith("/releases/20/assets"):
+            return httpx.Response(200, json=[], request=request)
+        return httpx.Response(500, json={"message": "unexpected request"}, request=request)
+
+    transport = httpx.MockTransport(handler)
+    original_client = httpx.Client
+
+    def fake_client(*args, **kwargs):
+        kwargs["transport"] = transport
+        return original_client(*args, **kwargs)
+
+    httpx.Client = fake_client
+    try:
+        result = GitHubReleaseClient("token").create_draft_release(
+            repository=GitHubRepositoryRef(owner="example", repo="demo-repository"),
+            tag_name="v0.7.7",
+            title="Release v0.7.7",
+            body="Release notes",
+            target_commitish="abc123def456abc123def456abc123def456abcd",
+            prerelease=False,
+        )
+    finally:
+        httpx.Client = original_client
+
+    assert result.remote_tag_created is True
+    assert result.release_url.endswith("/releases/tag/v0.7.7")
+    assert requests.index(("POST", "/repos/example/demo-repository/git/refs")) < requests.index(
+        ("POST", "/repos/example/demo-repository/releases")
+    )
+
+
 def test_draft_github_release_explains_non_github_provider(
     app_client,
     auth_headers,

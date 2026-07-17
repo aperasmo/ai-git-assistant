@@ -168,6 +168,8 @@ Phase 7.7 includes a guided **Release manager** flow in the WRITE command bar. C
 
 The app creates a new GitHub draft release if the tag has no draft yet. If you choose **Edit existing draft**, the app retrieves the existing draft title, release notes, release URL, and uploaded assets from GitHub before you continue. The asset picker shows what is already attached before you browse for new installers. On confirmation, it updates that draft and uploads only the new selected assets. Existing asset filenames are reported and skipped instead of being replaced silently.
 
+When a new draft is created for a tag that does not exist yet, the app also creates the missing GitHub tag ref first so the release appears in both GitHub **Releases** and **Tags**.
+
 Phase 6.1 adds a guided **Draft PR** flow in the WRITE command bar. Choose **Draft PR**, enter the base branch, optionally generate the title/body/checklist with AI, review or edit the text, then confirm the readiness summary. GitHub repositories create draft Pull Requests. GitLab repositories create draft Merge Requests. The app checks that the branch is named, the base differs from the current branch, conflicts are resolved, local commits are pushed, and the provider can see the head branch.
 
 Phase 6.2 adds **Review status** in the READ command bar and right-panel quick actions. It finds the open GitHub Pull Request or GitLab Merge Request for the current branch, then shows CI/check status, draft state, base/head branches, review summary, comment count, and recent comments.

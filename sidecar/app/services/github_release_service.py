@@ -37,6 +37,7 @@ class GitHubDraftReleaseResult:
     asset_sha256: str | None
     assets: tuple["GitHubReleaseAssetResult", ...] = ()
     action: str = "created"
+    remote_tag_created: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,18 @@ class GitHubReleaseClient:
                             f"Release tag '{tag_name}' already exists as a published release. "
                             "Choose a new tag or update the published release on GitHub."
                         )
+
+                remote_tag_created = False
+                if target_commitish:
+                    remote_tag_created = self._ensure_tag_ref(
+                        client=client,
+                        headers=headers,
+                        repository=repository,
+                        tag_name=tag_name,
+                        target_commitish=target_commitish,
+                    )
+
+                if existing_release is not None:
                     release_id = existing_release.get("id")
                     release_response = client.patch(
                         f"{api_url}/{release_id}",
@@ -222,6 +235,7 @@ class GitHubReleaseClient:
             asset_sha256=first_asset.sha256 if first_asset else None,
             assets=tuple(uploaded_assets),
             action=release_action,
+            remote_tag_created=remote_tag_created,
         )
 
     def get_draft_release(
@@ -320,6 +334,47 @@ class GitHubReleaseClient:
         if isinstance(assets, list):
             return [asset for asset in assets if isinstance(asset, dict)]
         return []
+
+    def _ensure_tag_ref(
+        self,
+        *,
+        client: httpx.Client,
+        headers: dict[str, str],
+        repository: GitHubRepositoryRef,
+        tag_name: str,
+        target_commitish: str,
+    ) -> bool:
+        api_root = f"https://api.github.com/repos/{repository.owner}/{repository.repo}"
+        ref_path = f"tags/{tag_name}"
+        response = client.get(
+            f"{api_root}/git/ref/{quote(ref_path, safe='/')}",
+            headers=headers,
+        )
+        if response.status_code == 200:
+            return False
+        if response.status_code != 404:
+            self._raise_for_github_error(response)
+
+        create_response = client.post(
+            f"{api_root}/git/refs",
+            headers=headers,
+            json={
+                "ref": f"refs/tags/{tag_name}",
+                "sha": target_commitish,
+            },
+        )
+        if create_response.status_code == 422:
+            message = _github_error_message(create_response)
+            lower_message = message.lower()
+            if "reference already exists" in lower_message:
+                return False
+            if "object does not exist" in lower_message or "invalid sha" in lower_message:
+                raise ValidationFailure(
+                    f"GitHub could not create tag '{tag_name}' because the selected commit is not "
+                    "available on GitHub yet. Push the current branch first, then run Release Manager again."
+                )
+        self._raise_for_github_error(create_response)
+        return True
 
     def create_draft_pull_request(
         self,
@@ -458,10 +513,7 @@ class GitHubReleaseClient:
     def _raise_for_github_error(response: httpx.Response, *, operation: str = "release") -> None:
         if response.status_code < 400:
             return
-        try:
-            message = response.json().get("message", response.text)
-        except ValueError:
-            message = response.text
+        message = _github_error_message(response)
         if (
             response.status_code == 403
             and "resource not accessible by personal access token" in str(message).lower()
@@ -475,6 +527,13 @@ class GitHubReleaseClient:
         raise ValidationFailure(
             f"GitHub returned {response.status_code}: {str(message).strip()[:300]}"
         )
+
+
+def _github_error_message(response: httpx.Response) -> str:
+    try:
+        return str(response.json().get("message", response.text))
+    except ValueError:
+        return response.text
 
 
 def _sha256_file(path: Path) -> str:

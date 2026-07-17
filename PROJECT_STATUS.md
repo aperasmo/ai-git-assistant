@@ -138,7 +138,8 @@ These dates mark when the phase or feature set was first added to the project hi
 3. Added existing-draft retrieval so Edit mode preloads the current release title, notes, URL, and uploaded assets.
 4. Shows already-attached assets inside the release asset picker before the user selects new installer files.
 5. Added duplicate asset detection so existing asset filenames are reported and skipped instead of replaced silently.
-6. Updated public docs and metadata for `0.7.7`.
+6. Creates missing GitHub tag refs before saving a new draft release so Releases and Tags stay aligned.
+7. Updated public docs and metadata for `0.7.7`.
 
 #### Phase 8 - target TBD
 

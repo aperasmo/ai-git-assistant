@@ -786,6 +786,7 @@ class RepositoryService:
         content_lines = [
             f"Repository: {repository_ref.slug}",
             f"Tag: {result.tag_name}",
+            f"GitHub tag ref: {'created' if result.remote_tag_created else 'already available'}",
             f"Release: {result.release_url}",
             "Draft: yes",
             f"Action: {action_label}",
