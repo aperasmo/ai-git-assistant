@@ -49,10 +49,14 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 
 ## Requirements
 
-- Windows 10 or 11 (64-bit), or Ubuntu 22.04+ for the Linux `.deb`
-- Git installed and available on PATH
 
-That's it. No Python, no Node.js, nothing else to install for normal app use.
+AI Git Assistant is packaged as a desktop app, so end users only need Git installed.
+
+- **Windows:** Windows 10/11, 64-bit, with Git for Windows
+- **Linux:** Ubuntu 22.04+, 64-bit, with Git
+- **macOS:** Build path planned; public installer not released yet
+
+No Python, Node.js, or Rust setup is required to use the installed app.
 
 ---
 
