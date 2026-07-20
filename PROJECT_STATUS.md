@@ -158,7 +158,8 @@ These dates mark when the phase or feature set was first added to the project hi
 2. Added preview-first conflict resolution using keep-local, keep-remote, or AI proposal strategies.
 3. Applies resolved content only after approval, validates conflict markers are gone, and marks files resolved through Git.
 4. Improved continue-merge planning so clean no-diff resolutions can finish without a false staging blocker.
-5. Updated public docs and metadata for `0.7.9`.
+5. GitHub HTTPS pull, push, fetch, tag push, and branch-visibility checks can use the stored GitHub token non-interactively.
+6. Updated public docs and metadata for `0.7.9`.
 
 #### Phase 8 - target TBD
 

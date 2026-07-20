@@ -10,6 +10,8 @@ AI Git Assistant is a cross-platform desktop app that turns what you want to do 
 
 **0.7.9 - Phase 7.9** adds a guided **Conflict Resolver** for merge conflicts. It includes everything from Phase 7.8 plus recovery cards that can preview a resolution by keeping the local version, keeping the incoming remote version, or asking AI for a proposed merge. Nothing is written until you approve the preview, then the app applies the resolved content, marks the files resolved, and guides you to continue the merge.
 
+It also lets GitHub HTTPS Git operations reuse the saved GitHub token for pull, push, fetch, tag push, and branch visibility checks, so Linux and fresh machines do not fall back to terminal password prompts when the app already has a valid token.
+
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
 
 See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phase 2 hardening notes.
@@ -25,6 +27,7 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 - **Detects repository providers** - the right panel labels GitHub, GitLab, Bitbucket, Azure DevOps, local-only, and mixed-provider remotes
 - **Helps ignore local noise** - selected untracked runtime files can be added to `.gitignore` from the file picker
 - **Sets Git author identity** - configure global `user.name` and `user.email` from Settings before your first commit on a machine
+- **Reuses your GitHub token for HTTPS Git** - GitHub pull, push, fetch, tag push, and branch checks can use the saved token without exposing it in the command line
 - **Publishes local projects to GitHub** - create the remote repository, connect `origin`, and push the first `main` branch from inside the app
 - **Guides blocked workflows** - when Git needs upstream tracking, author identity, GitHub push permission, divergent-branch handling, merge conflict resolution, or a better repository selection, the app recommends the next step
 - **Connects to an AI provider** (optional) so it can understand requests the built-in patterns don't cover

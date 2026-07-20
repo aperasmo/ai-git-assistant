@@ -340,9 +340,10 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
           <section className="settings-section">
             <p className="settings-section-heading">GITHUB PLATFORM ACTIONS</p>
             <p className="settings-hint">
-              Required for drafting GitHub releases and pull requests. For GitHub push access, use a
-              fine-grained token scoped to the repository with Contents: Read and write. Pull request
-              actions also need Pull requests: Read and write.
+              Required for drafting GitHub releases and pull requests. The same token is also used
+              for GitHub HTTPS pull, push, fetch, and tag push operations so Git does not ask for a
+              terminal password. Use a fine-grained token scoped to the repository with Contents:
+              Read and write. Pull request actions also need Pull requests: Read and write.
             </p>
             <label className="settings-label" htmlFor="github-token-input">
               GitHub token{githubSettings?.tokenSet ? " (token stored - enter a new one to replace)" : ""}
@@ -357,7 +358,7 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
               autoComplete="off"
             />
             <p className="settings-hint warning">
-              Draft releases and draft pull requests still require your explicit wizard confirmation
+              GitHub API actions and Git HTTPS writes still require your explicit wizard confirmation
               before anything is sent to GitHub.
             </p>
           </section>

@@ -9,11 +9,13 @@ Adds a guided Conflict Resolver for merge conflicts.
 - Resolution is preview-first: the app shows the files, strategy, summary, and resolved content before writing anything.
 - Applying a preview writes the resolved files, validates that conflict markers are gone, marks the files resolved through Git, and guides the user to continue the merge.
 - Continue-merge planning now supports clean no-diff resolutions, such as keeping the current local file when Git has no staged diff to show.
+- GitHub HTTPS pull, push, fetch, tag push, and branch-visibility checks can use the stored GitHub token non-interactively instead of sending users back to the terminal.
 - Public docs and version metadata updated to `0.7.9`.
 
 Validation:
 
 - focused conflict resolver regression test
+- focused GitHub HTTPS token handoff regression test
 - frontend build verification
 - Rust Tauri command bridge check
 

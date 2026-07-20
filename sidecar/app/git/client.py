@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import subprocess
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +19,12 @@ class GitResult:
     return_code: int
 
 
+@dataclass(frozen=True)
+class GitHttpAuth:
+    username: str
+    password: str
+
+
 class GitClient:
     def __init__(self, repository_path: Path | None = None) -> None:
         self.repository_path = repository_path
@@ -27,6 +35,7 @@ class GitClient:
         *,
         timeout_seconds: int = 20,
         allow_failure: bool = False,
+        http_auth: GitHttpAuth | None = None,
     ) -> GitResult:
         command = ["git", *args]
         environment = os.environ.copy()
@@ -41,35 +50,86 @@ class GitClient:
                 "LC_ALL": "C",
             }
         )
+        askpass_path: Path | None = None
+        if http_auth is not None:
+            askpass_path = self._write_askpass_helper()
+            environment.update(
+                {
+                    "GIT_ASKPASS": str(askpass_path),
+                    "AIGA_GIT_USERNAME": http_auth.username,
+                    "AIGA_GIT_PASSWORD": http_auth.password,
+                }
+            )
 
         try:
-            completed = subprocess.run(
-                command,
-                cwd=str(self.repository_path) if self.repository_path else None,
-                shell=False,
-                check=False,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout_seconds,
-                env=environment,
+            try:
+                completed = subprocess.run(
+                    command,
+                    cwd=str(self.repository_path) if self.repository_path else None,
+                    shell=False,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=timeout_seconds,
+                    env=environment,
+                )
+            except FileNotFoundError as exc:
+                raise GitCommandError("Git was not found on PATH.", status_code=503) from exc
+            except subprocess.TimeoutExpired as exc:
+                raise GitCommandError("Git command timed out.") from exc
+
+            result = GitResult(
+                stdout=completed.stdout,
+                stderr=completed.stderr,
+                return_code=completed.returncode,
             )
-        except FileNotFoundError as exc:
-            raise GitCommandError("Git was not found on PATH.", status_code=503) from exc
-        except subprocess.TimeoutExpired as exc:
-            raise GitCommandError("Git command timed out.") from exc
 
-        result = GitResult(
-            stdout=completed.stdout,
-            stderr=completed.stderr,
-            return_code=completed.returncode,
-        )
+            if completed.returncode != 0 and not allow_failure:
+                raise GitCommandError(self._safe_error(result))
 
-        if completed.returncode != 0 and not allow_failure:
-            raise GitCommandError(self._safe_error(result))
+            return result
+        finally:
+            if askpass_path is not None:
+                try:
+                    askpass_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
-        return result
+    @staticmethod
+    def _write_askpass_helper() -> Path:
+        """Create a short-lived helper that returns credentials from env vars."""
+        if os.name == "nt":
+            content = (
+                "@echo off\r\n"
+                "echo %* | findstr /I \"username\" >nul\r\n"
+                "if %ERRORLEVEL% EQU 0 (\r\n"
+                "  echo %AIGA_GIT_USERNAME%\r\n"
+                ") else (\r\n"
+                "  echo %AIGA_GIT_PASSWORD%\r\n"
+                ")\r\n"
+            )
+            suffix = ".cmd"
+        else:
+            content = (
+                "#!/bin/sh\n"
+                "case \"$1\" in\n"
+                "  *sername*|*Username*) printf '%s\\n' \"$AIGA_GIT_USERNAME\" ;;\n"
+                "  *) printf '%s\\n' \"$AIGA_GIT_PASSWORD\" ;;\n"
+                "esac\n"
+            )
+            suffix = ".sh"
+
+        handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=suffix, delete=False)
+        try:
+            handle.write(content)
+            path = Path(handle.name)
+        finally:
+            handle.close()
+        if os.name != "nt":
+            path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        return path
 
     @staticmethod
     def _safe_error(result: GitResult) -> str:
@@ -234,8 +294,8 @@ class GitClient:
             allow_failure=True,
         ).stdout
 
-    def fetch_prune(self) -> GitResult:
-        return self.run(["fetch", "--prune"], timeout_seconds=45)
+    def fetch_prune(self, *, http_auth: GitHttpAuth | None = None) -> GitResult:
+        return self.run(["fetch", "--prune"], timeout_seconds=45, http_auth=http_auth)
 
     def stage_paths(self, paths: Sequence[str]) -> GitResult:
         if not paths:
@@ -361,21 +421,29 @@ class GitClient:
     def delete_tag(self, tag_name: str) -> GitResult:
         return self.run(["tag", "-d", tag_name])
 
-    def push_tag(self, remote: str, tag_name: str) -> GitResult:
+    def push_tag(self, remote: str, tag_name: str, *, http_auth: GitHttpAuth | None = None) -> GitResult:
         return self.run(
             ["push", "--porcelain", remote, f"refs/tags/{tag_name}:refs/tags/{tag_name}"],
             timeout_seconds=90,
+            http_auth=http_auth,
         )
 
-    def push_current_head(self, remote: str, branch: str) -> GitResult:
+    def push_current_head(
+        self,
+        remote: str,
+        branch: str,
+        *,
+        http_auth: GitHttpAuth | None = None,
+    ) -> GitResult:
         # Intentionally non-force; pins the remote ref previewed to the user.
         return self.run(
             ["push", "--porcelain", remote, f"HEAD:refs/heads/{branch}"],
             timeout_seconds=90,
+            http_auth=http_auth,
         )
 
-    def pull_ff_only(self) -> GitResult:
-        return self.run(["pull", "--ff-only"], timeout_seconds=60)
+    def pull_ff_only(self, *, http_auth: GitHttpAuth | None = None) -> GitResult:
+        return self.run(["pull", "--ff-only"], timeout_seconds=60, http_auth=http_auth)
 
     def set_upstream(self, remote: str, branch: str) -> GitResult:
         return self.run(["branch", "--set-upstream-to", f"{remote}/{branch}", branch])
@@ -453,8 +521,19 @@ class GitClient:
     def log_range_oneline(self, revision_range: str) -> str:
         return self.run(["log", "--oneline", revision_range], allow_failure=True).stdout
 
-    def remote_branch_exists(self, remote: str, branch: str) -> bool:
-        result = self.run(["ls-remote", "--heads", remote, branch], timeout_seconds=60, allow_failure=True)
+    def remote_branch_exists(
+        self,
+        remote: str,
+        branch: str,
+        *,
+        http_auth: GitHttpAuth | None = None,
+    ) -> bool:
+        result = self.run(
+            ["ls-remote", "--heads", remote, branch],
+            timeout_seconds=60,
+            allow_failure=True,
+            http_auth=http_auth,
+        )
         return bool(result.stdout.strip())
 
     def stash_push(self, message: str | None = None) -> GitResult:
@@ -516,11 +595,18 @@ class GitClient:
     def merge_commit(self) -> GitResult:
         return self.run(["commit", "--no-edit"], timeout_seconds=45)
 
-    def push_with_set_upstream(self, remote: str, branch: str) -> GitResult:
+    def push_with_set_upstream(
+        self,
+        remote: str,
+        branch: str,
+        *,
+        http_auth: GitHttpAuth | None = None,
+    ) -> GitResult:
         # Used for branches that have no tracking upstream yet. Sets the
         # upstream tracking reference so subsequent pushes can use the simpler
         # push_current_head path.
         return self.run(
             ["push", "--porcelain", "--set-upstream", remote, f"HEAD:refs/heads/{branch}"],
             timeout_seconds=90,
+            http_auth=http_auth,
         )

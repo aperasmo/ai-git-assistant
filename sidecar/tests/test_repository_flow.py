@@ -1639,9 +1639,16 @@ def test_draft_github_pull_request_uses_configured_token(
     app_client.app.state.settings_service.update_github_settings(
         UpdateGitHubSettingsRequest(token="github-token")
     )
+
+    branch_checks: list[dict] = []
+
+    def fake_remote_branch_exists(self, remote, branch, **kwargs):
+        branch_checks.append({"remote": remote, "branch": branch, **kwargs})
+        return remote == "origin" and branch == "feature/readme"
+
     monkeypatch.setattr(
         "app.services.repository_service.GitClient.remote_branch_exists",
-        lambda self, remote, branch: remote == "origin" and branch == "feature/readme",
+        fake_remote_branch_exists,
     )
 
     calls: list[dict] = []
@@ -1689,6 +1696,8 @@ def test_draft_github_pull_request_uses_configured_token(
     assert calls[0]["repository"].slug == "example/demo-repository"
     assert calls[0]["head"] == "feature/readme"
     assert calls[0]["base"] == "master"
+    assert branch_checks[0]["http_auth"].username == "x-access-token"
+    assert branch_checks[0]["http_auth"].password == "github-token"
 
 
 def test_draft_github_pull_request_blocks_unpushed_commits(

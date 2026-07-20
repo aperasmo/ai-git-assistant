@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from app.config import Settings
 from app.errors import GitCommandError, ValidationFailure
-from app.git.client import GitClient
+from app.git.client import GitClient, GitHttpAuth
 from app.git.repository_inspector import RepositoryInspector
 from app.intent.action_planner import LocalActionPlanner
 from app.intent.local_matcher import LocalIntentMatcher
@@ -72,6 +72,7 @@ _MAX_COMMIT_MESSAGE_CONTEXT_CHARS = 14_000
 _STASH_REF_PATTERN = re.compile(r"^stash@\{\d{1,3}\}$")
 _TAG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 _GITHUB_REPOSITORY_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+_GITHUB_HTTPS_REMOTE_PATTERN = re.compile(r"^https://github\.com/[^/\s]+/[^/\s]+?(?:\.git)?/?$")
 _CONFLICT_RESOLUTION_STEPS = {
     PlanStepKind.STAGE,
     PlanStepKind.MERGE_ABORT,
@@ -966,7 +967,11 @@ class RepositoryService:
                 raise ValidationFailure("GitHub created the repository but did not return a clone URL.")
             client.remote_add("origin", remote_url)
             completed_steps.append("Add origin remote")
-            client.push_with_set_upstream("origin", target_branch)
+            client.push_with_set_upstream(
+                "origin",
+                target_branch,
+                http_auth=GitHttpAuth(username="x-access-token", password=token),
+            )
             completed_steps.append("Push with upstream")
         except GitCommandError as exc:
             msg = exc.message
@@ -1189,7 +1194,11 @@ class RepositoryService:
         canonical_path = self.store.canonical_path(repository_id)
         client = GitClient(canonical_path)
         github_remote = self._github_remote_name_from_snapshot(snapshot)
-        if not client.remote_branch_exists(github_remote, head_branch):
+        if not client.remote_branch_exists(
+            github_remote,
+            head_branch,
+            http_auth=self._git_http_auth_for_remote(snapshot, github_remote),
+        ):
             raise ValidationFailure(
                 f"GitHub cannot see branch '{head_branch}' on remote '{github_remote}'. Push the branch first."
             )
@@ -1373,15 +1382,16 @@ class RepositoryService:
                     self._validate_push_step_against_current_repository(repository_id, step)
                     if not step.remote or not step.branch:
                         raise ValidationFailure("The reviewed plan has no validated push target.")
+                    http_auth = self._git_http_auth_for_remote(current_snapshot, step.remote)
                     if step.set_upstream:
-                        client.push_with_set_upstream(step.remote, step.branch)
+                        client.push_with_set_upstream(step.remote, step.branch, http_auth=http_auth)
                     else:
-                        client.push_current_head(step.remote, step.branch)
+                        client.push_current_head(step.remote, step.branch, http_auth=http_auth)
                     completed_steps.append(step.title)
                     continue
 
                 if step.kind is PlanStepKind.PULL:
-                    client.pull_ff_only()
+                    client.pull_ff_only(http_auth=self._git_http_auth_for_upstream(current_snapshot))
                     completed_steps.append(step.title)
                     continue
 
@@ -1490,7 +1500,11 @@ class RepositoryService:
                         raise ValidationFailure("The reviewed plan has no remote.")
                     self._validate_tag_name(step.tag_name)
                     self._validate_tag_push_step_against_current_repository(repository_id, step)
-                    client.push_tag(step.remote, step.tag_name)
+                    client.push_tag(
+                        step.remote,
+                        step.tag_name,
+                        http_auth=self._git_http_auth_for_remote(current_snapshot, step.remote),
+                    )
                     completed_steps.append(step.title)
                     continue
 
@@ -1729,9 +1743,9 @@ class RepositoryService:
             )
 
         if request.action is ReadAction.FETCH:
-            client.fetch_prune()
-            refreshed_at = datetime.now(UTC).isoformat()
             pre_snapshot = self.snapshot(repository_id)
+            client.fetch_prune(http_auth=self._git_http_auth_for_upstream(pre_snapshot))
+            refreshed_at = datetime.now(UTC).isoformat()
             self.store.update_inspection(
                 repository_id,
                 branch=pre_snapshot.branch,
@@ -1945,6 +1959,26 @@ class RepositoryService:
             if parse_github_remote_url(remote_url) is not None:
                 return name
         raise ValidationFailure("No GitHub remote was found for this repository.")
+
+    def _git_http_auth_for_remote(
+        self,
+        snapshot: RepositorySnapshot,
+        remote: str | None,
+    ) -> GitHttpAuth | None:
+        if not remote:
+            return None
+        remote_url = (snapshot.remote_urls.get(remote) or "").strip()
+        if not _GITHUB_HTTPS_REMOTE_PATTERN.match(remote_url):
+            return None
+        if self.settings_service is None:
+            return None
+        token = self.settings_service.get_raw_github_token()
+        if not token:
+            return None
+        return GitHttpAuth(username="x-access-token", password=token)
+
+    def _git_http_auth_for_upstream(self, snapshot: RepositorySnapshot) -> GitHttpAuth | None:
+        return self._git_http_auth_for_remote(snapshot, snapshot.upstream_remote)
 
     @staticmethod
     def _gitlab_repository_from_snapshot(snapshot: RepositorySnapshot) -> GitLabRepositoryRef:
