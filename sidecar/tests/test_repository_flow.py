@@ -1729,7 +1729,7 @@ def test_draft_github_pull_request_blocks_unpushed_commits(
     )
     monkeypatch.setattr(
         "app.services.repository_service.GitClient.remote_branch_exists",
-        lambda self, remote, branch: False,
+        lambda self, remote, branch, **kwargs: False,
     )
 
     register = app_client.post(
@@ -1873,7 +1873,7 @@ def test_draft_gitlab_merge_request_uses_configured_token(
     )
     monkeypatch.setattr(
         "app.services.repository_service.GitClient.remote_branch_exists",
-        lambda self, remote, branch: remote == "origin" and branch == "feature/gitlab",
+        lambda self, remote, branch, **kwargs: remote == "origin" and branch == "feature/gitlab",
     )
 
     calls: list[dict] = []
