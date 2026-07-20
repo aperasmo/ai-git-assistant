@@ -1248,16 +1248,43 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px 16px 10px;
+  gap: 7px;
+  padding: 8px 20px 8px;
   border-top: 1px solid #1a1e26;
-  background: #0d1017;
+  background:
+    linear-gradient(180deg, rgba(13,16,23,.94), #0d1017 34%),
+    #0d1017;
 }
-.command-bar-row {
+.command-primary-row,
+.command-drawer-section {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.command-primary-row {
+  min-height: 30px;
+}
+.command-primary-actions,
+.command-drawer-actions {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
+}
+.command-primary-actions {
+  flex: 1;
+  overflow: hidden;
+  max-height: 31px;
+}
+.command-drawer {
+  display: grid;
+  gap: 7px;
+  padding: 10px 10px 11px;
+  border: 1px solid #1e2530;
+  border-radius: 10px;
+  background: rgba(17,20,25,.92);
+  box-shadow: 0 -10px 34px rgba(0,0,0,.18);
 }
 .command-bar-section-label {
   font-size: 9.5px;
@@ -1282,6 +1309,16 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   transition: border-color .13s, color .13s, background .13s;
 }
 .command-pill-icon { font-size: 11px; opacity: .8; }
+.command-pill-primary {
+  color: #9aa4b4;
+  background: #151a21;
+}
+.command-pill-more {
+  margin-left: auto;
+  border-color: rgba(96,165,250,.28);
+  background: rgba(59,130,246,.09);
+  color: #9fc3ff;
+}
 .command-pill-read:hover:not(:disabled) {
   border-color: #388bfd;
   color: #e6edf3;
@@ -1292,7 +1329,23 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   color: #e6edf3;
   background: #141d16;
 }
+.command-pill-more:hover:not(:disabled) {
+  border-color: #60a5fa;
+  background: rgba(59,130,246,.16);
+  color: #d6e6ff;
+}
 .command-pill:disabled { opacity: .35; cursor: not-allowed; }
+
+@media (max-width: 1180px), (max-height: 760px) {
+  .command-bar { padding-inline: 14px; }
+  .command-primary-actions .command-pill:nth-of-type(n+6) {
+    display: none;
+  }
+  .command-drawer {
+    max-height: 145px;
+    overflow: auto;
+  }
+}
 
 /* ── Tour button ─────────────────────────────────────────── */
 .tour-button {

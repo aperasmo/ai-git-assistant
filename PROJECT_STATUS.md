@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 18/07/2026
+Last updated: 20/07/2026
 
 ---
 
@@ -22,7 +22,8 @@ Versions track the active product phase so releases are easy to understand:
 | Phase 5 | `0.5.x` | Workflow polish and agent worktree control plane |
 | Phase 6 | `0.6.x` | PR and review workflow |
 | Phase 7 | `0.7.x` | Cross-platform release |
-| Phase 8 | `0.8.x` | Team context and conventions |
+| Phase 8 | `0.8.x` | UI responsiveness and workflow polish |
+| Phase 9 | `0.9.x` | Team context and conventions |
 
 The first release in a phase uses `.0`; sub-phase improvements stay inside the same phase line, so Phase 6 starts at `0.6.0`.
 
@@ -161,7 +162,14 @@ These dates mark when the phase or feature set was first added to the project hi
 5. GitHub HTTPS pull, push, fetch, tag push, and branch-visibility checks can use the stored GitHub token non-interactively.
 6. Updated public docs and metadata for `0.7.9`.
 
-#### Phase 8 - target TBD
+#### Phase 8 - 20/07/2026
+
+1. Started the UI responsiveness and workflow-polish line at `0.8.0`.
+2. Reworked the bottom command bar into an adaptive command dock.
+3. Kept high-frequency actions visible by default and moved the full command set behind More for smaller screens.
+4. Updated walkthrough targets and docs for the new dock.
+
+#### Phase 9 - target TBD
 
 1. Planned team context and conventions.
 2. Planned repo-local style profiles and AI context receipts.
@@ -519,7 +527,17 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [ ] Verify bundled sidecar startup, Git discovery, file pickers, and installer/update behavior on macOS and Linux.
 - [ ] Document platform-specific install and troubleshooting steps.
 
-### Phase 8 - Team context and conventions (target TBD)
+### Phase 8 - UI responsiveness and workflow polish (20/07/2026)
+
+- [x] Rework the bottom command bar into an adaptive command dock.
+- [x] Keep the most-used actions visible by default.
+- [x] Move the full command set behind More for smaller screens.
+- [x] Update walkthrough copy for the new command dock.
+- [ ] Add a collapsible right repository context panel.
+- [ ] Add stronger context-aware command visibility.
+- [ ] Add light/dark theme foundations.
+
+### Phase 9 - Team context and conventions (target TBD)
 
 - [ ] Add repo-local team context, for example `.ai-git-assistant/team-context.md`.
 - [ ] Import team conventions from `CONTRIBUTING.md`, PR templates, changelog rules, and recent commit history.

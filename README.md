@@ -8,11 +8,11 @@ AI Git Assistant is a cross-platform desktop app that turns what you want to do 
 
 ## Current release
 
-**0.7.9 - Phase 7.9** adds a guided **Conflict Resolver** for merge conflicts. It includes everything from Phase 7.8 plus recovery cards that can preview a resolution by keeping the local version, keeping the incoming remote version, or asking AI for a proposed merge. Nothing is written until you approve the preview, then the app applies the resolved content, marks the files resolved, and guides you to continue the merge.
+**0.8.0 - Phase 8** starts the UI polish line with an adaptive command dock. The bottom command area now keeps the most-used actions visible and moves the full command set behind **More**, so the app stays cleaner on Windows, Linux VMs, laptops, and lower-height screens.
 
-It also lets GitHub HTTPS Git operations reuse the saved GitHub token for pull, push, fetch, tag push, and branch visibility checks, so Linux and fresh machines do not fall back to terminal password prompts when the app already has a valid token.
+Phase 8 keeps the safety model from Phase 7.9: write actions still show reviewed plans and require approval before Git changes are made.
 
-Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
+Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`, Phase 8 = `0.8.x`. The first release in a phase uses `.0`, so Phase 8 starts at `0.8.0`.
 
 See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phase 2 hardening notes.
 
@@ -32,6 +32,7 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 - **Guides blocked workflows** - when Git needs upstream tracking, author identity, GitHub push permission, divergent-branch handling, merge conflict resolution, or a better repository selection, the app recommends the next step
 - **Connects to an AI provider** (optional) so it can understand requests the built-in patterns don't cover
 - **Safe by design** - no force pushes, no hard resets, no surprises
+- **Adapts the command dock** - common actions stay visible while advanced actions live behind More
 
 ---
 
@@ -448,7 +449,8 @@ Delete that file for a completely clean start.
 - **Phase 5:** Agent worktree control plane
 - **Phase 6:** PR and review workflow
 - **Phase 7:** Mac and Linux release support
-- **Phase 8:** Team context and conventions
+- **Phase 8:** UI responsiveness and workflow polish
+- **Phase 9:** Team context and conventions
 
 ---
 

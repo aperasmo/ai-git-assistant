@@ -1,5 +1,20 @@
 # Release Notes
 
+## 0.8.0 - Phase 8
+
+Starts the UI responsiveness and workflow-polish phase.
+
+- Reworked the bottom command bar into an adaptive command dock.
+- Keeps high-frequency actions visible by default: status, diff, recent commits, commit and push, pull latest, and connect remote.
+- Moves the full read/write command set behind **More** so smaller Linux VM and laptop resolutions have more room for the main conversation.
+- Adds an expanded command drawer with grouped read and write actions.
+- Updates walkthrough targets and copy for the new command dock.
+- Public docs and version metadata updated to `0.8.0`.
+
+Validation:
+
+- frontend build verification
+
 ## 0.7.9 - Phase 7.9
 
 Adds a guided Conflict Resolver for merge conflicts.
