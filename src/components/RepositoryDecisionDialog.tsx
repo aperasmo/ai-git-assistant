@@ -63,8 +63,8 @@ export function RepositoryDecisionDialog({
         ) : (
           <>
             <p>
-              This folder is not currently a Git repository. Initialising it
-              creates local Git metadata only.
+              {classification.message ??
+                "This folder is not currently a Git repository. Initialising it creates local Git metadata only."}
             </p>
 
             <div className="repository-decision-path-group">

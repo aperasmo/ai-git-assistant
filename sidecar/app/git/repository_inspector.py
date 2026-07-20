@@ -107,6 +107,19 @@ class RepositoryInspector:
 
         git_metadata = self._find_git_metadata(path)
         if git_metadata is not None:
+            if git_metadata.parent != path:
+                return FolderClassification(
+                    kind="initialisation_required",
+                    selected_path=path,
+                    repository_root=None,
+                    can_initialise=True,
+                    message=(
+                        f"Broken or incomplete Git metadata was found above this folder at "
+                        f"{git_metadata}. This selected folder is not a Git repository yet, "
+                        "so it can be initialised as its own separate repository."
+                    ),
+                )
+
             return FolderClassification(
                 kind="unsupported_repository",
                 selected_path=path,

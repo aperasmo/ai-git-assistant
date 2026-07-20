@@ -104,7 +104,16 @@ export function WizardStep({
     case "option_select":
       return <OptionSelectStep entry={entry} busy={busy} onNext={onNext} onCancel={onCancel} />;
     case "confirm":
-      return <ConfirmStep entry={entry} busy={busy} onConfirm={onConfirm} onCancel={onCancel} danger={entry.danger} />;
+      return (
+        <ConfirmStep
+          entry={entry}
+          busy={busy}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+          danger={entry.danger}
+          confirmLabel={entry.confirmLabel}
+        />
+      );
   }
 }
 
@@ -710,12 +719,14 @@ function ConfirmStep({
   onConfirm,
   onCancel,
   danger,
+  confirmLabel,
 }: {
   entry: WizardStepEntry;
   busy: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   danger?: boolean;
+  confirmLabel?: string;
 }) {
   return (
     <div className="wizard-step-card wizard-step-confirm">
@@ -742,9 +753,9 @@ function ConfirmStep({
               Executing...
             </>
           ) : danger ? (
-            "Discard"
+            confirmLabel ?? "Discard"
           ) : (
-            "Execute"
+            confirmLabel ?? "Execute"
           )}
         </button>
         <button

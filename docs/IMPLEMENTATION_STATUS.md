@@ -1,7 +1,7 @@
 # Implementation Status
 
-**Last updated:** 17 July 2026  
-**Current state:** Phase 7.7 cross-platform release hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; GitHub draft releases can be created or updated by tag; AppImage and macOS packaging remain pending.
+**Last updated:** 18 July 2026  
+**Current state:** Phase 7.9 cross-platform release hardening in progress. Windows is release-built; Ubuntu `.deb` packaging is verified; GitHub draft releases can be created or updated by tag; local-only repositories can be published to GitHub from the app; push/pull/merge blockers now surface guided recovery actions; merge conflicts can be resolved through preview-first local/remote/AI choices; AppImage and macOS packaging remain pending.
 
 ---
 
@@ -107,6 +107,9 @@
 - **Divergent-branch recovery:** Fast-forward pull failures now explain the cross-machine divergence and offer fetch, diff, or a reviewed upstream merge.
 - **One-command installer builds:** `npm run installer` runs sidecar tests, builds the sidecar binary, and builds the native installer for the current host OS.
 - **Release Manager draft releases:** GitHub draft releases can select an existing tag or enter a new tag, create the missing GitHub tag ref before saving a new draft, use a larger markdown description editor, retrieve existing draft title/body/assets in Edit mode, show already-attached assets in the asset picker, create a new draft or update an existing draft for that tag, upload multiple installer assets, and report duplicate asset filenames without silently replacing them.
+- **Publish GitHub:** Local-only repositories can create a GitHub repository, commit selected files when needed, rename the branch to `main`, add `origin`, and push with upstream tracking after explicit approval.
+- **Push/pull/merge recovery:** Push rejections caused by newer remote commits now explain that the local commit exists and offer fetch, pull latest, or diff review. Merge conflicts now offer show conflicts, continue merge, abort merge, and preview-first conflict resolution from the recovery card. Git error parsing prefers actionable `fatal:` / `error:` lines over transfer noise.
+- **Guided Conflict Resolver:** Conflict recovery can preview keep-local, keep-remote, or AI-proposed resolutions, then apply the resolved content only after explicit user approval.
 
 ### Post-launch fixes
 
@@ -123,9 +126,10 @@
 | `test_action_planner.py` | 30 | Pass |
 | `test_settings_service.py` | 7 | Pass |
 | `test_llm_validator.py` | 12 | Pass |
-| **Total** | **49** | **All pass** |
+| `test_repository_flow.py` | 135 | Pass |
+| **Total** | **184** | **All pass** |
 
-Integration tests (`test_repository_flow.py`, `test_local_matcher.py`) use disposable Git repositories via `tmp_path`; these currently fail at the pytest session level due to a Windows permission error on the `pytest-of-<user>` temp directory (`PermissionError: [WinError 5]`). This is a pre-existing OS-level issue unrelated to the application code.
+Integration tests (`test_repository_flow.py`) use disposable Git repositories and pass when pytest's base temp directory is controlled by the project test wrapper.
 
 TypeScript: `npx tsc --noEmit` — no errors.  
 Sidecar binary: built with PyInstaller at `src-tauri/binaries/ai-git-sidecar-x86_64-pc-windows-msvc.exe`.

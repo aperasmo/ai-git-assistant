@@ -1,4 +1,4 @@
-import type { ReadAction } from "./types";
+import type { ConflictResolvedFile, ConflictResolutionStrategy, ReadAction } from "./types";
 
 export type WizardFlowId =
   | "status"
@@ -19,6 +19,8 @@ export type WizardFlowId =
   | "stash"
   | "discard"
   | "connect_remote"
+  | "publish_github"
+  | "resolve_conflict"
   | "draft_release"
   | "draft_pr";
 
@@ -49,6 +51,7 @@ export const FLOWS: FlowDef[] = [
   { id: "stash", label: "Stash changes", icon: "H", description: "Save work in progress", category: "write" },
   { id: "discard", label: "Discard changes", icon: "X", description: "Revert file changes", category: "write" },
   { id: "connect_remote", label: "Connect remote", icon: "@", description: "Add GitHub/GitLab origin", category: "write" },
+  { id: "publish_github", label: "Publish GitHub", icon: "O", description: "Create GitHub repo and push", category: "write" },
   { id: "draft_release", label: "Release manager", icon: "V", description: "Create or update a GitHub draft release", category: "write" },
   { id: "draft_pr", label: "Draft PR", icon: "Q", description: "Create a GitHub PR or GitLab MR", category: "write" },
 ];
@@ -73,6 +76,12 @@ export interface WizardData {
   assetPath?: string;
   assetPaths?: string[];
   prerelease?: boolean;
+  githubRepoName?: string;
+  githubRepoDescription?: string;
+  githubPrivate?: boolean;
+  publishStage?: "commit_message" | "repo_name" | "description" | "visibility";
+  conflictStrategy?: ConflictResolutionStrategy;
+  conflictResolvedFiles?: ConflictResolvedFile[];
   prBaseBranch?: string;
   prTitle?: string;
   prBody?: string;

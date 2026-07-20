@@ -49,6 +49,19 @@ class GitHubReleaseAssetResult:
 
 
 @dataclass(frozen=True)
+class GitHubCreatedRepositoryResult:
+    owner: str
+    repo: str
+    html_url: str
+    clone_url: str
+    private: bool
+
+    @property
+    def slug(self) -> str:
+        return f"{self.owner}/{self.repo}"
+
+
+@dataclass(frozen=True)
 class GitHubDraftReleaseDetails:
     tag_name: str
     title: str
@@ -94,6 +107,45 @@ class GitHubReleaseClient:
     def __init__(self, token: str, *, timeout_seconds: float = 120.0) -> None:
         self._token = token
         self._timeout = timeout_seconds
+
+    def create_repository(
+        self,
+        *,
+        name: str,
+        description: str,
+        private: bool,
+    ) -> GitHubCreatedRepositoryResult:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self._token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        payload: dict[str, object] = {
+            "name": name,
+            "description": description,
+            "private": private,
+            "auto_init": False,
+        }
+        try:
+            with httpx.Client(timeout=self._timeout, follow_redirects=True) as client:
+                response = client.post(
+                    "https://api.github.com/user/repos",
+                    headers=headers,
+                    json=payload,
+                )
+                self._raise_for_github_error(response, operation="repository creation")
+                repository = response.json()
+        except httpx.HTTPError as exc:
+            raise ValidationFailure(f"GitHub repository request failed: {exc}") from exc
+
+        owner = repository.get("owner") or {}
+        return GitHubCreatedRepositoryResult(
+            owner=str(owner.get("login") or ""),
+            repo=str(repository.get("name") or name),
+            html_url=str(repository.get("html_url") or ""),
+            clone_url=str(repository.get("clone_url") or ""),
+            private=bool(repository.get("private")),
+        )
 
     def create_draft_release(
         self,
@@ -514,6 +566,15 @@ class GitHubReleaseClient:
         if response.status_code < 400:
             return
         message = _github_error_message(response)
+        if operation == "repository creation" and response.status_code in {403, 404}:
+            raise ValidationFailure(
+                "GitHub token cannot create repositories for this account. "
+                "Use a token that is allowed to create repositories, then save it again in Settings."
+            )
+        if operation == "repository creation" and response.status_code == 422:
+            raise ValidationFailure(
+                f"GitHub could not create the repository: {str(message).strip()[:300]}"
+            )
         if (
             response.status_code == 403
             and "resource not accessible by personal access token" in str(message).lower()

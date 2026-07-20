@@ -21,9 +21,14 @@ from app.schemas.repositories import (
     AgentSessionActionResponse,
     AgentSessionComparisonResponse,
     AgentSessionResponse,
+    ApplyConflictResolutionRequest,
+    ApplyConflictResolutionResponse,
     BranchInfo,
     CancelActionPlanResponse,
     CommitMessageStyle,
+    ConflictResolutionPreviewRequest,
+    ConflictResolutionPreviewResponse,
+    ConflictResolvedFile,
     DraftGitLabMergeRequestRequest,
     DraftGitLabMergeRequestResponse,
     DraftGitHubPullRequestRequest,
@@ -41,6 +46,8 @@ from app.schemas.repositories import (
     PlanRisk,
     PlanStepKind,
     PrivacyReceipt,
+    PublishGitHubRepositoryRequest,
+    PublishGitHubRepositoryResponse,
     ReadAction,
     ReadActionRequest,
     ReadActionResult,
@@ -64,6 +71,7 @@ _MAX_READ_OUTPUT_CHARS = 80_000
 _MAX_COMMIT_MESSAGE_CONTEXT_CHARS = 14_000
 _STASH_REF_PATTERN = re.compile(r"^stash@\{\d{1,3}\}$")
 _TAG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
+_GITHUB_REPOSITORY_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 _CONFLICT_RESOLUTION_STEPS = {
     PlanStepKind.STAGE,
     PlanStepKind.MERGE_ABORT,
@@ -681,6 +689,165 @@ class RepositoryService:
         )
         return response.model_copy(update={"privacy_receipt": receipt})
 
+    def preview_conflict_resolution(
+        self,
+        repository_id: str,
+        request: ConflictResolutionPreviewRequest,
+    ) -> ConflictResolutionPreviewResponse:
+        repository = self.store.get(repository_id)
+        canonical_path = self.store.canonical_path(repository_id)
+        snapshot = self.snapshot(repository_id)
+        conflict_paths = {item.path for item in snapshot.conflicts}
+        if not conflict_paths:
+            raise ValidationFailure("No conflicted files are available to resolve.")
+
+        requested_paths = request.paths or sorted(conflict_paths)
+        invalid = [path for path in requested_paths if path not in conflict_paths]
+        if invalid:
+            raise ValidationFailure(
+                "Only currently conflicted files can be resolved: " + ", ".join(invalid[:5])
+            )
+
+        resolved_files: list[ConflictResolvedFile] = []
+        total_chars = 0
+        for raw_path in requested_paths:
+            path = self._normalise_requested_path(raw_path)
+            file_path = canonical_path / path
+            if not file_path.is_file():
+                raise ValidationFailure(f"Conflicted file '{raw_path}' was not found.")
+            current = file_path.read_text(encoding="utf-8", errors="replace")
+            total_chars += len(current)
+            if total_chars > 60_000:
+                raise ValidationFailure(
+                    "Conflict preview is too large for one automated pass. Resolve fewer files at a time."
+                )
+
+            has_markers = self._has_conflict_markers(current)
+            if not has_markers:
+                resolved = current
+                count = 0
+                summary = (
+                    "No conflict markers were found. This file appears to be manually resolved "
+                    "and will be marked resolved."
+                )
+            elif request.strategy == "ai":
+                if not repository.external_llm_allowed:
+                    raise ValidationFailure(
+                        "Enable Repository AI context before using AI conflict resolution for this repository."
+                    )
+                if self._llm_router is None:
+                    raise ValidationFailure("No AI provider is configured for conflict resolution.")
+                resolved, count, summary = self._resolve_conflict_with_ai(raw_path, current)
+            else:
+                resolved, count = self._resolve_conflict_markers(current, request.strategy)
+                summary = (
+                    "Kept local conflict sections."
+                    if request.strategy == "ours"
+                    else "Kept incoming remote conflict sections."
+                )
+
+            if self._has_conflict_markers(resolved):
+                raise ValidationFailure(
+                    f"Resolved content for '{raw_path}' still contains conflict markers."
+                )
+            resolved_files.append(
+                ConflictResolvedFile(
+                    path=raw_path,
+                    content=resolved,
+                    conflict_count=count,
+                    summary=summary,
+                )
+            )
+
+        strategy_label = {
+            "ours": "keep local version",
+            "theirs": "keep remote version",
+            "ai": "AI proposal",
+        }[request.strategy]
+        content_lines = [
+            f"Strategy: {strategy_label}",
+            "",
+            "Resolved files:",
+            *[
+                f"- {item.path} ({item.conflict_count} conflict block{'s' if item.conflict_count != 1 else ''})"
+                for item in resolved_files
+            ],
+            "",
+            "Preview:",
+        ]
+        for item in resolved_files:
+            content_lines.extend(
+                [
+                    "",
+                    f"--- {item.path}",
+                    item.summary,
+                    self._preview_resolved_content(item.content),
+                ]
+            )
+
+        privacy_receipt = None
+        if request.strategy == "ai":
+            privacy_receipt = self._llm_privacy_receipt(
+                purpose="AI conflict resolution preview",
+                files=[item.path for item in resolved_files],
+                context_items=["conflicted file contents"],
+                exact_context="Conflicted file contents were sent to the configured AI provider for a resolution proposal.",
+                truncated=False,
+            )
+
+        return ConflictResolutionPreviewResponse(
+            strategy=request.strategy,
+            title="Conflict resolution preview",
+            summary=f"Preview prepared for {len(resolved_files)} conflicted file(s). Nothing has been written yet.",
+            content=self._bound_read_output("\n".join(content_lines)),
+            resolved_files=resolved_files,
+            privacy_receipt=privacy_receipt,
+            snapshot=snapshot,
+        )
+
+    def apply_conflict_resolution(
+        self,
+        repository_id: str,
+        request: ApplyConflictResolutionRequest,
+    ) -> ApplyConflictResolutionResponse:
+        canonical_path = self.store.canonical_path(repository_id)
+        snapshot = self.snapshot(repository_id)
+        conflict_paths = {item.path for item in snapshot.conflicts}
+        if not conflict_paths:
+            raise ValidationFailure("No conflicted files are available to resolve.")
+
+        paths: list[str] = []
+        for item in request.resolved_files:
+            if item.path not in conflict_paths:
+                raise ValidationFailure(f"'{item.path}' is no longer a conflicted file.")
+            if self._has_conflict_markers(item.content):
+                raise ValidationFailure(f"Resolved content for '{item.path}' still contains conflict markers.")
+            path = self._normalise_requested_path(item.path)
+            file_path = canonical_path / path
+            if not file_path.is_file():
+                raise ValidationFailure(f"Conflicted file '{item.path}' was not found.")
+            file_path.write_text(item.content, encoding="utf-8")
+            paths.append(item.path)
+
+        GitClient(canonical_path).stage_paths(paths)
+        next_snapshot = self.snapshot(repository_id)
+        content = "\n".join(
+            [
+                f"Applied {request.strategy} conflict resolution.",
+                "",
+                "Resolved files:",
+                *[f"- {path}" for path in paths],
+                "",
+                "Next step: run continue merge from the app.",
+            ]
+        )
+        return ApplyConflictResolutionResponse(
+            title="Conflict resolution applied",
+            summary=f"{len(paths)} file(s) were written and marked resolved.",
+            content=content,
+            snapshot=next_snapshot,
+        )
+
     def generate_pull_request_draft(
         self,
         repository_id: str,
@@ -733,6 +900,116 @@ class RepositoryService:
             file_summaries=response.file_summaries,
             context_summary=context_summary,
             privacy_receipt=receipt,
+        )
+
+    def publish_github_repository(
+        self,
+        repository_id: str,
+        request: PublishGitHubRepositoryRequest,
+    ) -> PublishGitHubRepositoryResponse:
+        if self.settings_service is None:
+            raise ValidationFailure("GitHub settings are unavailable.")
+
+        token = self.settings_service.get_raw_github_token()
+        if not token:
+            raise ValidationFailure(
+                "No GitHub token is configured. Open Settings and add a token that can create repositories."
+            )
+
+        repository_name = request.repository_name.strip()
+        if not _GITHUB_REPOSITORY_NAME_PATTERN.match(repository_name):
+            raise ValidationFailure("Use a GitHub repository name with only letters, numbers, dots, dashes, or underscores.")
+
+        snapshot = self.snapshot(repository_id)
+        if snapshot.remote_names:
+            raise ValidationFailure(
+                "This repository already has a remote. Use Pull latest, Commit & push, or Connect remote for existing remotes."
+            )
+        if snapshot.write_blocked_reason or snapshot.conflicts:
+            raise ValidationFailure("Resolve repository conflicts before publishing this repository.")
+
+        canonical_path = self.store.canonical_path(repository_id)
+        client = GitClient(canonical_path)
+        changed_paths = self._changed_paths_from_snapshot(snapshot)
+        selected_paths = self._normalise_publish_paths(request.paths, changed_paths)
+        completed_steps: list[str] = []
+
+        try:
+            if selected_paths:
+                client.stage_paths(selected_paths)
+                completed_steps.append("Stage files")
+                staged_snapshot = self.snapshot(repository_id)
+                if not staged_snapshot.staged_changes:
+                    raise ValidationFailure("There are no staged changes available for the first publish commit.")
+                client.commit(request.commit_message.strip())
+                completed_steps.append("Commit")
+            elif not snapshot.head_commit:
+                raise ValidationFailure("Select files for the first commit before publishing this repository.")
+
+            branch_snapshot = self.snapshot(repository_id)
+            current_branch = branch_snapshot.branch or "main"
+            if current_branch != "main":
+                client.rename_branch("main")
+                completed_steps.append("Rename branch to main")
+            target_branch = "main"
+
+            github = self._github_release_client_factory(token)
+            created = github.create_repository(
+                name=repository_name,
+                description=request.description.strip(),
+                private=request.private,
+            )
+            completed_steps.append("Create GitHub repository")
+
+            remote_url = created.clone_url or f"{created.html_url}.git"
+            if not remote_url:
+                raise ValidationFailure("GitHub created the repository but did not return a clone URL.")
+            client.remote_add("origin", remote_url)
+            completed_steps.append("Add origin remote")
+            client.push_with_set_upstream("origin", target_branch)
+            completed_steps.append("Push with upstream")
+        except GitCommandError as exc:
+            msg = exc.message
+            if "author identity unknown" in msg.lower():
+                raise GitCommandError(
+                    "Git cannot create the commit because author identity is not configured. "
+                    "Open Settings, add your Git author name and email, then try Publish to GitHub again."
+                ) from exc
+            if completed_steps:
+                raise GitCommandError(
+                    f"Completed before the failure: {', '.join(completed_steps)}. Git then reported: {msg}"
+                ) from exc
+            raise
+
+        latest_snapshot = self.snapshot(repository_id)
+        content_lines = [
+            f"Repository: {created.slug}",
+            f"Visibility: {'private' if created.private else 'public'}",
+            f"GitHub URL: {created.html_url}",
+            f"Remote: origin -> {remote_url}",
+            f"Branch: {target_branch}",
+        ]
+        if selected_paths:
+            content_lines.extend(
+                [
+                    "",
+                    f"Committed {len(selected_paths)} file{'s' if len(selected_paths) != 1 else ''}:",
+                    *[f"- {path}" for path in selected_paths],
+                ]
+            )
+        else:
+            content_lines.extend(["", "No new commit was needed; existing commits were published."])
+        content_lines.extend(["", f"Ahead: {latest_snapshot.ahead}", f"Behind: {latest_snapshot.behind}"])
+
+        return PublishGitHubRepositoryResponse(
+            repository=created.slug,
+            repository_url=created.html_url,
+            remote_url=remote_url,
+            branch=target_branch,
+            title="Repository Published to GitHub",
+            summary=f"Created {created.slug}, connected origin, and pushed main with upstream tracking.",
+            content="\n".join(content_lines),
+            snapshot=latest_snapshot,
         )
 
     def draft_github_release(
@@ -1965,6 +2242,32 @@ class RepositoryService:
         return list(dict.fromkeys(normalised))
 
     @staticmethod
+    def _changed_paths_from_snapshot(snapshot: RepositorySnapshot) -> list[str]:
+        return list(dict.fromkeys([
+            *[item.path for item in snapshot.staged_changes],
+            *[item.path for item in snapshot.modified_changes],
+            *[item.path for item in snapshot.untracked_paths],
+        ]))
+
+    @staticmethod
+    def _normalise_publish_paths(paths: list[str], changed_paths: list[str]) -> list[str]:
+        if not changed_paths:
+            return []
+        if not paths:
+            return changed_paths
+
+        allowed = set(changed_paths)
+        normalised: list[str] = []
+        for raw_path in paths:
+            path = RepositoryService._normalise_requested_path(raw_path)
+            if path not in allowed:
+                raise ValidationFailure(
+                    f"'{path}' is not a changed file in the selected repository."
+                )
+            normalised.append(path)
+        return list(dict.fromkeys(normalised))
+
+    @staticmethod
     def _build_ai_diff_context(
         canonical_path,
         paths: list[str],
@@ -2619,10 +2922,12 @@ class RepositoryService:
                 *[f"- {item.path}" for item in snapshot.conflicts],
                 "",
                 "Next steps:",
-                "1. Edit each file and keep the correct content.",
-                "2. Remove the conflict markers: <<<<<<<, =======, >>>>>>>.",
-                "3. Stage each resolved file in the app.",
-                "4. Run: continue merge",
+                "1. Use the recovery card to preview Keep local, Keep remote, or AI conflict resolution.",
+                "2. Approve the preview to write and mark the files resolved.",
+                "3. Run: continue merge",
+                "",
+                "Manual option:",
+                "- Edit each file, remove <<<<<<<, =======, >>>>>>> markers, stage the resolved files, then run: continue merge",
                 "",
                 "To abandon this merge, run: abort merge",
             ]
@@ -2656,6 +2961,96 @@ class RepositoryService:
         start = max(0, marker_indexes[0] - 4)
         end = min(len(raw_lines), marker_indexes[-1] + 5)
         return "\n".join(raw_lines[start:end])
+
+    @staticmethod
+    def _has_conflict_markers(value: str) -> bool:
+        return any(
+            line.startswith(("<<<<<<<", "=======", ">>>>>>>"))
+            for line in value.splitlines()
+        )
+
+    @staticmethod
+    def _resolve_conflict_markers(value: str, strategy: str) -> tuple[str, int]:
+        if strategy not in {"ours", "theirs"}:
+            raise ValidationFailure("Unsupported deterministic conflict resolution strategy.")
+
+        lines = value.splitlines(keepends=True)
+        output: list[str] = []
+        ours: list[str] = []
+        theirs: list[str] = []
+        state = "normal"
+        conflict_count = 0
+
+        for line in lines:
+            if state == "normal":
+                if line.startswith("<<<<<<<"):
+                    state = "ours"
+                    ours = []
+                    theirs = []
+                    conflict_count += 1
+                elif line.startswith(("=======", ">>>>>>>")):
+                    raise ValidationFailure("Conflict markers are malformed. Resolve this file manually.")
+                else:
+                    output.append(line)
+                continue
+
+            if state == "ours":
+                if line.startswith("======="):
+                    state = "theirs"
+                elif line.startswith(">>>>>>>"):
+                    raise ValidationFailure("Conflict markers are malformed. Resolve this file manually.")
+                else:
+                    ours.append(line)
+                continue
+
+            if state == "theirs":
+                if line.startswith(">>>>>>>"):
+                    output.extend(ours if strategy == "ours" else theirs)
+                    state = "normal"
+                elif line.startswith("<<<<<<<") or line.startswith("======="):
+                    raise ValidationFailure("Conflict markers are malformed. Resolve this file manually.")
+                else:
+                    theirs.append(line)
+
+        if state != "normal":
+            raise ValidationFailure("Conflict markers are incomplete. Resolve this file manually.")
+        if conflict_count == 0:
+            raise ValidationFailure("No conflict markers were found in the selected file.")
+        return "".join(output), conflict_count
+
+    @staticmethod
+    def _preview_resolved_content(value: str) -> str:
+        lines = value.splitlines()
+        if len(lines) <= 80:
+            return "\n".join(lines)
+        head = "\n".join(lines[:60])
+        tail = "\n".join(lines[-12:])
+        omitted = len(lines) - 72
+        return f"{head}\n\n... {omitted} line(s) omitted from preview ...\n\n{tail}"
+
+    def _resolve_conflict_with_ai(self, path: str, content: str) -> tuple[str, int, str]:
+        if self._llm_router is None:
+            raise ValidationFailure("No AI provider is configured for conflict resolution.")
+        conflict_count = sum(1 for line in content.splitlines() if line.startswith("<<<<<<<"))
+        if conflict_count == 0:
+            raise ValidationFailure(f"No conflict markers were found in '{path}'.")
+        resolved = self._llm_router.resolve_conflict(path=path, conflicted_content=content)
+        resolved = self._strip_ai_code_fence(resolved).strip()
+        if not resolved:
+            raise ValidationFailure("AI did not return resolved file content.")
+        if self._has_conflict_markers(resolved):
+            raise ValidationFailure("AI returned content that still contains conflict markers.")
+        return resolved + ("\n" if content.endswith("\n") and not resolved.endswith("\n") else ""), conflict_count, "AI proposed a merged file."
+
+    @staticmethod
+    def _strip_ai_code_fence(value: str) -> str:
+        stripped = value.strip()
+        if not stripped.startswith("```"):
+            return value
+        lines = stripped.splitlines()
+        if len(lines) >= 2 and lines[-1].strip() == "```":
+            return "\n".join(lines[1:-1])
+        return value
 
     @staticmethod
     def _render_log(raw: str) -> str:

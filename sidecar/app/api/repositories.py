@@ -6,11 +6,15 @@ from app.auth import require_session_token
 from app.schemas.repositories import (
     ActionExecutionResult,
     AddToGitignoreRequest,
+    ApplyConflictResolutionRequest,
+    ApplyConflictResolutionResponse,
     AgentSessionActionResponse,
     AgentSessionComparisonResponse,
     AgentSessionResponse,
     CancelActionPlanResponse,
     CloneRepositoryRequest,
+    ConflictResolutionPreviewRequest,
+    ConflictResolutionPreviewResponse,
     CreateAgentSessionRequest,
     DraftGitLabMergeRequestRequest,
     DraftGitLabMergeRequestResponse,
@@ -31,6 +35,8 @@ from app.schemas.repositories import (
     InitialiseAndRegisterRequest,
     LocalActionPlan,
     LocalResolveRequest,
+    PublishGitHubRepositoryRequest,
+    PublishGitHubRepositoryResponse,
     ReadActionRequest,
     ReadActionResult,
     RegisterRepositoryRequest,
@@ -216,6 +222,32 @@ def run_read_action(
 
 
 @router.post(
+    "/{repository_id}/conflicts/preview-resolution",
+    response_model=ConflictResolutionPreviewResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def preview_conflict_resolution(
+    repository_id: str,
+    payload: ConflictResolutionPreviewRequest,
+    request: Request,
+) -> ConflictResolutionPreviewResponse:
+    return _service(request).preview_conflict_resolution(repository_id, payload)
+
+
+@router.post(
+    "/{repository_id}/conflicts/apply-resolution",
+    response_model=ApplyConflictResolutionResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def apply_conflict_resolution(
+    repository_id: str,
+    payload: ApplyConflictResolutionRequest,
+    request: Request,
+) -> ApplyConflictResolutionResponse:
+    return _service(request).apply_conflict_resolution(repository_id, payload)
+
+
+@router.post(
     "/{repository_id}/resolve-local",
     response_model=LocalActionPlan,
     dependencies=[Depends(require_session_token)],
@@ -242,6 +274,19 @@ def execute_action_plan(
     request: Request,
 ) -> ActionExecutionResult:
     return _service(request).execute_action_plan(repository_id, payload.plan_id)
+
+
+@router.post(
+    "/{repository_id}/github/repositories/publish",
+    response_model=PublishGitHubRepositoryResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def publish_github_repository(
+    repository_id: str,
+    payload: PublishGitHubRepositoryRequest,
+    request: Request,
+) -> PublishGitHubRepositoryResponse:
+    return _service(request).publish_github_repository(repository_id, payload)
 
 
 @router.post(

@@ -323,6 +323,43 @@ class GenerateChangeSummaryResponse(ApiModel):
     privacy_receipt: PrivacyReceipt | None = None
 
 
+ConflictResolutionStrategy = Literal["ours", "theirs", "ai"]
+
+
+class ConflictResolvedFile(ApiModel):
+    path: str
+    content: str
+    conflict_count: int = 0
+    summary: str = ""
+
+
+class ConflictResolutionPreviewRequest(ApiModel):
+    strategy: ConflictResolutionStrategy
+    paths: list[str] = Field(default_factory=list, max_length=25)
+
+
+class ConflictResolutionPreviewResponse(ApiModel):
+    strategy: ConflictResolutionStrategy
+    title: str
+    summary: str
+    content: str
+    resolved_files: list[ConflictResolvedFile] = Field(default_factory=list)
+    privacy_receipt: PrivacyReceipt | None = None
+    snapshot: RepositorySnapshot
+
+
+class ApplyConflictResolutionRequest(ApiModel):
+    strategy: ConflictResolutionStrategy
+    resolved_files: list[ConflictResolvedFile] = Field(default_factory=list, min_length=1, max_length=25)
+
+
+class ApplyConflictResolutionResponse(ApiModel):
+    title: str
+    summary: str
+    content: str
+    snapshot: RepositorySnapshot
+
+
 class DraftGitHubReleaseRequest(ApiModel):
     tag_name: str = Field(min_length=1, max_length=255)
     title: str = Field(min_length=1, max_length=255)
@@ -352,6 +389,25 @@ class DraftGitHubReleaseResponse(ApiModel):
     asset_name: str | None = None
     asset_sha256: str | None = None
     assets: list[ReleaseAssetUpload] = Field(default_factory=list)
+    title: str
+    summary: str
+    content: str
+    snapshot: RepositorySnapshot
+
+
+class PublishGitHubRepositoryRequest(ApiModel):
+    repository_name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=350)
+    private: bool = False
+    commit_message: str = Field(default="Initial commit", min_length=1, max_length=500)
+    paths: list[str] = Field(default_factory=list, max_length=500)
+
+
+class PublishGitHubRepositoryResponse(ApiModel):
+    repository: str
+    repository_url: str
+    remote_url: str
+    branch: str
     title: str
     summary: str
     content: str

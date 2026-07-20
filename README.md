@@ -2,13 +2,13 @@
 
 **Use plain English to manage your Git projects - no commands to memorise.**
 
-AI Git Assistant is a Windows desktop app that turns what you want to do into the exact Git steps needed. Type something like *"commit all my changes with message 'Fix login bug'"* and the app shows you exactly what it will run - before running anything. You review, you approve, it executes.
+AI Git Assistant is a cross-platform desktop app that turns what you want to do into the exact Git steps needed. Type something like *"commit all my changes with message 'Fix login bug'"* and the app shows you exactly what it will run - before running anything. You review, you approve, it executes.
 
 ---
 
 ## Current release
 
-**0.7.7 - Phase 7.7** adds a Release Manager flow for multi-platform GitHub releases. It includes everything from Phase 6 plus portable Node-based sidecar build/test scripts, one-command installer builds, platform-aware sidecar binary naming, explicit Windows/macOS/Linux Tauri bundle commands, sidecar shutdown handling for macOS/Linux hosts, Ubuntu Git compatibility, non-Windows local secret storage, guided `.gitignore` updates, Git identity setup, reviewed upstream setup, push-only retry guidance, divergent-branch recovery, and GitHub draft releases that can be created or updated by tag with multiple installer assets.
+**0.7.9 - Phase 7.9** adds a guided **Conflict Resolver** for merge conflicts. It includes everything from Phase 7.8 plus recovery cards that can preview a resolution by keeping the local version, keeping the incoming remote version, or asking AI for a proposed merge. Nothing is written until you approve the preview, then the app applies the resolved content, marks the files resolved, and guides you to continue the merge.
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`. The first release in a phase uses `.0`, so Phase 7 starts at `0.7.0`.
 
@@ -25,7 +25,8 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 - **Detects repository providers** - the right panel labels GitHub, GitLab, Bitbucket, Azure DevOps, local-only, and mixed-provider remotes
 - **Helps ignore local noise** - selected untracked runtime files can be added to `.gitignore` from the file picker
 - **Sets Git author identity** - configure global `user.name` and `user.email` from Settings before your first commit on a machine
-- **Guides blocked workflows** - when Git needs upstream tracking, author identity, GitHub push permission, or a better repository selection, the app recommends the next step
+- **Publishes local projects to GitHub** - create the remote repository, connect `origin`, and push the first `main` branch from inside the app
+- **Guides blocked workflows** - when Git needs upstream tracking, author identity, GitHub push permission, divergent-branch handling, merge conflict resolution, or a better repository selection, the app recommends the next step
 - **Connects to an AI provider** (optional) so it can understand requests the built-in patterns don't cover
 - **Safe by design** - no force pushes, no hard resets, no surprises
 
@@ -95,7 +96,7 @@ The bar at the bottom has two rows of buttons:
 | Row | What it does |
 |-----|-------------|
 | **READ** | View status, diffs, commits, graph, branches, stashes, remotes, history, blame, conflicts |
-| **WRITE** | Commit, push, pull, switch branch, stash, merge, tags, release drafts, and more |
+| **WRITE** | Commit, push, pull, switch branch, stash, merge, tags, GitHub publish, release drafts, and more |
 
 Click any button and the app walks you through it step by step.
 
@@ -174,13 +175,19 @@ The app creates a new GitHub draft release if the tag has no draft yet. If you c
 
 When a new draft is created for a tag that does not exist yet, the app also creates the missing GitHub tag ref first so the release appears in both GitHub **Releases** and **Tags**.
 
+Phase 7.8 adds **Publish GitHub** for local-only repositories. Choose **Publish GitHub**, select the files for the first publish commit if needed, enter the commit message, repository name, description, and visibility, then confirm. The app creates the GitHub repo, commits selected files, renames the branch to `main`, adds `origin`, and pushes with upstream tracking.
+
+Phase 7.8 also improves recovery when local and remote history do not line up. If a push is rejected because the remote has newer commits, the app explains that the local commit was created and offers to fetch, pull latest, or view differences.
+
+Phase 7.9 adds a guided **Conflict Resolver** when a merge stops on conflicts. The recovery card can show conflicts, continue or abort the merge, or preview an automated resolution. Deterministic options keep either the local or incoming version. The AI option uses the configured provider only after repository AI context is enabled, returns a preview first, and still requires your approval before the app writes resolved files.
+
 Phase 6.1 adds a guided **Draft PR** flow in the WRITE command bar. Choose **Draft PR**, enter the base branch, optionally generate the title/body/checklist with AI, review or edit the text, then confirm the readiness summary. GitHub repositories create draft Pull Requests. GitLab repositories create draft Merge Requests. The app checks that the branch is named, the base differs from the current branch, conflicts are resolved, local commits are pushed, and the provider can see the head branch.
 
 Phase 6.2 adds **Review status** in the READ command bar and right-panel quick actions. It finds the open GitHub Pull Request or GitLab Merge Request for the current branch, then shows CI/check status, draft state, base/head branches, review summary, comment count, and recent comments.
 
 Phase 4.3 adds provider awareness before platform actions run. If the selected repository is Bitbucket, Azure DevOps, local-only, or unknown, the app explains which platform actions are not available for that repository while confirming local Git workflows still work.
 
-If GitHub rejects the request with a token permission error, create or update a fine-grained token for that exact repository, enable **Contents: Read and write** and **Pull requests: Read and write**, save it again in Settings, then retry.
+If GitHub rejects release, PR, or push requests with a token permission error, create or update a fine-grained token for that exact repository, enable **Contents: Read and write** and **Pull requests: Read and write**, save it again in Settings, then retry. To create brand-new GitHub repositories from **Publish GitHub**, use a token that is allowed to create repositories for your account or organization.
 
 ---
 
@@ -200,7 +207,7 @@ Provider-specific platform features are guarded by the selected repository's rem
 
 ## Cross-platform status
 
-Phase 7.7 continues Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing Ubuntu verification blockers, confirming Ubuntu `.deb` packaging, adding Git author identity setup in Settings for new machines, and turning common setup blockers into guided next steps. It also adds GitHub push-auth recovery, divergent-branch recovery when fast-forward pull is blocked, and a Release Manager path for one release with Windows/Linux assets.
+Phase 7.9 continues Mac and Linux support by removing Windows-only build assumptions from the project scripts, fixing Ubuntu verification blockers, confirming Ubuntu `.deb` packaging, adding Git author identity setup in Settings for new machines, and turning common setup blockers into guided next steps. It also adds GitHub push-auth recovery, divergent-branch recovery when fast-forward pull is blocked, push-rejected recovery when the remote has newer commits, guided merge-conflict recovery with preview/apply resolution choices, a Release Manager path for one release with Windows/Linux assets, and a Publish GitHub flow for local-only repositories.
 
 | Host OS | Status |
 |---|---|
@@ -300,6 +307,7 @@ Click **Approve and execute** to run it, or **Cancel** to go back. Nothing ever 
 | `create tag v0.7.7 with message "Release v0.7.7"` | Create an annotated local tag |
 | `push tag v0.7.7` | Push one explicit tag to the remote |
 | `delete tag v0.7.7` | Delete a local tag after approval |
+| `publish github` | Create a GitHub repository for a local-only project and push `main` |
 | `release manager` / `draft release` | Create or update a GitHub draft release and upload installer assets |
 | `draft PR` | Create a GitHub draft PR or GitLab draft MR from the current branch |
 | `unstage login.py` | Remove file from staging |
@@ -354,7 +362,7 @@ AI Git Assistant is not just a chat box. It also gives you the day-to-day Git vi
 - **Remote provider awareness** - label GitHub, GitLab, Bitbucket, Azure DevOps, unknown, local-only, and mixed-provider remotes
 - **Review status** - read current branch GitHub PR or GitLab MR CI/check status, reviews, and comments
 - **Release tags** - list, inspect, create, push, and delete explicit tags
-- **Conflict guide** - list conflicted files, show conflict marker snippets, then continue or abort
+- **Conflict resolver** - list conflicted files, preview local/remote/AI resolutions, apply after approval, then continue or abort
 
 ---
 
@@ -422,6 +430,7 @@ Delete that file for a completely clean start.
 - If you click **Generate with AI** for a commit message, grouped selected-file context, diff stats, recent commit subjects, and the selected diff/file snippets are sent to your configured provider
 - If you click **Analyze changes**, the receipt shows the exact selected diff context sent to the configured AI provider
 - If you publish or update a GitHub draft release, the tag, title, description, and selected assets are sent to GitHub using your saved token
+- If you publish a local repository to GitHub, the repository name, description, visibility, branch, commit, and selected files are sent to GitHub through standard Git/GitHub APIs
 - If you generate PR/MR text with AI, the base/head branches, commits, changed-file list, diff stats, and recent commit subjects are sent to your configured provider
 - If you create a GitHub draft pull request, the base branch, current branch, title, and description are sent to GitHub using your saved token
 - If you create a GitLab draft merge request, the base branch, current branch, title, and description are sent to GitLab using your saved token

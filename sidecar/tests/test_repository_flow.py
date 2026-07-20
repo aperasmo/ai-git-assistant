@@ -1,7 +1,24 @@
 from __future__ import annotations
 
+from app.git.client import GitClient, GitResult
 from app.llm.router import CommitMessageDraft
 from app.schemas.repositories import ActionPlanStep, PlanStepKind
+
+
+def test_git_error_prefers_actionable_failure_line():
+    error = GitClient._safe_error(
+        GitResult(
+            stdout="",
+            stderr=(
+                "From https://github.com/example/repo\n"
+                " * branch            main       -> FETCH_HEAD\n"
+                "fatal: Not possible to fast-forward, aborting.\n"
+            ),
+            return_code=128,
+        )
+    )
+
+    assert error == "fatal: Not possible to fast-forward, aborting."
 
 
 def test_register_and_read_status(app_client, auth_headers, git_repository):
@@ -225,6 +242,56 @@ def test_classify_plain_folder_requires_explicit_initialisation(
     assert body["selectedPath"] == str(selected_folder.resolve())
     assert body["repositoryRoot"] is None
     assert body["canInitialise"] is True
+
+
+def test_classify_plain_folder_under_broken_parent_git_can_initialise(
+    app_client,
+    auth_headers,
+    tmp_path,
+):
+    parent = tmp_path / "workspace"
+    selected_folder = parent / "my-portfolio"
+    selected_folder.mkdir(parents=True)
+    (parent / ".git").mkdir()
+
+    response = app_client.post(
+        "/v1/repositories/classify",
+        headers=auth_headers,
+        json={"path": str(selected_folder)},
+    )
+
+    assert response.status_code == 200, response.json()
+
+    body = response.json()
+    assert body["kind"] == "initialisation_required"
+    assert body["selectedPath"] == str(selected_folder.resolve())
+    assert body["repositoryRoot"] is None
+    assert body["canInitialise"] is True
+    assert "Broken or incomplete Git metadata was found above this folder" in body["message"]
+
+
+def test_classify_folder_with_own_broken_git_metadata_is_unsupported(
+    app_client,
+    auth_headers,
+    tmp_path,
+):
+    selected_folder = tmp_path / "broken-repository"
+    selected_folder.mkdir()
+    (selected_folder / ".git").mkdir()
+
+    response = app_client.post(
+        "/v1/repositories/classify",
+        headers=auth_headers,
+        json={"path": str(selected_folder)},
+    )
+
+    assert response.status_code == 200, response.json()
+
+    body = response.json()
+    assert body["kind"] == "unsupported_repository"
+    assert body["canInitialise"] is False
+    assert "Git metadata was found" in body["message"]
+
 
 def test_classify_existing_repository(app_client, auth_headers, git_repository):
     response = app_client.post(
@@ -1347,6 +1414,135 @@ def test_github_draft_release_creates_missing_tag_ref_before_draft():
     )
 
 
+def test_publish_github_repository_creates_remote_and_pushes(
+    app_client,
+    auth_headers,
+    git_repository,
+    tmp_path,
+):
+    import subprocess
+
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+    from app.services.github_release_service import GitHubCreatedRepositoryResult
+
+    bare = tmp_path / "created-remote.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-b", "main", str(bare)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+
+    calls = []
+
+    class FakeGitHubReleaseClient:
+        def __init__(self, token: str) -> None:
+            calls.append({"token": token})
+
+        def create_repository(self, *, name, description, private):
+            calls.append({"name": name, "description": description, "private": private})
+            return GitHubCreatedRepositoryResult(
+                owner="example",
+                repo=name,
+                html_url=f"https://github.com/example/{name}",
+                clone_url=str(bare),
+                private=private,
+            )
+
+    app_client.app.state.repository_service._github_release_client_factory = FakeGitHubReleaseClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repo_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repo_id}/github/repositories/publish",
+        headers=auth_headers,
+        json={
+            "repositoryName": "demo-published",
+            "description": "Demo repository",
+            "private": True,
+            "commitMessage": "Publish demo repository",
+            "paths": ["README.md"],
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["repository"] == "example/demo-published"
+    assert body["repositoryUrl"] == "https://github.com/example/demo-published"
+    assert body["branch"] == "main"
+    assert body["snapshot"]["upstreamBranch"] == "origin/main"
+    assert body["snapshot"]["ahead"] == 0
+    assert calls[0]["token"] == "github-token"
+    assert calls[1] == {"name": "demo-published", "description": "Demo repository", "private": True}
+
+    remote_url = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=git_repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert remote_url == str(bare)
+    remote_head = subprocess.run(
+        ["git", "ls-remote", str(bare), "refs/heads/main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "refs/heads/main" in remote_head
+
+
+def test_publish_github_repository_blocks_existing_remote(
+    app_client,
+    auth_headers,
+    git_repository_with_remote,
+):
+    from app.schemas.settings import UpdateGitHubSettingsRequest
+
+    app_client.app.state.settings_service.update_github_settings(
+        UpdateGitHubSettingsRequest(token="github-token")
+    )
+
+    class FakeGitHubReleaseClient:
+        def __init__(self, token: str) -> None:
+            raise AssertionError("GitHub client should not be created when a remote already exists.")
+
+    app_client.app.state.repository_service._github_release_client_factory = FakeGitHubReleaseClient
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository_with_remote)},
+    )
+    assert register.status_code == 200, register.json()
+    repo_id = register.json()["id"]
+
+    response = app_client.post(
+        f"/v1/repositories/{repo_id}/github/repositories/publish",
+        headers=auth_headers,
+        json={
+            "repositoryName": "already-remote",
+            "description": "",
+            "private": False,
+            "commitMessage": "Initial commit",
+            "paths": [],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "already has a remote" in response.json()["detail"]
+
+
 def test_draft_github_release_explains_non_github_provider(
     app_client,
     auth_headers,
@@ -1944,6 +2140,179 @@ def test_execute_merge_conflict_then_guided_resolution(
     assert continue_response.status_code == 200, continue_response.json()
     assert continue_response.json()["title"] == "Merge completed"
     assert continue_response.json()["snapshot"]["conflicts"] == []
+
+
+def test_preview_and_apply_conflict_resolution_keep_local(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    repo = git_repository
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    git("restore", "README.md")
+    base_branch = git("branch", "--show-current")
+    git("checkout", "-b", "feature/conflict")
+    (repo / "README.md").write_text("# Demo\n\nFeature branch.\n", encoding="utf-8")
+    git("add", "README.md")
+    git("commit", "-m", "feature edit")
+    git("checkout", base_branch)
+    (repo / "README.md").write_text("# Demo\n\nMain branch.\n", encoding="utf-8")
+    git("add", "README.md")
+    git("commit", "-m", "main edit")
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(repo)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    merge_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "merge feature/conflict"},
+    )
+    assert merge_plan_response.status_code == 200, merge_plan_response.json()
+    merge_plan = merge_plan_response.json()
+    merge_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": merge_plan["planId"]},
+    )
+    assert merge_response.status_code == 400, merge_response.json()
+
+    preview = app_client.post(
+        f"/v1/repositories/{repository_id}/conflicts/preview-resolution",
+        headers=auth_headers,
+        json={"strategy": "ours", "paths": ["README.md"]},
+    )
+    assert preview.status_code == 200, preview.json()
+    preview_body = preview.json()
+    assert preview_body["resolvedFiles"][0]["path"] == "README.md"
+    assert "Main branch." in preview_body["resolvedFiles"][0]["content"]
+    assert "<<<<<<<" not in preview_body["resolvedFiles"][0]["content"]
+
+    apply = app_client.post(
+        f"/v1/repositories/{repository_id}/conflicts/apply-resolution",
+        headers=auth_headers,
+        json={
+            "strategy": "ours",
+            "resolvedFiles": preview_body["resolvedFiles"],
+        },
+    )
+    assert apply.status_code == 200, apply.json()
+    assert apply.json()["snapshot"]["conflicts"] == []
+    assert "<<<<<<<" not in (repo / "README.md").read_text(encoding="utf-8")
+
+    continue_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "continue merge"},
+    )
+    assert continue_plan_response.status_code == 200, continue_plan_response.json()
+    continue_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": continue_plan_response.json()["planId"]},
+    )
+    assert continue_response.status_code == 200, continue_response.json()
+    assert continue_response.json()["title"] == "Merge completed"
+
+
+def test_preview_and_apply_markerless_resolved_conflict(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    import subprocess
+
+    repo = git_repository
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    git("restore", "README.md")
+    base_branch = git("branch", "--show-current")
+    git("checkout", "-b", "feature/markerless-conflict")
+    (repo / "README.md").write_text("# Demo\n\nFeature branch.\n", encoding="utf-8")
+    git("add", "README.md")
+    git("commit", "-m", "feature markerless edit")
+    git("checkout", base_branch)
+    (repo / "README.md").write_text("# Demo\n\nMain branch.\n", encoding="utf-8")
+    git("add", "README.md")
+    git("commit", "-m", "main markerless edit")
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(repo)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    merge_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "merge feature/markerless-conflict"},
+    )
+    assert merge_plan_response.status_code == 200, merge_plan_response.json()
+    merge_response = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": merge_plan_response.json()["planId"]},
+    )
+    assert merge_response.status_code == 400, merge_response.json()
+
+    (repo / "README.md").write_text("# Demo\n\nResolved manually.\n", encoding="utf-8")
+
+    preview = app_client.post(
+        f"/v1/repositories/{repository_id}/conflicts/preview-resolution",
+        headers=auth_headers,
+        json={"strategy": "ai", "paths": ["README.md"]},
+    )
+    assert preview.status_code == 200, preview.json()
+    preview_body = preview.json()
+    assert preview_body["resolvedFiles"][0]["conflictCount"] == 0
+    assert "manually resolved" in preview_body["resolvedFiles"][0]["summary"]
+    assert "Resolved manually." in preview_body["resolvedFiles"][0]["content"]
+
+    apply = app_client.post(
+        f"/v1/repositories/{repository_id}/conflicts/apply-resolution",
+        headers=auth_headers,
+        json={
+            "strategy": "ai",
+            "resolvedFiles": preview_body["resolvedFiles"],
+        },
+    )
+    assert apply.status_code == 200, apply.json()
+    assert apply.json()["snapshot"]["conflicts"] == []
+
+    continue_plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "continue merge"},
+    )
+    assert continue_plan_response.status_code == 200, continue_plan_response.json()
 
 
 def test_execute_stash_apply_and_drop_specific_ref(

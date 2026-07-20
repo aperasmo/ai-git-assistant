@@ -155,6 +155,27 @@ class LLMRouter:
             context_summary=context_summary,
         )
 
+    def resolve_conflict(self, *, path: str, conflicted_content: str) -> str:
+        provider = _build_provider(self._settings_service)
+        system_prompt = (
+            "You resolve Git conflict markers safely. Return only the complete resolved file content. "
+            "Do not include markdown fences, explanations, or conflict markers. Preserve unrelated content, "
+            "combine compatible changes when possible, and prefer a coherent final file over simply choosing one side."
+        )
+        user_message = (
+            f"Resolve the Git conflict markers in this file: {path}\n\n"
+            "Return the full resolved file content only.\n\n"
+            f"{conflicted_content}"
+        )
+
+        try:
+            return provider.complete_text(system_prompt, user_message, max_tokens=2500)
+        except LLMNotConfiguredError:
+            raise
+        except Exception as exc:
+            logger.exception("LLM conflict-resolution call failed")
+            raise RuntimeError(f"The AI call failed: {exc}") from exc
+
 
 def _normalise_commit_subject(value: str) -> str:
     first_line = next((line.strip() for line in value.splitlines() if line.strip()), "")

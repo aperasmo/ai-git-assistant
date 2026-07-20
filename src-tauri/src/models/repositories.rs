@@ -260,6 +260,53 @@ pub struct GeneratePullRequestDraftResponse {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ConflictResolvedFile {
+    pub path: String,
+    pub content: String,
+    pub conflict_count: i32,
+    pub summary: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictResolutionPreviewRequest {
+    pub strategy: String,
+    #[serde(default)]
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictResolutionPreviewResponse {
+    pub strategy: String,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+    #[serde(default)]
+    pub resolved_files: Vec<ConflictResolvedFile>,
+    #[serde(default)]
+    pub privacy_receipt: Option<Value>,
+    pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyConflictResolutionRequest {
+    pub strategy: String,
+    pub resolved_files: Vec<ConflictResolvedFile>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyConflictResolutionResponse {
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+    pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DraftGitHubReleaseRequest {
     pub tag_name: String,
     pub title: String,
@@ -299,6 +346,29 @@ pub struct DraftGitHubReleaseResponse {
     pub asset_sha256: Option<String>,
     #[serde(default)]
     pub assets: Vec<ReleaseAssetUpload>,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+    pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishGitHubRepositoryRequest {
+    pub repository_name: String,
+    pub description: String,
+    pub private: bool,
+    pub commit_message: String,
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishGitHubRepositoryResponse {
+    pub repository: String,
+    pub repository_url: String,
+    pub remote_url: String,
+    pub branch: String,
     pub title: String,
     pub summary: String,
     pub content: String,

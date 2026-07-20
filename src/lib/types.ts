@@ -340,6 +340,42 @@ export interface GeneratePullRequestDraftResponse {
   privacyReceipt?: PrivacyReceipt | null;
 }
 
+export type ConflictResolutionStrategy = "ours" | "theirs" | "ai";
+
+export interface ConflictResolvedFile {
+  path: string;
+  content: string;
+  conflictCount: number;
+  summary: string;
+}
+
+export interface ConflictResolutionPreviewRequest {
+  strategy: ConflictResolutionStrategy;
+  paths: string[];
+}
+
+export interface ConflictResolutionPreviewResponse {
+  strategy: ConflictResolutionStrategy;
+  title: string;
+  summary: string;
+  content: string;
+  resolvedFiles: ConflictResolvedFile[];
+  privacyReceipt?: PrivacyReceipt | null;
+  snapshot: RepositorySnapshot;
+}
+
+export interface ApplyConflictResolutionRequest {
+  strategy: ConflictResolutionStrategy;
+  resolvedFiles: ConflictResolvedFile[];
+}
+
+export interface ApplyConflictResolutionResponse {
+  title: string;
+  summary: string;
+  content: string;
+  snapshot: RepositorySnapshot;
+}
+
 export interface DraftGitHubReleaseRequest {
   tagName: string;
   title: string;
@@ -369,6 +405,25 @@ export interface DraftGitHubReleaseResponse {
   assetName?: string | null;
   assetSha256?: string | null;
   assets: ReleaseAssetUpload[];
+  title: string;
+  summary: string;
+  content: string;
+  snapshot: RepositorySnapshot;
+}
+
+export interface PublishGitHubRepositoryRequest {
+  repositoryName: string;
+  description: string;
+  private: boolean;
+  commitMessage: string;
+  paths: string[];
+}
+
+export interface PublishGitHubRepositoryResponse {
+  repository: string;
+  repositoryUrl: string;
+  remoteUrl: string;
+  branch: string;
   title: string;
   summary: string;
   content: string;
@@ -443,6 +498,12 @@ export type RecoveryActionKind =
   | "view_diff"
   | "retry_push"
   | "pull_latest"
+  | "show_conflicts"
+  | "continue_merge"
+  | "abort_merge"
+  | "resolve_conflict_ours"
+  | "resolve_conflict_theirs"
+  | "resolve_conflict_ai"
   | "show_remotes"
   | "open_settings"
   | "switch_repository"
@@ -506,4 +567,5 @@ export type ChatTranscriptEntry =
       initialValue?: string;
       chosenLabel?: string;
       danger?: boolean;
+      confirmLabel?: string;
     };

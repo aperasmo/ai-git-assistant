@@ -27,6 +27,7 @@ import type {
   BootstrapStatus,
   ChatTranscriptEntry,
   CommitMessageStyle,
+  ConflictResolutionStrategy,
   FolderClassification,
   GenerateChangeSummaryResponse,
   GenerateCommitMessageResponse,
@@ -263,6 +264,55 @@ export default function App() {
     const lower = message.toLowerCase();
 
     if (
+      (currentSnapshot?.conflicts?.length ?? 0) > 0 ||
+      lower.includes("merge stopped with conflicts") ||
+      lower.includes("automatic merge failed") ||
+      lower.includes("fix conflicts") ||
+      lower.includes("unresolved conflicts detected")
+    ) {
+      appendRecoveryEntry(
+        repositoryId,
+        "Merge needs conflict resolution",
+        "Git started the merge but stopped because at least one file has conflicting changes.",
+        "Preview an automated resolution, inspect the conflict markers, continue after resolving, or abort the merge from inside the app.",
+        [
+          {
+            label: "Auto-resolve with AI",
+            description: "Preview an AI-merged file proposal before anything is written.",
+            action: "resolve_conflict_ai",
+            recommended: true,
+          },
+          {
+            label: "Keep local version",
+            description: "Preview resolving each conflict by keeping your current branch's content.",
+            action: "resolve_conflict_ours",
+          },
+          {
+            label: "Keep remote version",
+            description: "Preview resolving each conflict by keeping the incoming branch's content.",
+            action: "resolve_conflict_theirs",
+          },
+          {
+            label: "Show conflicts",
+            description: "List conflicted files and show conflict markers.",
+            action: "show_conflicts",
+          },
+          {
+            label: "Continue merge",
+            description: "Finish the merge after resolved files are staged.",
+            action: "continue_merge",
+          },
+          {
+            label: "Abort merge",
+            description: "Cancel the merge and restore the pre-merge state.",
+            action: "abort_merge",
+          },
+        ],
+      );
+      return;
+    }
+
+    if (
       lower.includes("not possible to fast-forward") ||
       lower.includes("need to specify how to reconcile divergent branches") ||
       lower.includes("divergent branches")
@@ -298,6 +348,45 @@ export default function App() {
           {
             label: "View differences",
             description: "Inspect the current local changes and commits.",
+            action: "view_diff",
+          },
+        ],
+      );
+      return;
+    }
+
+    if (
+      !lower.includes("write access to repository not granted") &&
+      !(lower.includes("repository not found") && lower.includes("push")) &&
+      !(lower.includes("authentication failed") && lower.includes("push")) &&
+      (
+        lower.includes("failed to push some refs") ||
+        lower.includes("non-fast-forward") ||
+        lower.includes("fetch first") ||
+        lower.includes("branch is now behind its upstream") ||
+        lower.includes("branch is behind its upstream")
+      )
+    ) {
+      appendRecoveryEntry(
+        repositoryId,
+        "Remote has changes first",
+        "Your local commit was created, but the remote did not accept the push.",
+        "Fetch the remote state, then pull latest. If fast-forward is blocked, the app will guide you into a reviewed merge before retrying the push.",
+        [
+          {
+            label: "Fetch remote",
+            description: "Refresh what the remote currently has.",
+            action: "fetch_remote",
+            recommended: true,
+          },
+          {
+            label: "Pull latest",
+            description: "Try the safe fast-forward pull path.",
+            action: "pull_latest",
+          },
+          {
+            label: "View differences",
+            description: "Inspect local and remote changes before deciding.",
             action: "view_diff",
           },
         ],
@@ -426,6 +515,101 @@ export default function App() {
           },
         ],
       );
+    }
+  }
+
+  async function startConflictResolutionPreview(strategy: ConflictResolutionStrategy) {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId || busy || activePendingPlan) return;
+    const paths = (snapshot?.conflicts ?? []).map((item) => item.path);
+    if (paths.length === 0) {
+      appendRecoveryEntry(
+        repositoryId,
+        "No conflicted files found",
+        "The repository no longer reports conflicted paths.",
+        "Refresh status or continue the merge if you have already staged the resolved files.",
+        [
+          {
+            label: "Show conflicts",
+            description: "Refresh conflict status.",
+            action: "show_conflicts",
+            recommended: true,
+          },
+          {
+            label: "Continue merge",
+            description: "Finish the merge after resolved files are staged.",
+            action: "continue_merge",
+          },
+        ],
+      );
+      return;
+    }
+
+    const label =
+      strategy === "ai"
+        ? "Auto-resolve with AI"
+        : strategy === "ours"
+          ? "Keep local version"
+          : "Keep remote version";
+
+    appendTranscriptEntry(repositoryId, {
+      id: createTranscriptId(),
+      kind: "user",
+      message: label,
+    });
+
+    try {
+      setBusy(true);
+      setApplicationError(null);
+      const preview = await desktopApi.previewConflictResolution(repositoryId, { strategy, paths });
+      if (activeRepositoryIdRef.current !== repositoryId) return;
+
+      setSnapshot(preview.snapshot);
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "result",
+        title: preview.title,
+        summary: preview.summary,
+        content: preview.content,
+      });
+
+      const stepId = createTranscriptId();
+      activeWizardRef.current = {
+        flowId: "resolve_conflict",
+        currentStepId: stepId,
+        currentStepKind: "confirm",
+        data: {
+          conflictStrategy: preview.strategy,
+          conflictResolvedFiles: preview.resolvedFiles,
+        },
+      };
+      const allFilesAlreadyResolved = preview.resolvedFiles.every((item) => item.conflictCount === 0);
+      appendTranscriptEntry(repositoryId, {
+        id: stepId,
+        kind: "wizard_step",
+        stepKind: "confirm",
+        prompt: "Apply conflict resolution",
+        status: "active",
+        confirmLabel: allFilesAlreadyResolved ? "Mark resolved" : "Apply resolution",
+        confirmLines: [
+          `Strategy: ${label}`,
+          `Files (${preview.resolvedFiles.length}): ${preview.resolvedFiles.map((item) => item.path).join(", ")}`,
+          "The app will write the previewed resolved content and stage the files.",
+          ...gitCmds(`git add -- (${preview.resolvedFiles.length} resolved files)`),
+        ],
+      });
+    } catch (cause) {
+      if (activeRepositoryIdRef.current === repositoryId) {
+        const errorMessage = toErrorMessage(cause, "Conflict resolution preview failed.");
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "error",
+          message: errorMessage,
+        });
+        appendRecoveryForError(repositoryId, errorMessage);
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -989,6 +1173,8 @@ export default function App() {
       startStashWizard(repositoryId);
     } else if (flowId === "connect_remote") {
       startConnectRemoteWizard();
+    } else if (flowId === "publish_github") {
+      startPublishGithubWizard(repositoryId);
     } else if (flowId === "draft_release") {
       startDraftReleaseWizard(repositoryId);
     } else if (flowId === "draft_pr") {
@@ -1275,6 +1461,80 @@ export default function App() {
     });
   }
 
+  function startPublishGithubWizard(repositoryId: string) {
+    if ((snapshot?.remoteNames ?? []).length > 0) {
+      appendRecoveryEntry(
+        repositoryId,
+        "Remote already configured",
+        "This repository already has a remote, so it does not need a new GitHub repository.",
+        "Use Pull latest or Commit & push for this repo. Use Publish GitHub only for local repos that have not been connected yet.",
+        [
+          { label: "Pull latest", description: "Update from the configured upstream.", action: "pull_latest", recommended: true },
+          { label: "Commit & push", description: "Publish local commits to the existing remote.", action: "retry_push" },
+          { label: "Inspect remotes", description: "Show remote names and URLs.", action: "show_remotes" },
+        ],
+      );
+      appendTranscriptEntry(repositoryId, { id: createTranscriptId(), kind: "wizard_menu", variant: "compact" });
+      return;
+    }
+
+    const ignored = new Set(sessionGitignored[repositoryId] ?? []);
+    const files = sortRepositoryPaths([
+      ...(snapshot?.stagedChanges ?? []).map((c) => c.path),
+      ...(snapshot?.modifiedChanges ?? []).map((c) => c.path),
+      ...(snapshot?.untrackedPaths ?? []).map((c) => c.path),
+    ]
+      .filter((f, i, arr) => arr.indexOf(f) === i)
+      .filter((f) => !ignored.has(f))
+      .filter((f) => !isWindowsReservedPath(f)));
+
+    if (!snapshot?.headCommit && files.length === 0) {
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "error",
+        message: "Add at least one file before publishing a brand-new repository to GitHub.",
+      });
+      appendTranscriptEntry(repositoryId, { id: createTranscriptId(), kind: "wizard_menu", variant: "compact" });
+      return;
+    }
+
+    const stepId = createTranscriptId();
+    const defaultName = activeRepository?.displayName ?? "new-repository";
+    if (files.length > 0) {
+      activeWizardRef.current = {
+        flowId: "publish_github",
+        currentStepId: stepId,
+        currentStepKind: "file_pick",
+        data: { githubRepoName: defaultName, publishStage: "commit_message" },
+      };
+      appendTranscriptEntry(repositoryId, {
+        id: stepId,
+        kind: "wizard_step",
+        stepKind: "file_pick",
+        prompt: snapshot?.headCommit ? "Which changed files should be committed before publishing?" : "Which files should be included in the first publish commit?",
+        status: "active",
+        choices: files,
+        gitignoreChoices: sortRepositoryPaths((snapshot?.untrackedPaths ?? []).map((c) => c.path)),
+      });
+      return;
+    }
+
+    activeWizardRef.current = {
+      flowId: "publish_github",
+      currentStepId: stepId,
+      currentStepKind: "text_input",
+      data: { githubRepoName: defaultName, files: [], publishStage: "repo_name" },
+    };
+    appendTranscriptEntry(repositoryId, {
+      id: stepId,
+      kind: "wizard_step",
+      stepKind: "text_input",
+      prompt: "GitHub repository name",
+      status: "active",
+      initialValue: defaultName,
+    });
+  }
+
   function startDraftReleaseWizard(repositoryId: string) {
     const remote = githubRemote(snapshot);
     if (!remote) {
@@ -1381,7 +1641,46 @@ export default function App() {
         });
       }
     } else if (wizard.currentStepKind === "text_input") {
-      if (wizard.flowId === "connect_remote") {
+      if (wizard.flowId === "publish_github") {
+        const value = (choiceData.message ?? "").trim();
+        if (wizard.data.publishStage === "commit_message") {
+          const publishData: WizardData = { ...wizard.data, message: value, publishStage: "repo_name" };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: publishData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "text_input",
+            prompt: "GitHub repository name",
+            status: "active",
+            initialValue: publishData.githubRepoName,
+          });
+        } else if (wizard.data.publishStage === "repo_name") {
+          const publishData: WizardData = { ...wizard.data, githubRepoName: value, publishStage: "description" };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "text_input", data: publishData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "text_input",
+            prompt: "Repository description",
+            status: "active",
+            initialValue: activeRepository?.displayName ? `Source for ${activeRepository.displayName}` : "",
+          });
+        } else {
+          const publishData: WizardData = { ...wizard.data, githubRepoDescription: value, publishStage: "visibility" };
+          const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "option_select", data: publishData };
+          activeWizardRef.current = next;
+          appendTranscriptEntry(repositoryId, {
+            id: nextStepId,
+            kind: "wizard_step",
+            stepKind: "option_select",
+            prompt: "Repository visibility",
+            status: "active",
+            choices: ["Public", "Private"],
+          });
+        }
+      } else if (wizard.flowId === "connect_remote") {
         const url = updatedData.message ?? "";
         const remoteName = "origin";
         const currentBranch = snapshot?.branch ?? "main";
@@ -1574,7 +1873,43 @@ export default function App() {
         });
       }
     } else if (wizard.currentStepKind === "option_select") {
-      if (wizard.flowId === "switch_branch") {
+      if (wizard.flowId === "publish_github") {
+        const publishData: WizardData = {
+          ...wizard.data,
+          githubPrivate: choiceLabel.toLowerCase().includes("private"),
+        };
+        const files = publishData.files ?? [];
+        const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: publishData };
+        activeWizardRef.current = next;
+        appendTranscriptEntry(repositoryId, {
+          id: nextStepId,
+          kind: "wizard_step",
+          stepKind: "confirm",
+          prompt: "Publish local repository to GitHub",
+          status: "active",
+          confirmLines: [
+            `Repository: ${publishData.githubRepoName}`,
+            `Visibility: ${publishData.githubPrivate ? "private" : "public"}`,
+            `Description: ${publishData.githubRepoDescription || "(none)"}`,
+            files.length > 0
+              ? `Commit message: ${publishData.message}`
+              : "Commit: no new commit needed",
+            files.length > 0
+              ? `Files (${files.length}): ${files.join(", ")}`
+              : "Files: existing commits only",
+            "Branch: main",
+            ...gitCmds(
+              ...(files.length > 0
+                ? [`git add -- (${files.length} files)`, `git commit -m "${publishData.message}"`]
+                : []),
+              "GitHub API: create repository",
+              "git branch -M main",
+              `git remote add origin https://github.com/<owner>/${publishData.githubRepoName}.git`,
+              "git push -u origin main",
+            ),
+          ],
+        });
+      } else if (wizard.flowId === "switch_branch") {
         // OptionSelectStep sends { remote: choice } — move it to branch
         const targetBranch = updatedData.remote ?? choiceLabel;
         const branchData: WizardData = { ...updatedData, branch: targetBranch };
@@ -1709,11 +2044,71 @@ export default function App() {
       setBusy(true);
       setApplicationError(null);
 
+      if (wizard.flowId === "resolve_conflict") {
+        const strategy = wizard.data.conflictStrategy ?? "ours";
+        const resolvedFiles = wizard.data.conflictResolvedFiles ?? [];
+        const result = await desktopApi.applyConflictResolution(repositoryId, {
+          strategy,
+          resolvedFiles,
+        });
+        if (activeRepositoryIdRef.current !== repositoryId) return;
+        setSnapshot(result.snapshot);
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "result",
+          title: result.title,
+          summary: result.summary,
+          content: result.content,
+        });
+        appendRecoveryEntry(
+          repositoryId,
+          "Ready to continue merge",
+          "The resolved file content was written and staged.",
+          "Continue the merge to create Git's merge commit, or abort if you want to undo the merge.",
+          [
+            {
+              label: "Continue merge",
+              description: "Finish the merge with Git's prepared merge message.",
+              action: "continue_merge",
+              recommended: true,
+            },
+            {
+              label: "Abort merge",
+              description: "Cancel the merge and restore the pre-merge state.",
+              action: "abort_merge",
+            },
+          ],
+        );
+        await loadRepositories();
+        return;
+      }
+
       const { files = [], message = "", remote = "origin" } = wizard.data;
       const currentBranch = snapshot?.branch ?? "main";
       const targetBranch = wizard.data.branch ?? message;
 
       const steps: ActionPlanStep[] = [];
+
+      if (wizard.flowId === "publish_github") {
+        const publishResult = await desktopApi.publishGithubRepository(repositoryId, {
+          repositoryName: wizard.data.githubRepoName ?? "",
+          description: wizard.data.githubRepoDescription ?? "",
+          private: Boolean(wizard.data.githubPrivate),
+          commitMessage: wizard.data.message || "Initial commit",
+          paths: wizard.data.files ?? [],
+        });
+        if (activeRepositoryIdRef.current !== repositoryId) return;
+        setSnapshot(publishResult.snapshot);
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "result",
+          title: publishResult.title,
+          summary: publishResult.summary,
+          content: publishResult.content,
+        });
+        await loadRepositories();
+        return;
+      }
 
       if (wizard.flowId === "draft_release") {
         const release = await desktopApi.draftGithubRelease(repositoryId, {
@@ -2144,6 +2539,36 @@ export default function App() {
 
     if (option.action === "view_diff") {
       void runAction("diff");
+      return;
+    }
+
+    if (option.action === "show_conflicts") {
+      void runAction("conflicts");
+      return;
+    }
+
+    if (option.action === "resolve_conflict_ours") {
+      void startConflictResolutionPreview("ours");
+      return;
+    }
+
+    if (option.action === "resolve_conflict_theirs") {
+      void startConflictResolutionPreview("theirs");
+      return;
+    }
+
+    if (option.action === "resolve_conflict_ai") {
+      void startConflictResolutionPreview("ai");
+      return;
+    }
+
+    if (option.action === "continue_merge") {
+      void submitMessage("continue merge");
+      return;
+    }
+
+    if (option.action === "abort_merge") {
+      void submitMessage("abort merge");
       return;
     }
 

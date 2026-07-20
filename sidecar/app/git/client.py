@@ -73,13 +73,38 @@ class GitClient:
 
     @staticmethod
     def _safe_error(result: GitResult) -> str:
-        raw = (result.stderr or result.stdout or "Git command failed.").strip()
+        raw = "\n".join(part for part in (result.stderr, result.stdout) if part).strip()
+        if not raw:
+            raw = "Git command failed."
         lines = raw.splitlines()
+        # Git can print transfer lines such as "From <remote>" before the
+        # actionable failure. Prefer the line that explains what blocked.
+        for line in lines:
+            stripped = line.strip()
+            lower = stripped.lower()
+            if not stripped or lower.startswith("warning:") or lower.startswith("hint:"):
+                continue
+            if (
+                lower.startswith("fatal:")
+                or lower.startswith("error:")
+                or "[rejected]" in lower
+                or "failed to push some refs" in lower
+                or "not possible to fast-forward" in lower
+                or "automatic merge failed" in lower
+            ):
+                return stripped[:500]
+
         # Skip advisory lines so the real error is always visible.
         for line in lines:
             stripped = line.strip()
             lower = stripped.lower()
-            if stripped and not lower.startswith("warning:") and not lower.startswith("hint:"):
+            if (
+                stripped
+                and not lower.startswith("warning:")
+                and not lower.startswith("hint:")
+                and not lower.startswith("from ")
+                and not lower.startswith("to ")
+            ):
                 return stripped[:500]
         # All lines were warnings/hints — fall back to the first non-empty line.
         fallback = next((l.strip() for l in lines if l.strip()), "Git command failed.")

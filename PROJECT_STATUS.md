@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 17/07/2026
+Last updated: 18/07/2026
 
 ---
 
@@ -140,6 +140,25 @@ These dates mark when the phase or feature set was first added to the project hi
 5. Added duplicate asset detection so existing asset filenames are reported and skipped instead of replaced silently.
 6. Creates missing GitHub tag refs before saving a new draft release so Releases and Tags stay aligned.
 7. Updated public docs and metadata for `0.7.7`.
+
+#### Phase 7.8 - 18/07/2026
+
+1. Added Publish GitHub for local-only repositories.
+2. Guides first publish setup: selected files, commit message, GitHub repository name, description, and visibility.
+3. Creates the GitHub repository, commits selected local files when needed, renames the branch to `main`, adds `origin`, and pushes with upstream tracking.
+4. Guards already-connected repositories with next-step guidance so users use Pull latest or Commit & push instead of creating another remote.
+5. Added recovery guidance for push rejections caused by newer remote commits.
+6. Added merge-conflict recovery actions for show conflicts, continue merge, and abort merge.
+7. Improved Git error parsing so actionable `fatal:` / `error:` lines are shown instead of transfer noise.
+8. Updated public docs and metadata for `0.7.8`.
+
+#### Phase 7.9 - 18/07/2026
+
+1. Added Guided Conflict Resolver recovery actions for merge conflicts.
+2. Added preview-first conflict resolution using keep-local, keep-remote, or AI proposal strategies.
+3. Applies resolved content only after approval, validates conflict markers are gone, and marks files resolved through Git.
+4. Improved continue-merge planning so clean no-diff resolutions can finish without a false staging blocker.
+5. Updated public docs and metadata for `0.7.9`.
 
 #### Phase 8 - target TBD
 
@@ -549,11 +568,11 @@ Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.25+.
 
 | Suite | Tests | What is covered |
 |---|---|---|
-| `test_action_planner.py` | 44 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase 3 stash/read/merge/tag commands |
+| `test_action_planner.py` | 48 | Local plan creation for read/write commands; push safety; short filename resolution; selected/all/staged commit paths; Phase 3 stash/read/merge/tag commands; continue-merge safety |
 | `test_settings_service.py` | 11 | LLM/GitHub/GitLab settings defaults, updates, encrypted secret persistence, and secret redaction |
 | `test_llm_validator.py` | 12 | LLM step validation, safe path checks, remote validation, supported action kinds |
 | `test_health.py` | 3 | Authenticated sidecar health checks, protocol version, and diagnostics metadata |
-| `test_repository_flow.py` | 42 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, agent worktree session lifecycle, Phase 6 GitHub draft PR / GitLab draft MR flow, and Phase 6.2 PR/MR review status |
+| `test_repository_flow.py` | 54 | Repository registration/classification, read actions, execute-plan flows, push/pull, branch creation, plan cancel, Phase 3 diff/graph/stash/remote/history/blame/merge/tag flows, Phase 4 premium commit-message generation, large selections, change summaries, risk, privacy receipts, Phase 4.1 GitHub draft releases, Phase 4.3 provider awareness, Phase 5 commit style modes, agent worktree session lifecycle, Phase 6 GitHub draft PR / GitLab draft MR flow, Phase 6.2 PR/MR review status, Phase 7.8 Publish GitHub flow, Phase 7.9 conflict resolver flow, and folder selection recovery |
 | `test_remote_provider.py` | 9 | Remote provider detection for GitHub, GitLab, Bitbucket, Azure DevOps, SSH, HTTPS, and local path remotes |
 
-Current verified sidecar suite: 121 passing tests via `npm run sidecar:test` on Windows; Ubuntu 20.04 verification is in progress.
+Current collected sidecar suite: 137 tests. Phase 7.9 focused backend checks, frontend build, and Rust command bridge verification pass on Windows.

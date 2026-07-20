@@ -6,12 +6,16 @@ use crate::{
     app_state::AppState,
     models::repositories::{
         ActionExecutionResult, AgentSession, AgentSessionActionResponse,
-        AgentSessionComparisonResponse, CancelActionPlanResponse, CreateAgentSessionRequest,
+        AgentSessionComparisonResponse, ApplyConflictResolutionRequest,
+        ApplyConflictResolutionResponse, CancelActionPlanResponse,
+        ConflictResolutionPreviewRequest, ConflictResolutionPreviewResponse,
+        CreateAgentSessionRequest,
         DraftGitLabMergeRequestRequest, DraftGitLabMergeRequestResponse,
         DraftGitHubPullRequestRequest, DraftGitHubPullRequestResponse, DraftGitHubReleaseRequest,
         DraftGitHubReleaseResponse, FolderClassification, GenerateChangeSummaryResponse,
         GitHubDraftReleaseDetailsRequest, GitHubDraftReleaseDetailsResponse,
         GenerateCommitMessageResponse, GeneratePullRequestDraftResponse, LocalActionPlan,
+        PublishGitHubRepositoryRequest, PublishGitHubRepositoryResponse,
         ReadActionRequest, ReadActionResult, Repository, RepositorySnapshot,
     },
     sidecar_proxy::SidecarProxy,
@@ -207,6 +211,38 @@ pub async fn run_read_action(
         .post(
             &state,
             &format!("/v1/repositories/{repository_id}/read-actions"),
+            &request,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn preview_conflict_resolution(
+    repository_id: String,
+    request: ConflictResolutionPreviewRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<ConflictResolutionPreviewResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/conflicts/preview-resolution"),
+            &request,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn apply_conflict_resolution(
+    repository_id: String,
+    request: ApplyConflictResolutionRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<ApplyConflictResolutionResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/conflicts/apply-resolution"),
             &request,
         )
         .await
@@ -421,6 +457,22 @@ pub async fn get_github_draft_release(
         .post(
             &state,
             &format!("/v1/repositories/{repository_id}/github/releases/draft/details"),
+            &request,
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn publish_github_repository(
+    repository_id: String,
+    request: PublishGitHubRepositoryRequest,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<PublishGitHubRepositoryResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/github/repositories/publish"),
             &request,
         )
         .await

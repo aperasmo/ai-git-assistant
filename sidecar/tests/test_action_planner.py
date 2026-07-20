@@ -513,7 +513,25 @@ def test_abort_merge_allowed_when_conflicts_exist():
     assert plan.steps[0].kind.value == "merge_abort"
 
 
-def test_continue_merge_requires_staged_resolutions():
+def test_continue_merge_requires_staging_modified_resolutions():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(
+        update={
+            "write_blocked_reason": "A merge is in progress.",
+            "staged_changes": [],
+            "modified_changes": [
+                ChangedPath(path="README.md", index_status=" ", worktree_status="M", kind="modified")
+            ],
+            "untracked_paths": [],
+            "conflicts": [],
+        }
+    )
+
+    with pytest.raises(ValidationFailure, match="Stage the resolved"):
+        planner.plan("repo-1", "continue merge", snapshot)
+
+
+def test_continue_merge_allows_clean_no_diff_resolution():
     planner = LocalActionPlanner(LocalIntentMatcher())
     snapshot = make_snapshot().model_copy(
         update={
@@ -525,8 +543,10 @@ def test_continue_merge_requires_staged_resolutions():
         }
     )
 
-    with pytest.raises(ValidationFailure, match="Stage the resolved"):
-        planner.plan("repo-1", "continue merge", snapshot)
+    plan = planner.plan("repo-1", "continue merge", snapshot)
+
+    assert plan.plan_kind == "write"
+    assert plan.steps[0].kind.value == "merge_commit"
 
 
 def test_continue_merge_creates_plan_after_staging():

@@ -1,5 +1,42 @@
 # Release Notes
 
+## 0.7.9 - Phase 7.9
+
+Adds a guided Conflict Resolver for merge conflicts.
+
+- Merge-conflict recovery now offers deterministic **Keep local version** and **Keep remote version** actions.
+- Repositories with AI context enabled can request an **Auto-resolve with AI** proposal.
+- Resolution is preview-first: the app shows the files, strategy, summary, and resolved content before writing anything.
+- Applying a preview writes the resolved files, validates that conflict markers are gone, marks the files resolved through Git, and guides the user to continue the merge.
+- Continue-merge planning now supports clean no-diff resolutions, such as keeping the current local file when Git has no staged diff to show.
+- Public docs and version metadata updated to `0.7.9`.
+
+Validation:
+
+- focused conflict resolver regression test
+- frontend build verification
+- Rust Tauri command bridge check
+
+## 0.7.8 - Phase 7.8
+
+Adds a guided Publish GitHub flow for local-only repositories and improves recovery for cross-machine push/pull failures.
+
+- New **Publish GitHub** WRITE action creates a GitHub repository from a local project.
+- The wizard collects selected files, commit message, repository name, description, and visibility before execution.
+- On approval, the app commits selected files when needed, renames the branch to `main`, adds `origin`, and pushes with upstream tracking.
+- Already-connected repositories are guarded with next-step guidance so users use Pull latest or Commit & push instead.
+- Push rejections caused by newer remote commits now explain that the local commit exists and offer fetch, pull latest, or diff review.
+- Merge conflict failures now offer Show conflicts, Continue merge, and Abort merge directly from the recovery card.
+- Git error parsing now prefers actionable `fatal:` / `error:` lines over transfer noise such as `From <remote>`.
+- Public docs and version metadata updated to `0.7.8`.
+
+Validation:
+
+- focused publish-to-GitHub sidecar tests for successful create/add-remote/push and already-remote blocking
+- focused regression tests for actionable Git error parsing and merge-conflict guidance
+- full sidecar test suite: 135 passed
+- frontend build verification
+
 ## 0.7.7 - Phase 7.7
 
 Adds Release Manager behavior for assembling one GitHub release from multiple platform machines.

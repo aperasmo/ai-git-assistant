@@ -1,12 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ActionExecutionResult,
+  ApplyConflictResolutionRequest,
+  ApplyConflictResolutionResponse,
   ActionPlanStep,
   AgentSession,
   AgentSessionActionResponse,
   AgentSessionComparisonResponse,
   BootstrapStatus,
   CancelActionPlanResponse,
+  ConflictResolutionPreviewRequest,
+  ConflictResolutionPreviewResponse,
   DiagnosticsStatus,
   DraftGitLabMergeRequestRequest,
   DraftGitLabMergeRequestResponse,
@@ -26,6 +30,8 @@ import type {
   GitLabSettings,
   LLMSettings,
   LocalActionPlan,
+  PublishGitHubRepositoryRequest,
+  PublishGitHubRepositoryResponse,
   ReadActionRequest,
   ReadActionResult,
   Repository,
@@ -90,6 +96,12 @@ export const desktopApi = {
   runReadAction: (repositoryId: string, request: ReadActionRequest) =>
     invoke<ReadActionResult>("run_read_action", { repositoryId, request }),
 
+  previewConflictResolution: (repositoryId: string, request: ConflictResolutionPreviewRequest) =>
+    invoke<ConflictResolutionPreviewResponse>("preview_conflict_resolution", { repositoryId, request }),
+
+  applyConflictResolution: (repositoryId: string, request: ApplyConflictResolutionRequest) =>
+    invoke<ApplyConflictResolutionResponse>("apply_conflict_resolution", { repositoryId, request }),
+
   planLocalRequest: (repositoryId: string, message: string) =>
     invoke<LocalActionPlan>("resolve_local_request", { repositoryId, message }),
 
@@ -116,6 +128,9 @@ export const desktopApi = {
 
   getGithubDraftRelease: (repositoryId: string, request: GitHubDraftReleaseDetailsRequest) =>
     invoke<GitHubDraftReleaseDetailsResponse>("get_github_draft_release", { repositoryId, request }),
+
+  publishGithubRepository: (repositoryId: string, request: PublishGitHubRepositoryRequest) =>
+    invoke<PublishGitHubRepositoryResponse>("publish_github_repository", { repositoryId, request }),
 
   draftGithubPullRequest: (repositoryId: string, request: DraftGitHubPullRequestRequest) =>
     invoke<DraftGitHubPullRequestResponse>("draft_github_pull_request", { repositoryId, request }),

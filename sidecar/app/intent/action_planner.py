@@ -1063,7 +1063,7 @@ class LocalActionPlanner:
             raise ValidationFailure("Resolve all conflicted files before continuing the merge.")
         if not snapshot.write_blocked_reason or "merge" not in snapshot.write_blocked_reason.lower():
             raise ValidationFailure("No merge appears to be in progress.")
-        if not snapshot.staged_changes:
+        if snapshot.modified_changes:
             raise ValidationFailure("Stage the resolved merge files before continuing the merge.")
 
         return self._write_plan(
