@@ -17,6 +17,7 @@ use crate::{
         GenerateCommitMessageResponse, GeneratePullRequestDraftResponse, LocalActionPlan,
         PublishGitHubRepositoryRequest, PublishGitHubRepositoryResponse,
         ReadActionRequest, ReadActionResult, Repository, RepositorySnapshot,
+        TeamContextTemplateResponse,
     },
     sidecar_proxy::SidecarProxy,
 };
@@ -100,6 +101,21 @@ pub async fn get_repository_snapshot(
 ) -> Result<RepositorySnapshot, String> {
     proxy
         .get(&state, &format!("/v1/repositories/{repository_id}/snapshot"))
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn create_team_context_template(
+    repository_id: String,
+    state: State<'_, AppState>,
+    proxy: State<'_, SidecarProxy>,
+) -> Result<TeamContextTemplateResponse, String> {
+    proxy
+        .post(
+            &state,
+            &format!("/v1/repositories/{repository_id}/team-context/template"),
+            &json!({}),
+        )
         .await
 }
 

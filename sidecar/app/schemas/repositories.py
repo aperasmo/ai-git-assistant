@@ -108,6 +108,13 @@ class RemoteProviderInfo(ApiModel):
     url: str | None = None
 
 
+class TeamContextInfo(ApiModel):
+    available: bool = False
+    path: str = ".ai-git-assistant/team-context.md"
+    char_count: int = 0
+    truncated: bool = False
+
+
 class RepositorySnapshot(ApiModel):
     repository_id: str
     branch: str | None = None
@@ -129,6 +136,7 @@ class RepositorySnapshot(ApiModel):
     remote_providers: list[RemoteProviderInfo] = Field(default_factory=list)
     local_branches: list[BranchInfo] = Field(default_factory=list)
     local_tags: list[str] = Field(default_factory=list)
+    team_context: TeamContextInfo = Field(default_factory=TeamContextInfo)
 
 
 class ReadAction(StrEnum):
@@ -167,6 +175,13 @@ class ReadActionResult(ApiModel):
     summary: str
     content: str
     content_kind: Literal["text", "diff", "graph"] = "text"
+    snapshot: RepositorySnapshot
+
+
+class TeamContextTemplateResponse(ApiModel):
+    title: str
+    summary: str
+    content: str
     snapshot: RepositorySnapshot
 
 

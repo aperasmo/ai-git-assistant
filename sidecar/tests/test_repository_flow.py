@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.git.client import GitClient, GitResult
 from app.llm.router import CommitMessageDraft
 from app.schemas.repositories import ActionPlanStep, PlanStepKind
@@ -774,6 +776,14 @@ def test_generate_commit_message_uses_selected_changed_files(
     auth_headers,
     git_repository,
 ):
+    template_path = Path(__file__).resolve().parents[2] / "docs" / "TEAM_CONTEXT_TEMPLATE.md"
+    team_context_dir = git_repository / ".ai-git-assistant"
+    team_context_dir.mkdir()
+    (team_context_dir / "team-context.md").write_text(
+        template_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
     class FakeLLMRouter:
         def __init__(self) -> None:
             self.diff_context = ""
@@ -797,6 +807,13 @@ def test_generate_commit_message_uses_selected_changed_files(
     )
     assert register.status_code == 200, register.json()
     repository_id = register.json()["id"]
+    snapshot_response = app_client.get(
+        f"/v1/repositories/{repository_id}/snapshot",
+        headers=auth_headers,
+    )
+    assert snapshot_response.status_code == 200, snapshot_response.json()
+    assert snapshot_response.json()["teamContext"]["available"] is True
+    assert snapshot_response.json()["teamContext"]["path"] == ".ai-git-assistant/team-context.md"
 
     allow_response = app_client.post(
         f"/v1/repositories/{repository_id}/set-llm",
@@ -827,14 +844,57 @@ def test_generate_commit_message_uses_selected_changed_files(
     assert response.json()["privacyReceipt"]["files"] == ["README.md"]
     assert "Organized change map" in response.json()["privacyReceipt"]["contextItems"]
     assert "Diff stats" in response.json()["privacyReceipt"]["contextItems"]
+    assert "Repository team context" in response.json()["privacyReceipt"]["contextItems"]
     assert "Recent commit subjects" in response.json()["privacyReceipt"]["contextItems"]
     assert "Tracked file patch" in response.json()["privacyReceipt"]["contextItems"]
     assert fake_router.style == "conventional"
     assert "Group: README.md" in fake_router.diff_context
+    assert "Repository team context (.ai-git-assistant/team-context.md):" in fake_router.diff_context
+    assert "Use Conventional Commits" in fake_router.diff_context
+    assert "Include a Validation section" in fake_router.diff_context
     assert "+2/-0" in fake_router.diff_context
     assert "Recent commit style examples:" in fake_router.diff_context
     assert "README.md" in fake_router.diff_context
     assert "Changed." in fake_router.diff_context
+
+
+def test_create_team_context_template_adds_repo_guidance_file(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    context_path = git_repository / ".ai-git-assistant" / "team-context.md"
+    assert not context_path.exists()
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/team-context/template",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["title"] == "Team context template added"
+    assert response.json()["snapshot"]["teamContext"]["available"] is True
+    assert response.json()["snapshot"]["teamContext"]["path"] == ".ai-git-assistant/team-context.md"
+    assert context_path.exists()
+    content = context_path.read_text(encoding="utf-8")
+    assert "## Commit Message Style" in content
+    assert "## Pull Request / Merge Request Style" in content
+    assert "free of secrets" in content
+
+    duplicate_response = app_client.post(
+        f"/v1/repositories/{repository_id}/team-context/template",
+        headers=auth_headers,
+    )
+    assert duplicate_response.status_code == 422, duplicate_response.json()
+    assert "already exists" in duplicate_response.json()["detail"]
 
 
 def test_generate_commit_message_allows_large_file_selection(

@@ -155,6 +155,7 @@ Rules:
 - For conventional style, prefix the subject with a fitting type such as feat, fix, docs, test, refactor, chore, or build.
 - For release-ready style, write a clear subject and body that could also seed release notes.
 - Return 0-3 alternative subjects that fit the requested style.
+- Respect repository team context when present, but only when it is supported by the selected files.
 - Do not invent tests, issues, branches, files, or intent that is not supported by context.
 """
 
@@ -177,6 +178,7 @@ Rules:
 - Do not invent tests, issues, branches, or files.
 - For PR bodies, include concise sections like Summary and Checklist.
 - Checklist items must be grounded in the provided commits, files, or diff stats.
+- Respect repository team context when present, but only when it is supported by the branch comparison.
 - Split mixed work into 1-5 logical commit suggestions.
 - Commit messages must be 72 characters or fewer and use imperative mood.
 """

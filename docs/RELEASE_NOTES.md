@@ -1,5 +1,28 @@
 # Release Notes
 
+## 0.9.0 - Phase 9
+
+Starts the team context and conventions phase.
+
+- Adds optional repo-local team context at `.ai-git-assistant/team-context.md`.
+- Surfaces Team Context status in the repository context panel.
+- Includes team context in AI-generated commit-message prompts when present.
+- Includes team context in AI-generated PR/MR draft prompts when present.
+- Lists repository team context in the privacy receipt whenever it is sent to the configured AI provider.
+- Clips large team-context files before prompt assembly and marks the receipt as truncated.
+- Adds a public-safe `docs/TEAM_CONTEXT_TEMPLATE.md` with real-world defaults for commit, PR/MR, validation, review, documentation, branch, and release guidance.
+- Uses the same template in the sidecar regression test so unit coverage reflects the recommended team-context shape.
+- Adds one-click **Add template** onboarding from the repository context panel when a repo has no team context file.
+- Clarifies that the selected commit-message style takes priority over team context guidance.
+- Adds tooltips for the **Detailed**, **Concise**, **Conventional**, and **Release** commit-message style buttons.
+- Fixes the Tauri bridge model so `teamContext` is preserved from the sidecar snapshot instead of causing a blank renderer on upgrade.
+- Public docs and version metadata updated to `0.9.0`.
+
+Validation:
+
+- focused team-context sidecar regression test
+- frontend build verification
+
 ## 0.8.0 - Phase 8
 
 Starts the UI responsiveness and workflow-polish phase.
@@ -8,6 +31,9 @@ Starts the UI responsiveness and workflow-polish phase.
 - Keeps high-frequency actions visible by default: status, diff, recent commits, commit and push, pull latest, and connect remote.
 - Moves the full read/write command set behind **More** so smaller Linux VM and laptop resolutions have more room for the main conversation.
 - Adds an expanded command drawer with grouped read and write actions.
+- Adds a collapsible repository context panel that shrinks to a slim restore rail.
+- Adds context-aware command visibility so local-only, remote-connected, conflicted, GitHub, and GitLab repositories surface the right actions first.
+- Adds a top-bar dark/light theme toggle with local theme persistence.
 - Updates walkthrough targets and copy for the new command dock.
 - Public docs and version metadata updated to `0.8.0`.
 

@@ -40,6 +40,8 @@ import type {
   RepositorySnapshot,
 } from "./lib/types";
 
+type ThemeMode = "dark" | "light";
+
 const QUICK_ACTION_MESSAGES: Record<ReadAction, string> = {
   status: "Git status",
   log: "Show recent commits",
@@ -152,6 +154,11 @@ function renderChangeSummary(result: GenerateChangeSummaryResponse): string {
   return lines.join("\n");
 }
 
+function initialTheme(): ThemeMode {
+  if (typeof window === "undefined") return "dark";
+  return window.localStorage.getItem("aga-theme") === "light" ? "light" : "dark";
+}
+
 export default function App() {
   const [bootstrap, setBootstrap] = useState<BootstrapStatus | null>(null);
   const [gitStatus, setGitStatus] = useState<GitInstallationStatus | null>(null);
@@ -169,6 +176,8 @@ export default function App() {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [contextPanelCollapsed, setContextPanelCollapsed] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(initialTheme);
   const [activeLlm, setActiveLlm] = useState<{ provider: string; model: string } | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStep, setTourStep] = useState(0);
@@ -182,6 +191,11 @@ export default function App() {
   const activeTranscript = activeRepositoryId ? transcripts[activeRepositoryId] ?? [] : [];
   const activePendingPlan = findPendingPlan(activeTranscript);
   const interactionLocked = busy || Boolean(activePendingPlan);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("aga-theme", theme);
+  }, [theme]);
 
   const appendTranscriptEntry = useCallback(
     (repositoryId: string, entry: ChatTranscriptEntry) => {
@@ -2501,6 +2515,39 @@ export default function App() {
     }
   }
 
+  async function createTeamContextTemplate() {
+    const repositoryId = activeRepositoryId;
+    if (!repositoryId) return;
+
+    try {
+      setApplicationError(null);
+      setBusy(true);
+      const result = await desktopApi.createTeamContextTemplate(repositoryId);
+      if (activeRepositoryIdRef.current !== repositoryId) return;
+      setSnapshot(result.snapshot);
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(),
+        kind: "result",
+        title: result.title,
+        summary: result.summary,
+        content: result.content,
+        contentKind: "text",
+      });
+      await loadRepositories();
+    } catch (cause) {
+      if (activeRepositoryIdRef.current === repositoryId) {
+        appendTranscriptEntry(repositoryId, {
+          id: createTranscriptId(),
+          kind: "error",
+          message: toErrorMessage(cause, "Could not add the team context template."),
+        });
+      }
+      throw cause;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function onWizardCancel() {
     const repositoryId = activeRepositoryId;
     if (!repositoryId) return;
@@ -2673,18 +2720,19 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <TopBar
         repository={activeRepository}
         gitStatus={gitStatus}
-        activeLlm={activeLlm}
+        theme={theme}
+        onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenDiagnostics={() => setDiagnosticsOpen(true)}
         onOpenTour={openTour}
         onOpenHelp={() => setHelpOpen(true)}
       />
 
-      <div className="app-body">
+      <div className={`app-body ${contextPanelCollapsed ? "context-collapsed" : ""}`}>
         <RepositorySidebar
           repositories={repositories}
           activeRepositoryId={activeRepositoryId}
@@ -2698,6 +2746,7 @@ export default function App() {
         <ChatPanel
           repositorySelected={Boolean(activeRepository)}
           busy={busy}
+          snapshot={snapshot}
           transcript={activeTranscript}
           pendingPlanId={activePendingPlan?.planId}
           applicationError={applicationError}
@@ -2718,8 +2767,10 @@ export default function App() {
         <RepositoryContextPanel
           repository={activeRepository}
           snapshot={snapshot}
+          collapsed={contextPanelCollapsed}
           agentSessions={agentSessions}
           busy={interactionLocked}
+          onCollapse={() => setContextPanelCollapsed((current) => !current)}
           onAction={(action) => void runAction(action)}
           onCreateAgentSession={(task) => createAgentSession(task)}
           onRefreshAgentSessions={() => loadAgentSessions(activeRepositoryId)}
@@ -2731,6 +2782,7 @@ export default function App() {
           onTestLlm={() => desktopApi.testLlmConnection()}
           onAnalyzeChanges={() => void analyzeChanges()}
           onSetRepositoryLlmAllowed={setRepositoryLlmAllowed}
+          onCreateTeamContext={createTeamContextTemplate}
         />
       </div>
 

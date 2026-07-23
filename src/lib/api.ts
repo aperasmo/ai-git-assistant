@@ -36,6 +36,7 @@ import type {
   ReadActionResult,
   Repository,
   RepositorySnapshot,
+  TeamContextTemplateResponse,
   UpdateGitHubSettingsRequest,
   UpdateGitIdentityRequest,
   UpdateGitLabSettingsRequest,
@@ -64,6 +65,9 @@ export const desktopApi = {
 
   getRepositorySnapshot: (repositoryId: string) =>
     invoke<RepositorySnapshot>("get_repository_snapshot", { repositoryId }),
+
+  createTeamContextTemplate: (repositoryId: string) =>
+    invoke<TeamContextTemplateResponse>("create_team_context_template", { repositoryId }),
 
   listAgentSessions: (repositoryId: string) =>
     invoke<AgentSession[]>("list_agent_sessions", { repositoryId }),

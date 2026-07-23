@@ -35,6 +35,7 @@ pub fn run() {
             commands::repositories::register_repository,
             commands::repositories::initialise_and_register_repository,
             commands::repositories::get_repository_snapshot,
+            commands::repositories::create_team_context_template,
             commands::repositories::list_agent_sessions,
             commands::repositories::create_agent_session,
             commands::repositories::compare_agent_session,

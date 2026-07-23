@@ -11,7 +11,10 @@ from app.errors import GitCommandError, ValidationFailure
 from app.git.client import GitClient
 from app.git.remote_provider import detect_remote_provider
 from app.git.status_parser import parse_branch_headers, parse_porcelain_v1_z
-from app.schemas.repositories import BranchInfo, RemoteProviderInfo, RepositorySnapshot
+from app.schemas.repositories import BranchInfo, RemoteProviderInfo, RepositorySnapshot, TeamContextInfo
+
+TEAM_CONTEXT_RELATIVE_PATH = Path(".ai-git-assistant") / "team-context.md"
+TEAM_CONTEXT_MAX_CHARS = 8_000
 
 IN_PROGRESS_MARKERS = {
     "MERGE_HEAD": (
@@ -212,6 +215,7 @@ class RepositoryInspector:
         remote_providers = self._detect_remote_providers(remote_names, remote_urls)
         local_branches = self._parse_branch_list(client.branch_list())
         local_tags = self._parse_tag_list(client.tag_list())
+        team_context = self._team_context_info(canonical_path)
 
         snapshot = RepositorySnapshot(
             repository_id=repository_id,
@@ -232,6 +236,7 @@ class RepositoryInspector:
             remote_providers=remote_providers,
             local_branches=local_branches,
             local_tags=local_tags,
+            team_context=team_context,
             fingerprint=self._fingerprint(
                 head=head,
                 branch=branch,
@@ -240,6 +245,22 @@ class RepositoryInspector:
             ),
         )
         return RepositoryInspection(canonical_path=canonical_path, snapshot=snapshot)
+
+    @staticmethod
+    def _team_context_info(canonical_path: Path) -> TeamContextInfo:
+        context_path = canonical_path / TEAM_CONTEXT_RELATIVE_PATH
+        if not context_path.is_file():
+            return TeamContextInfo()
+        try:
+            content = context_path.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            return TeamContextInfo()
+        return TeamContextInfo(
+            available=bool(content),
+            path=TEAM_CONTEXT_RELATIVE_PATH.as_posix(),
+            char_count=len(content),
+            truncated=len(content) > TEAM_CONTEXT_MAX_CHARS,
+        )
 
     @staticmethod
     def _detect_remote_providers(

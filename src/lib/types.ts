@@ -190,6 +190,13 @@ export interface RemoteProviderInfo {
   url?: string | null;
 }
 
+export interface TeamContextInfo {
+  available: boolean;
+  path: string;
+  charCount: number;
+  truncated: boolean;
+}
+
 export interface RepositorySnapshot {
   repositoryId: string;
   branch?: string | null;
@@ -211,6 +218,7 @@ export interface RepositorySnapshot {
   remoteProviders: RemoteProviderInfo[];
   localBranches: BranchInfo[];
   localTags: string[];
+  teamContext?: TeamContextInfo;
 }
 
 export interface ReadActionRequest {
@@ -224,6 +232,13 @@ export interface ReadActionResult {
   summary: string;
   content: string;
   contentKind?: "text" | "diff" | "graph";
+  snapshot: RepositorySnapshot;
+}
+
+export interface TeamContextTemplateResponse {
+  title: string;
+  summary: string;
+  content: string;
   snapshot: RepositorySnapshot;
 }
 

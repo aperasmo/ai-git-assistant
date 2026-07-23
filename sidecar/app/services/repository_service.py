@@ -55,6 +55,7 @@ from app.schemas.repositories import (
     ReleaseAssetUpload,
     RepositoryResponse,
     RepositorySnapshot,
+    TeamContextTemplateResponse,
 )
 from app.services.repository_store import RepositoryStore
 from app.services.github_release_service import GitHubReleaseClient, GitHubRepositoryRef, parse_github_remote_url
@@ -63,6 +64,7 @@ from app.services.gitlab_merge_request_service import (
     GitLabRepositoryRef,
     parse_gitlab_remote_url,
 )
+from app.templates.team_context import DEFAULT_TEAM_CONTEXT_TEMPLATE
 
 _logger = logging.getLogger("aiga.sidecar")
 
@@ -73,6 +75,8 @@ _STASH_REF_PATTERN = re.compile(r"^stash@\{\d{1,3}\}$")
 _TAG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 _GITHUB_REPOSITORY_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 _GITHUB_HTTPS_REMOTE_PATTERN = re.compile(r"^https://github\.com/[^/\s]+/[^/\s]+?(?:\.git)?/?$")
+_TEAM_CONTEXT_RELATIVE_PATH = Path(".ai-git-assistant") / "team-context.md"
+_TEAM_CONTEXT_MAX_CHARS = 8_000
 _CONFLICT_RESOLUTION_STEPS = {
     PlanStepKind.STAGE,
     PlanStepKind.MERGE_ABORT,
@@ -560,6 +564,38 @@ class RepositoryService:
                 fh.write(self._GITIGNORE_HEADER)
             for line in new_lines:
                 fh.write(f"{line}\n")
+
+    def create_team_context_template(self, repository_id: str) -> TeamContextTemplateResponse:
+        root = self.store.canonical_path(repository_id)
+        context_dir = root / _TEAM_CONTEXT_RELATIVE_PATH.parent
+        context_path = root / _TEAM_CONTEXT_RELATIVE_PATH
+
+        if context_path.exists():
+            raise ValidationFailure(
+                "Team context already exists. Open .ai-git-assistant/team-context.md and edit it for this repository."
+            )
+
+        try:
+            context_dir.mkdir(parents=True, exist_ok=True)
+            context_path.write_text(
+                DEFAULT_TEAM_CONTEXT_TEMPLATE.rstrip() + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+        except OSError as exc:
+            raise ValidationFailure(f"Could not create team context: {exc}") from exc
+
+        snapshot = self.snapshot(repository_id)
+        return TeamContextTemplateResponse(
+            title="Team context template added",
+            summary="A repo-local AI guidance file was created.",
+            content=(
+                "Created .ai-git-assistant/team-context.md.\n\n"
+                "Review and edit this file so AI Git Assistant follows this repository's commit, PR/MR, "
+                "validation, documentation, and release conventions. Keep it free of secrets."
+            ),
+            snapshot=snapshot,
+        )
 
     def submit_wizard_plan(
         self,
@@ -2320,6 +2356,19 @@ class RepositoryService:
             ]
         )
         lines.extend(RepositoryService._render_ai_change_map(paths, status_map, stat_map))
+        context_items = ["Selected file paths", "Organized change map", "Diff stats"]
+        team_context = RepositoryService._read_team_context(canonical_path)
+        team_context_truncated = False
+        if team_context:
+            team_context_content, team_context_truncated = team_context
+            lines.extend(
+                [
+                    "",
+                    f"Repository team context ({_TEAM_CONTEXT_RELATIVE_PATH.as_posix()}):",
+                    team_context_content,
+                ]
+            )
+            context_items.append("Repository team context")
         if snapshot.recent_commits:
             lines.extend(
                 [
@@ -2328,7 +2377,6 @@ class RepositoryService:
                     *[f"- {commit.subject}" for commit in snapshot.recent_commits[:5]],
                 ]
             )
-        context_items = ["Selected file paths", "Organized change map", "Diff stats"]
         if snapshot.recent_commits:
             context_items.append("Recent commit subjects")
 
@@ -2372,7 +2420,7 @@ class RepositoryService:
                 content=context,
                 files=paths,
                 context_items=list(dict.fromkeys(context_items)),
-                truncated=False,
+                truncated=team_context_truncated,
             )
         truncated_context = (
             context[:_MAX_COMMIT_MESSAGE_CONTEXT_CHARS]
@@ -2412,6 +2460,19 @@ class RepositoryService:
             "Diff stat:",
             diff_stat or "(No local diff stat available.)",
         ]
+        context_items = ["Branch names", "Commit range", "Changed files", "Diff stat"]
+        team_context = RepositoryService._read_team_context(canonical_path)
+        team_context_truncated = False
+        if team_context:
+            team_context_content, team_context_truncated = team_context
+            lines.extend(
+                [
+                    "",
+                    f"Repository team context ({_TEAM_CONTEXT_RELATIVE_PATH.as_posix()}):",
+                    team_context_content,
+                ]
+            )
+            context_items.append("Repository team context")
         if snapshot.recent_commits:
             lines.extend(
                 [
@@ -2420,13 +2481,12 @@ class RepositoryService:
                     *[f"- {commit.subject}" for commit in snapshot.recent_commits[:5]],
                 ]
             )
-        context_items = ["Branch names", "Commit range", "Changed files", "Diff stat"]
         if snapshot.recent_commits:
             context_items.append("Recent commit subjects")
 
         context = "\n".join(lines)
-        truncated = len(context) > _MAX_COMMIT_MESSAGE_CONTEXT_CHARS
-        if truncated:
+        context_truncated = len(context) > _MAX_COMMIT_MESSAGE_CONTEXT_CHARS
+        if context_truncated:
             context = (
                 context[:_MAX_COMMIT_MESSAGE_CONTEXT_CHARS]
                 + "\n\n[Pull request context truncated by AI Git Assistant.]"
@@ -2435,7 +2495,26 @@ class RepositoryService:
             content=context,
             files=files,
             context_items=context_items,
-            truncated=truncated,
+            truncated=context_truncated or team_context_truncated,
+        )
+
+    @staticmethod
+    def _read_team_context(canonical_path: Path) -> tuple[str, bool] | None:
+        context_path = canonical_path / _TEAM_CONTEXT_RELATIVE_PATH
+        if not context_path.is_file():
+            return None
+        try:
+            content = context_path.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            return None
+        if not content:
+            return None
+        if len(content) <= _TEAM_CONTEXT_MAX_CHARS:
+            return content, False
+        return (
+            content[:_TEAM_CONTEXT_MAX_CHARS]
+            + "\n\n[Repository team context truncated by AI Git Assistant.]",
+            True,
         )
 
     @staticmethod

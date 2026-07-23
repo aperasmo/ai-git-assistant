@@ -5,6 +5,7 @@ import type {
   GeneratePullRequestDraftResponse,
   CommitMessageStyle,
   LocalActionPlan,
+  RepositorySnapshot,
   RecoveryOption,
 } from "../lib/types";
 import type { WizardData, WizardFlowId } from "../lib/flows";
@@ -14,6 +15,7 @@ import { WizardStep } from "./WizardStep";
 interface ChatPanelProps {
   repositorySelected: boolean;
   busy: boolean;
+  snapshot?: RepositorySnapshot | null;
   transcript: ChatTranscriptEntry[];
   pendingPlanId?: string | null;
   applicationError?: string | null;
@@ -390,6 +392,7 @@ function TranscriptItem({
 export function ChatPanel({
   repositorySelected,
   busy,
+  snapshot,
   transcript,
   pendingPlanId,
   applicationError,
@@ -480,7 +483,7 @@ export function ChatPanel({
       </div>
 
       {repositorySelected && (
-        <CommandBar onSelect={onWizardSelect} disabled={commandBarDisabled} />
+        <CommandBar onSelect={onWizardSelect} disabled={commandBarDisabled} snapshot={snapshot} />
       )}
 
       <form className="chat-composer" onSubmit={submit}>

@@ -44,6 +44,8 @@ app/services/repository_service.py
 app/services/repository_store.py
 app/services/secret_store.py
 app/services/settings_service.py
+app/templates/__init__.py
+app/templates/team_context.py
 tests/test_action_planner.py
 tests/test_health.py
 tests/test_llm_validator.py

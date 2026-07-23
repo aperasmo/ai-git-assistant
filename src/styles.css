@@ -4,6 +4,34 @@
   background: #0b0d10;
   color: #e8eaed;
   font-synthesis: none;
+  --theme-bg: #0b0d10;
+  --theme-panel: #111419;
+  --theme-surface: #171b20;
+  --theme-surface-strong: #1a1e24;
+  --theme-border: #252a32;
+  --theme-border-strong: #2e343d;
+  --theme-text: #e8eaed;
+  --theme-muted: #8a92a0;
+  --theme-faint: #59616e;
+  --theme-accent: #34d399;
+  --theme-blue: #60a5fa;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  background: #f4f7fb;
+  color: #1f2937;
+  --theme-bg: #f4f7fb;
+  --theme-panel: #ffffff;
+  --theme-surface: #f8fafc;
+  --theme-surface-strong: #eef2f7;
+  --theme-border: #d8dee8;
+  --theme-border-strong: #c5ceda;
+  --theme-text: #1f2937;
+  --theme-muted: #64748b;
+  --theme-faint: #8794a7;
+  --theme-accent: #0f9f7a;
+  --theme-blue: #2563eb;
 }
 
 * { box-sizing: border-box; }
@@ -38,6 +66,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .icon-button { font-size: 16px; padding: 3px; }
 
 .app-body { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: 268px minmax(420px, 1fr) 292px; }
+.app-body.context-collapsed { grid-template-columns: 268px minmax(420px, 1fr) 44px; }
 .sidebar { overflow: hidden; display: flex; flex-direction: column; border-right: 1px solid #252a32; background: #111419; }
 .sidebar-section-heading { padding: 17px 16px 9px; display: flex; align-items: center; justify-content: space-between; color: #666f7b; font-size: 10.5px; font-weight: 800; letter-spacing: .075em; }
 .small-button { border: 1px solid #2e343d; background: #1a1e24; color: #abb2be; border-radius: 6px; font-size: 11px; padding: 4px 8px; }
@@ -161,7 +190,68 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .composer-hint { flex: 0 0 auto; margin: 7px 0 12px; text-align: center; color: #59616e; font-size: 10.5px; }
 
 .context-panel { min-height: 0; overflow: auto; border-left: 1px solid #252a32; background: #111419; padding: 16px; }
+.context-panel-collapsed {
+  min-height: 0;
+  border-left: 1px solid #252a32;
+  background: #111419;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 10px 6px;
+}
+.context-expand-button {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #2e343d;
+  border-radius: 10px;
+  background: #171b20;
+  color: #8a92a0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 4px;
+}
+.context-expand-button:hover {
+  border-color: #46505d;
+  color: #e8eaed;
+}
+.context-expand-button span {
+  color: #9fc3ff;
+  font-size: 0;
+  line-height: 1;
+}
+.context-expand-button span::before {
+  content: "<";
+  font-size: 17px;
+}
+.context-expand-button strong {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 .context-heading-row { display: flex; align-items: center; justify-content: space-between; }
+.context-heading-actions { display: flex; align-items: center; gap: 7px; }
+.context-collapse-button {
+  min-width: 22px;
+  min-height: 22px;
+  border: 1px solid #2e343d;
+  border-radius: 7px;
+  background: #171b20;
+  color: #8a92a0;
+  font-size: 0;
+}
+.context-collapse-button::before {
+  content: ">";
+  font-size: 13px;
+}
+.context-collapse-button:hover:not(:disabled) {
+  border-color: #46505d;
+  color: #e8eaed;
+}
 .context-heading, .context-subheading { margin: 0; color: #666f7b; font-size: 10.5px; font-weight: 800; letter-spacing: .075em; }
 .context-panel h2 { margin: 14px 0 2px; font-size: 15px; }
 .context-path { margin: 0 0 10px; color: #67707c; font: 10.5px ui-monospace, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -174,6 +264,14 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .remote-provider-list { display: grid; gap: 4px; margin-top: 8px; }
 .remote-provider-list code { color: #aab2be; font: 10.5px ui-monospace, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .remote-provider-card p { margin: 8px 0 0; color: #737d8a; font-size: 10.5px; line-height: 1.45; }
+.team-context-card { margin-top: 10px; padding: 10px; border: 1px solid #2e343d; border-radius: 8px; background: #15191f; }
+.team-context-card.available { border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.06); }
+.team-context-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #788391; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .055em; }
+.team-context-header strong { color: #d4d9e1; font-size: 11px; text-transform: none; letter-spacing: 0; }
+.team-context-card.available .team-context-header strong { color: #34d399; }
+.team-context-card code { display: block; margin-top: 8px; color: #aab2be; font: 10.5px ui-monospace, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-context-card p { margin: 8px 0 0; color: #737d8a; font-size: 10.5px; line-height: 1.45; }
+.team-context-create-button { margin-top: 10px; width: 100%; justify-content: center; }
 .context-subheading { margin-top: 19px; margin-bottom: 4px; }
 .status-list { border-top: 1px solid #252a32; }
 .count-row { padding: 8px 0; display: flex; align-items: center; justify-content: space-between; color: #a0a8b4; font-size: 12px; }
@@ -256,6 +354,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 @media (max-width: 1100px) {
   body { min-width: 860px; }
   .app-body { grid-template-columns: 240px minmax(350px, 1fr) 260px; }
+  .app-body.context-collapsed { grid-template-columns: 240px minmax(350px, 1fr) 42px; }
   .topbar-title { min-width: 210px; }
 }
 
@@ -1335,6 +1434,12 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   color: #d6e6ff;
 }
 .command-pill:disabled { opacity: .35; cursor: not-allowed; }
+.command-pill-unavailable {
+  border-style: dashed;
+  color: #68717d;
+  background: rgba(21,26,33,.62);
+}
+.command-pill-unavailable .command-pill-icon { opacity: .45; }
 
 @media (max-width: 1180px), (max-height: 760px) {
   .command-bar { padding-inline: 14px; }
@@ -1357,12 +1462,26 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 }
 .tour-button:hover { border-color: #388bfd; color: #e8eaed; }
 
-.active-llm-badge {
-  font-size: 11px; font-weight: 700; padding: 2px 8px;
-  border-radius: 20px; letter-spacing: .04em;
-  background: rgba(56,139,253,.1); color: #79c0ff;
-  border: 1px solid rgba(56,139,253,.25);
-  white-space: nowrap;
+.theme-toggle-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(96,165,250,.26);
+  background: rgba(59,130,246,.09);
+  color: #9fc3ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.theme-toggle-button span {
+  font-size: 14px;
+  line-height: 1;
+}
+.theme-toggle-button:hover {
+  border-color: #60a5fa;
+  color: #d6e6ff;
+  background: rgba(59,130,246,.16);
 }
 
 .settings-test-ok { font-size: 12px; color: #3fb950; margin: 6px 0 0; }
@@ -1658,3 +1777,147 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .help-footer { justify-content: space-between; }
 .help-count { font-size: 11px; color: #3a4050; }
 .wizard-context-item:disabled { opacity: .4; cursor: default; }
+
+/* Light theme foundation */
+:root[data-theme="light"] body {
+  background: var(--theme-bg);
+  color: var(--theme-text);
+}
+
+.app-shell[data-theme="light"],
+.app-shell[data-theme="light"] .chat-panel {
+  background: var(--theme-bg);
+  color: var(--theme-text);
+}
+
+.app-shell[data-theme="light"] .topbar,
+.app-shell[data-theme="light"] .sidebar,
+.app-shell[data-theme="light"] .context-panel,
+.app-shell[data-theme="light"] .context-panel-collapsed {
+  background: var(--theme-panel);
+  border-color: var(--theme-border);
+}
+
+.app-shell[data-theme="light"] .topbar-title strong,
+.app-shell[data-theme="light"] .repository-pill,
+.app-shell[data-theme="light"] .empty-state h2,
+.app-shell[data-theme="light"] .result-card-heading strong,
+.app-shell[data-theme="light"] .recovery-card-heading strong,
+.app-shell[data-theme="light"] .help-card-name,
+.app-shell[data-theme="light"] .modal-header h2 {
+  color: var(--theme-text);
+}
+
+.app-shell[data-theme="light"] .brand-mark,
+.app-shell[data-theme="light"] .repository-pill,
+.app-shell[data-theme="light"] .branch-pill,
+.app-shell[data-theme="light"] .repository-item.active,
+.app-shell[data-theme="light"] .empty-state-icon,
+.app-shell[data-theme="light"] .chat-composer,
+.app-shell[data-theme="light"] .context-expand-button,
+.app-shell[data-theme="light"] .context-collapse-button,
+.app-shell[data-theme="light"] .small-button,
+.app-shell[data-theme="light"] .command-drawer,
+.app-shell[data-theme="light"] .command-pill,
+.app-shell[data-theme="light"] .modal-panel,
+.app-shell[data-theme="light"] .settings-section,
+.app-shell[data-theme="light"] .modal-card,
+.app-shell[data-theme="light"] .help-card {
+  background: var(--theme-surface);
+  border-color: var(--theme-border);
+}
+
+.app-shell[data-theme="light"] .repository-item:hover,
+.app-shell[data-theme="light"] .repo-filter-placeholder,
+.app-shell[data-theme="light"] .result-card-heading,
+.app-shell[data-theme="light"] .plan-command-preview,
+.app-shell[data-theme="light"] .settings-select,
+.app-shell[data-theme="light"] .settings-input,
+.app-shell[data-theme="light"] .clone-input,
+.app-shell[data-theme="light"] .wizard-step input,
+.app-shell[data-theme="light"] .wizard-step textarea,
+.app-shell[data-theme="light"] .wizard-option-button,
+.app-shell[data-theme="light"] .wizard-file-item,
+.app-shell[data-theme="light"] .wizard-context-menu {
+  background: var(--theme-surface-strong);
+  border-color: var(--theme-border);
+}
+
+.app-shell[data-theme="light"] .result-card,
+.app-shell[data-theme="light"] .prompt-card,
+.app-shell[data-theme="light"] .recovery-card,
+.app-shell[data-theme="light"] .plan-card,
+.app-shell[data-theme="light"] .wizard-step-card,
+.app-shell[data-theme="light"] .remote-provider-card,
+.app-shell[data-theme="light"] .team-context-card,
+.app-shell[data-theme="light"] .agent-create-form,
+.app-shell[data-theme="light"] .agent-session-card {
+  background: var(--theme-panel);
+  border-color: var(--theme-border);
+  box-shadow: 0 14px 32px rgba(31,41,55,.06);
+}
+
+.app-shell[data-theme="light"] .result-card > p,
+.app-shell[data-theme="light"] .assistant-intro p,
+.app-shell[data-theme="light"] .empty-state,
+.app-shell[data-theme="light"] .recovery-card p,
+.app-shell[data-theme="light"] .settings-hint,
+.app-shell[data-theme="light"] .help-section-summary,
+.app-shell[data-theme="light"] .help-card-desc,
+.app-shell[data-theme="light"] .composer-hint,
+.app-shell[data-theme="light"] .context-upstream,
+.app-shell[data-theme="light"] .remote-refresh {
+  color: var(--theme-muted);
+}
+
+.app-shell[data-theme="light"] .sidebar-section-heading,
+.app-shell[data-theme="light"] .context-heading,
+.app-shell[data-theme="light"] .context-subheading,
+.app-shell[data-theme="light"] .command-bar-section-label,
+.app-shell[data-theme="light"] .settings-section-heading,
+.app-shell[data-theme="light"] .help-section-label,
+.app-shell[data-theme="light"] .help-card-section-label {
+  color: var(--theme-faint);
+}
+
+.app-shell[data-theme="light"] .chat-composer input,
+.app-shell[data-theme="light"] .settings-select,
+.app-shell[data-theme="light"] .settings-input,
+.app-shell[data-theme="light"] .wizard-step input,
+.app-shell[data-theme="light"] .wizard-step textarea,
+.app-shell[data-theme="light"] .clone-input {
+  color: var(--theme-text);
+}
+
+.app-shell[data-theme="light"] .result-card pre,
+.app-shell[data-theme="light"] .help-git-example,
+.app-shell[data-theme="light"] .plan-privacy-receipt pre {
+  background: #f8fafc;
+  border-color: var(--theme-border);
+  color: #334155;
+}
+
+.app-shell[data-theme="light"] .command-bar {
+  background: linear-gradient(to top, rgba(244,247,251,.96), rgba(244,247,251,.92));
+  border-color: var(--theme-border);
+}
+
+.app-shell[data-theme="light"] .command-pill-primary,
+.app-shell[data-theme="light"] .command-pill-unavailable,
+.app-shell[data-theme="light"] .theme-toggle-button {
+  color: #64748b;
+}
+
+.app-shell[data-theme="light"] .theme-toggle-button {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.app-shell[data-theme="light"] .theme-toggle-button:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.app-shell[data-theme="light"] .modal-backdrop {
+  background: rgba(15,23,42,.28);
+}

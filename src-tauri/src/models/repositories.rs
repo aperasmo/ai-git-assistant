@@ -105,6 +105,34 @@ pub struct RemoteProviderInfo {
     pub url: Option<String>,
 }
 
+fn default_team_context_path() -> String {
+    ".ai-git-assistant/team-context.md".to_string()
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamContextInfo {
+    #[serde(default)]
+    pub available: bool,
+    #[serde(default = "default_team_context_path")]
+    pub path: String,
+    #[serde(default)]
+    pub char_count: i64,
+    #[serde(default)]
+    pub truncated: bool,
+}
+
+impl Default for TeamContextInfo {
+    fn default() -> Self {
+        Self {
+            available: false,
+            path: default_team_context_path(),
+            char_count: 0,
+            truncated: false,
+        }
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositorySnapshot {
@@ -133,6 +161,8 @@ pub struct RepositorySnapshot {
     pub local_branches: Vec<Value>,
     #[serde(default)]
     pub local_tags: Vec<String>,
+    #[serde(default)]
+    pub team_context: TeamContextInfo,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -196,6 +226,15 @@ pub struct LocalActionPlan {
 #[serde(rename_all = "camelCase")]
 pub struct ActionExecutionResult {
     pub plan_id: String,
+    pub title: String,
+    pub summary: String,
+    pub content: String,
+    pub snapshot: RepositorySnapshot,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamContextTemplateResponse {
     pub title: String,
     pub summary: String,
     pub content: String,

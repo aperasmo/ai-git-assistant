@@ -8,13 +8,13 @@ AI Git Assistant is a cross-platform desktop app that turns what you want to do 
 
 ## Current release
 
-**0.8.0 - Phase 8** starts the UI polish line with an adaptive command dock. The bottom command area now keeps the most-used actions visible and moves the full command set behind **More**, so the app stays cleaner on Windows, Linux VMs, laptops, and lower-height screens.
+**0.9.0 - Phase 9** starts the team-context line. Repositories can now carry an optional `.ai-git-assistant/team-context.md` file so AI-generated commit messages and PR/MR drafts can follow repo-specific conventions without storing secrets or requiring a hosted team account.
 
-Phase 8 keeps the safety model from Phase 7.9: write actions still show reviewed plans and require approval before Git changes are made.
+Phase 9 keeps the safety and UI work from Phase 8: write actions still show reviewed plans, the adaptive command dock stays compact on smaller screens, and any AI context sent to a provider is listed in the privacy receipt.
 
-Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`, Phase 8 = `0.8.x`. The first release in a phase uses `.0`, so Phase 8 starts at `0.8.0`.
+Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`, Phase 8 = `0.8.x`, Phase 9 = `0.9.x`. The first release in a phase uses `.0`, so Phase 9 starts at `0.9.0`.
 
-See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phase 2 hardening notes.
+See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and validation notes.
 
 ---
 
@@ -30,9 +30,13 @@ See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and Phas
 - **Reuses your GitHub token for HTTPS Git** - GitHub pull, push, fetch, tag push, and branch checks can use the saved token without exposing it in the command line
 - **Publishes local projects to GitHub** - create the remote repository, connect `origin`, and push the first `main` branch from inside the app
 - **Guides blocked workflows** - when Git needs upstream tracking, author identity, GitHub push permission, divergent-branch handling, merge conflict resolution, or a better repository selection, the app recommends the next step
+- **Supports repo-local team context** - optional `.ai-git-assistant/team-context.md` guidance can shape AI commit and PR/MR drafts
 - **Connects to an AI provider** (optional) so it can understand requests the built-in patterns don't cover
 - **Safe by design** - no force pushes, no hard resets, no surprises
 - **Adapts the command dock** - common actions stay visible while advanced actions live behind More
+- **Shows contextual actions** - local-only, remote-connected, conflicted, GitHub, and GitLab repos surface the actions that make sense first
+- **Collapses the right context panel** - reclaim horizontal space when reviewing longer results
+- **Supports theme foundations** - switch between dark and light UI modes from the top bar
 
 ---
 
@@ -165,7 +169,15 @@ Choose one provider:
 
 From now on, any request the app doesn't recognise locally is automatically sent to your AI provider. You still see and approve every step - the AI just figures out what steps to take.
 
-In the commit wizard, enable AI for the repository and choose a commit-message style: **Detailed**, **Concise**, **Conventional**, or **Release**. Click **Generate with AI** to draft one consolidated commit message from the selected files. For multi-file changes, the app sends an organized in-memory context pack first - grouped paths, change status, diff stats, detected domains, recent commit subjects, and concise file hints - then the selected diff/file snippets, so the AI can produce a broader subject plus useful body bullets instead of overfitting to one file.
+In the commit wizard, enable AI for the repository and choose a commit-message style: **Detailed**, **Concise**, **Conventional**, or **Release**. Each style button includes a tooltip explaining when to use it. Click **Generate with AI** to draft one consolidated commit message from the selected files. For multi-file changes, the app sends an organized in-memory context pack first - grouped paths, change status, diff stats, detected domains, recent commit subjects, and concise file hints - then the selected diff/file snippets, so the AI can produce a broader subject plus useful body bullets instead of overfitting to one file.
+
+### Repo-local team context
+
+Phase 9 adds optional repository guidance through `.ai-git-assistant/team-context.md`. Add conventions such as commit style, PR checklist expectations, naming rules, release-note tone, or files that usually belong together. When repository AI context is enabled, this file is included in commit-message and PR/MR draft prompts and appears in the privacy receipt.
+
+A starter template is included at `docs/TEAM_CONTEXT_TEMPLATE.md`. Copy it into a repository as `.ai-git-assistant/team-context.md`, then trim it to match the team. It covers real-world defaults for commit messages, PR/MR summaries, validation notes, review risk, documentation, branching, and release guidance. The selected commit-message style in the app still takes priority over team-context guidance.
+
+From v0.9.x onward, the repository context panel also shows whether team context is active. If the file is missing, use **Add template** to create `.ai-git-assistant/team-context.md` in the selected repository, then review and edit it before committing.
 
 ---
 
@@ -234,6 +246,13 @@ npm run installer:mac
 ```
 
 Current bundle defaults are Windows NSIS, Linux `.deb`, and macOS `.dmg`. Each OS still needs to build on its own host or CI runner because Tauri, PyInstaller, WebView dependencies, signing, and installer tooling are platform-specific.
+
+On Linux, activate the Python virtual environment before running installer builds so the sidecar test dependencies are available:
+
+```bash
+source .venv/bin/activate
+npm run installer:linux
+```
 
 Advanced lower-level commands are still available:
 
@@ -433,6 +452,7 @@ Delete that file for a completely clean start.
 - Only the **names of changed files**, current **branch**, and your **typed request** are sent to the AI provider when the AI fallback is used
 - If you click **Generate with AI** for a commit message, grouped selected-file context, diff stats, recent commit subjects, and the selected diff/file snippets are sent to your configured provider
 - If you click **Analyze changes**, the receipt shows the exact selected diff context sent to the configured AI provider
+- If `.ai-git-assistant/team-context.md` exists, its contents are included in AI commit-message and PR/MR draft contexts and are listed in the privacy receipt
 - If you publish or update a GitHub draft release, the tag, title, description, and selected assets are sent to GitHub using your saved token
 - If you publish a local repository to GitHub, the repository name, description, visibility, branch, commit, and selected files are sent to GitHub through standard Git/GitHub APIs
 - If you generate PR/MR text with AI, the base/head branches, commits, changed-file list, diff stats, and recent commit subjects are sent to your configured provider
@@ -460,4 +480,4 @@ Found a bug or have a suggestion? Open an issue on this repository and describe 
 
 ---
 
-*Built with [Tauri](https://tauri.app) · [React](https://react.dev) · Python FastAPI · Phase 7*
+*Built with [Tauri](https://tauri.app) - [React](https://react.dev) - Python FastAPI - Phase 9*

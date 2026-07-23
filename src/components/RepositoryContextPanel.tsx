@@ -5,8 +5,10 @@ import type { AgentSession, ReadAction, Repository, RepositorySnapshot } from ".
 interface RepositoryContextPanelProps {
   repository?: Repository | null;
   snapshot?: RepositorySnapshot | null;
+  collapsed?: boolean;
   agentSessions?: AgentSession[];
   busy: boolean;
+  onCollapse?: () => void;
   onAction: (action: ReadAction) => void;
   onCreateAgentSession?: (task: string) => Promise<void>;
   onRefreshAgentSessions?: () => Promise<AgentSession[] | void>;
@@ -18,6 +20,7 @@ interface RepositoryContextPanelProps {
   onTestLlm?: () => Promise<{ ok: boolean; message: string }>;
   onAnalyzeChanges?: () => void;
   onSetRepositoryLlmAllowed?: (allowed: boolean) => Promise<void>;
+  onCreateTeamContext?: () => Promise<void>;
 }
 
 function CountRow({
@@ -40,8 +43,10 @@ function CountRow({
 export function RepositoryContextPanel({
   repository,
   snapshot,
+  collapsed = false,
   agentSessions = [],
   busy,
+  onCollapse,
   onAction,
   onCreateAgentSession,
   onRefreshAgentSessions,
@@ -53,20 +58,53 @@ export function RepositoryContextPanel({
   onTestLlm,
   onAnalyzeChanges,
   onSetRepositoryLlmAllowed,
+  onCreateTeamContext,
 }: RepositoryContextPanelProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [savingAiAllowed, setSavingAiAllowed] = useState(false);
   const [agentTask, setAgentTask] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
+  const [teamContextBusy, setTeamContextBusy] = useState(false);
 
   useEffect(() => {
     setTestResult(null);
   }, [activeLlm?.provider, activeLlm?.model]);
+
+  if (collapsed) {
+    return (
+      <aside className="context-panel-collapsed" aria-label="Repository context collapsed">
+        <button
+          type="button"
+          className="context-expand-button"
+          onClick={onCollapse}
+          aria-label="Show repository context"
+          title="Show repository context"
+        >
+          <span aria-hidden="true">&lt;</span>
+          <strong>Context</strong>
+        </button>
+      </aside>
+    );
+  }
+
   if (!repository || !snapshot) {
     return (
       <aside className="context-panel">
-        <p className="context-heading">REPOSITORY CONTEXT</p>
+        <div className="context-heading-row">
+          <p className="context-heading">REPOSITORY CONTEXT</p>
+          {onCollapse && (
+            <button
+              type="button"
+              className="icon-button context-collapse-button"
+              onClick={onCollapse}
+            aria-label="Hide repository context"
+            title="Hide repository context"
+          >
+              &gt;
+          </button>
+        )}
+        </div>
         <div className="context-empty">
           <p>Live repository status will appear here after you select a repository.</p>
         </div>
@@ -88,11 +126,38 @@ export function RepositoryContextPanel({
     snapshot.stagedChanges.length + snapshot.modifiedChanges.length + snapshot.untrackedPaths.length;
   const remoteProviderLabel = providerSummary(snapshot);
   const remoteProviderDetails = providerDetailLines(snapshot);
+  const teamContext = snapshot.teamContext ?? {
+    available: false,
+    path: ".ai-git-assistant/team-context.md",
+    charCount: 0,
+    truncated: false,
+  };
+
+  async function handleCreateTeamContext() {
+    if (!onCreateTeamContext) return;
+    setTeamContextBusy(true);
+    try {
+      await onCreateTeamContext();
+    } finally {
+      setTeamContextBusy(false);
+    }
+  }
 
   return (
     <aside className="context-panel">
       <div className="context-heading-row">
         <p className="context-heading">REPOSITORY CONTEXT</p>
+        {onCollapse && (
+          <button
+            type="button"
+            className="icon-button context-collapse-button"
+            onClick={onCollapse}
+            aria-label="Hide repository context"
+            title="Hide repository context"
+          >
+            &gt;
+          </button>
+        )}
         <button
           type="button"
           className="icon-button"
@@ -128,6 +193,38 @@ export function RepositoryContextPanel({
           ))}
         </div>
         <p>{platformFeatureHint(snapshot)}</p>
+      </div>
+
+      <div className={`team-context-card ${teamContext.available ? "available" : ""}`}>
+        <div className="team-context-header">
+          <span>Team context</span>
+          <strong>{teamContext.available ? "Active" : "Not configured"}</strong>
+        </div>
+        {teamContext.available ? (
+          <>
+            <code>{teamContext.path}</code>
+            <p>
+              {teamContext.charCount.toLocaleString()} characters available for AI drafts
+              {teamContext.truncated ? " (trimmed for prompt size)." : "."}
+            </p>
+          </>
+        ) : (
+          <>
+            <p>
+              Repository convention file not found. Add the starter template, then edit it for this repo.
+            </p>
+            {onCreateTeamContext && (
+              <button
+                type="button"
+                className="small-button team-context-create-button"
+                onClick={handleCreateTeamContext}
+                disabled={busy || teamContextBusy}
+              >
+                {teamContextBusy ? "Adding..." : "Add template"}
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       <p className="context-subheading">STATUS SUMMARY</p>

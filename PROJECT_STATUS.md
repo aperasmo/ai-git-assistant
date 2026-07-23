@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 20/07/2026
+Last updated: 23/07/2026
 
 ---
 
@@ -167,13 +167,21 @@ These dates mark when the phase or feature set was first added to the project hi
 1. Started the UI responsiveness and workflow-polish line at `0.8.0`.
 2. Reworked the bottom command bar into an adaptive command dock.
 3. Kept high-frequency actions visible by default and moved the full command set behind More for smaller screens.
-4. Updated walkthrough targets and docs for the new dock.
+4. Added a collapsible repository context panel for tighter laptop and Linux VM layouts.
+5. Added context-aware command visibility for local-only, remote-connected, conflicted, GitHub, and GitLab repositories.
+6. Added a top-bar dark/light theme toggle with local persistence.
+7. Updated walkthrough targets and docs for the new dock.
 
-#### Phase 9 - target TBD
+#### Phase 9 - 22/07/2026
 
-1. Planned team context and conventions.
-2. Planned repo-local style profiles and AI context receipts.
-3. Planned team-aware commit messages, PR summaries, release notes, and branch naming.
+1. Started the team context and conventions line at `0.9.0`.
+2. Added optional repo-local team context at `.ai-git-assistant/team-context.md`.
+3. Added Team Context status in the repository context panel.
+4. Included team context in AI-generated commit-message and PR/MR draft prompts.
+5. Added privacy receipt coverage when team context is sent to the configured AI provider.
+6. Added one-click Team Context template creation from the repository context panel.
+7. Clarified that the selected commit-message style takes priority over team context guidance.
+8. Added tooltips for the Detailed, Concise, Conventional, and Release commit-message style buttons.
 
 ### Architecture
 
@@ -533,17 +541,22 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Keep the most-used actions visible by default.
 - [x] Move the full command set behind More for smaller screens.
 - [x] Update walkthrough copy for the new command dock.
-- [ ] Add a collapsible right repository context panel.
-- [ ] Add stronger context-aware command visibility.
-- [ ] Add light/dark theme foundations.
+- [x] Add a collapsible right repository context panel.
+- [x] Add stronger context-aware command visibility.
+- [x] Add light/dark theme foundations.
 
-### Phase 9 - Team context and conventions (target TBD)
+### Phase 9 - Team context and conventions (22/07/2026)
 
-- [ ] Add repo-local team context, for example `.ai-git-assistant/team-context.md`.
+- [x] Add repo-local team context, for example `.ai-git-assistant/team-context.md`.
+- [x] Surface Team Context status in the right repository panel.
+- [x] Include team context in AI commit-message and PR/MR draft prompts.
+- [x] Show a context receipt explaining when team rules influenced an AI suggestion.
+- [x] Add a reusable real-world team context template and use it in regression testing.
+- [x] Add in-app Team Context onboarding with one-click template creation.
+- [x] Preserve Team Context through the Tauri bridge so upgraded installs do not blank-screen on older repo state.
 - [ ] Import team conventions from `CONTRIBUTING.md`, PR templates, changelog rules, and recent commit history.
 - [ ] Let AI commit messages, PR summaries, release notes, branch names, and logical commit splits follow team style.
 - [ ] Add shared convention profiles that can be checked into the repository without storing secrets.
-- [ ] Show a context receipt explaining which team rules influenced an AI suggestion.
 - [ ] Keep team context optional and reviewable so single-user local workflows stay lightweight.
 
 ---
@@ -578,6 +591,13 @@ npm run tauri:dev
 ```
 
 `npm run installer` runs sidecar tests, builds the sidecar binary, and then builds the native installer package for the host OS. Windows emits NSIS, Linux emits `.deb`, and macOS emits `.dmg`.
+
+On Linux build machines, activate the Python virtual environment first so sidecar test dependencies such as `pytest` are available:
+
+```bash
+source .venv/bin/activate
+npm run installer:linux
+```
 
 Requirements: Node 20+, Rust stable, Python 3.12+, Git 2.25+.
 

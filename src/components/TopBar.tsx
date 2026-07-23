@@ -6,7 +6,8 @@ import { BrandMark } from "./BrandMark";
 interface TopBarProps {
   repository?: Repository | null;
   gitStatus?: GitInstallationStatus | null;
-  activeLlm?: { provider: string; model: string } | null;
+  theme: "dark" | "light";
+  onToggleTheme: () => void;
   onOpenSettings: () => void;
   onOpenDiagnostics: () => void;
   onOpenTour: () => void;
@@ -16,7 +17,8 @@ interface TopBarProps {
 export function TopBar({
   repository,
   gitStatus,
-  activeLlm,
+  theme,
+  onToggleTheme,
   onOpenSettings,
   onOpenDiagnostics,
   onOpenTour,
@@ -79,11 +81,15 @@ export function TopBar({
         <span className={gitStatus?.status === "available" ? "git-ready" : "git-warning"}>
           {gitStatus?.status === "available" ? "Git ready" : "Git check pending"}
         </span>
-        {activeLlm && (
-          <span className="active-llm-badge" title={`AI: ${activeLlm.model}`}>
-            AI: {activeLlm.provider}
-          </span>
-        )}
+        <button
+          type="button"
+          className="theme-toggle-button"
+          onClick={onToggleTheme}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+        >
+          <span aria-hidden="true">{theme === "dark" ? "☾" : "☀"}</span>
+        </button>
         <button type="button" className="tour-button" onClick={onOpenTour} title="Take a tour">
           ?
         </button>

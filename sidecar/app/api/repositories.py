@@ -45,6 +45,7 @@ from app.schemas.repositories import (
     SetExternalLLMRequest,
     SubmitPlanRequest,
     SubmitPlanResponse,
+    TeamContextTemplateResponse,
 )
 
 router = APIRouter(prefix="/v1/repositories", tags=["repositories"])
@@ -127,6 +128,18 @@ def list_repositories(request: Request) -> list[RepositoryResponse]:
 )
 def repository_snapshot(repository_id: str, request: Request) -> RepositorySnapshot:
     return _service(request).snapshot(repository_id)
+
+
+@router.post(
+    "/{repository_id}/team-context/template",
+    response_model=TeamContextTemplateResponse,
+    dependencies=[Depends(require_session_token)],
+)
+def create_team_context_template(
+    repository_id: str,
+    request: Request,
+) -> TeamContextTemplateResponse:
+    return _service(request).create_team_context_template(repository_id)
 
 
 @router.get(
