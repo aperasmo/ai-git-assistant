@@ -15,6 +15,7 @@ Starts the team context and conventions phase.
 - Adds one-click **Add template** onboarding from the repository context panel when a repo has no team context file.
 - Clarifies that the selected commit-message style takes priority over team context guidance.
 - Adds tooltips for the **Detailed**, **Concise**, **Conventional**, and **Release** commit-message style buttons.
+- Remembers generated commit-message drafts per style so users can switch between styles without losing the previous wording.
 - Fixes the Tauri bridge model so `teamContext` is preserved from the sidecar snapshot instead of causing a blank renderer on upgrade.
 - Public docs and version metadata updated to `0.9.0`.
 

@@ -9,11 +9,27 @@ import type { WizardData } from "../lib/flows";
 
 type WizardStepEntry = Extract<ChatTranscriptEntry, { kind: "wizard_step" }>;
 
-const COMMIT_MESSAGE_STYLES: { value: CommitMessageStyle; label: string }[] = [
-  { value: "detailed", label: "Detailed" },
-  { value: "concise", label: "Concise" },
-  { value: "conventional", label: "Conventional" },
-  { value: "release_ready", label: "Release" },
+const COMMIT_MESSAGE_STYLES: { value: CommitMessageStyle; label: string; tooltip: string }[] = [
+  {
+    value: "detailed",
+    label: "Detailed",
+    tooltip: "Best for multi-file changes. Generates one subject plus useful body bullets.",
+  },
+  {
+    value: "concise",
+    label: "Concise",
+    tooltip: "Best for small changes. Generates a short subject with minimal body text.",
+  },
+  {
+    value: "conventional",
+    label: "Conventional",
+    tooltip: "Uses Conventional Commit style, for example feat:, fix:, docs:, or chore:.",
+  },
+  {
+    value: "release_ready",
+    label: "Release",
+    tooltip: "Best for release prep. Emphasizes user-facing changes, packaging, and validation.",
+  },
 ];
 
 function toWizardErrorMessage(cause: unknown): string {
@@ -415,19 +431,39 @@ function TextInputStep({
   onGenerateCommitMessage?: (paths: string[], style?: CommitMessageStyle) => Promise<GenerateCommitMessageResponse>;
   onGeneratePullRequestDraft?: (baseBranch: string) => Promise<GeneratePullRequestDraftResponse>;
 }) {
+  const isCommitMessage = entry.prompt === "Commit message";
+  const isPullRequestTitle = entry.prompt === "Pull request title";
+  const isLongText = isCommitMessage || entry.prompt === "Release description" || entry.prompt === "Pull request description";
+  const selectedPaths = isCommitMessage ? entry.choices ?? [] : [];
+  const prBaseBranch = isPullRequestTitle ? entry.choices?.[0] ?? "" : "";
+  const [style, setStyle] = useState<CommitMessageStyle>("detailed");
+  const [commitDraftsByStyle, setCommitDraftsByStyle] = useState<Partial<Record<CommitMessageStyle, string>>>(() =>
+    isCommitMessage && entry.initialValue ? { detailed: entry.initialValue } : {},
+  );
+  const [commitReceiptsByStyle, setCommitReceiptsByStyle] = useState<Partial<Record<CommitMessageStyle, GenerateCommitMessageResponse>>>({});
   const [value, setValue] = useState(entry.initialValue ?? "");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<GenerateCommitMessageResponse | null>(null);
   const [prDraft, setPrDraft] = useState<GeneratePullRequestDraftResponse | null>(null);
-  const [style, setStyle] = useState<CommitMessageStyle>("detailed");
-  const isCommitMessage = entry.prompt === "Commit message";
-  const isPullRequestTitle = entry.prompt === "Pull request title";
-  const isLongText = isCommitMessage || entry.prompt === "Release description" || entry.prompt === "Pull request description";
-  const selectedPaths = isCommitMessage ? entry.choices ?? [] : [];
   const canGenerate = selectedPaths.length > 0 && Boolean(onGenerateCommitMessage);
-  const prBaseBranch = isPullRequestTitle ? entry.choices?.[0] ?? "" : "";
   const canGeneratePrDraft = isPullRequestTitle && Boolean(prBaseBranch) && Boolean(onGeneratePullRequestDraft);
+
+  function setCommitValue(nextValue: string) {
+    setValue(nextValue);
+    if (isCommitMessage) {
+      setCommitDraftsByStyle((current) => ({ ...current, [style]: nextValue }));
+    }
+  }
+
+  function handleStyleSelect(nextStyle: CommitMessageStyle) {
+    setStyle(nextStyle);
+    setError(null);
+    if (isCommitMessage) {
+      setValue(commitDraftsByStyle[nextStyle] ?? "");
+      setReceipt(commitReceiptsByStyle[nextStyle] ?? null);
+    }
+  }
 
   function handleNext() {
     const trimmed = value.trim();
@@ -448,6 +484,8 @@ function TextInputStep({
       const generated = await onGenerateCommitMessage(selectedPaths, nextStyle);
       setValue(generated.message);
       setReceipt(generated);
+      setCommitDraftsByStyle((current) => ({ ...current, [nextStyle]: generated.message }));
+      setCommitReceiptsByStyle((current) => ({ ...current, [nextStyle]: generated }));
     } catch (cause) {
       setError(toWizardErrorMessage(cause));
     } finally {
@@ -477,7 +515,7 @@ function TextInputStep({
         <textarea
           className={entry.prompt === "Release description" ? "wizard-text-input wizard-textarea-input wizard-release-description-input" : "wizard-text-input wizard-textarea-input"}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => setCommitValue(e.target.value)}
           placeholder={entry.prompt === "Release description" ? "Markdown release notes..." : "Type here..."}
           disabled={busy}
           autoFocus
@@ -488,7 +526,7 @@ function TextInputStep({
           type="text"
           className="wizard-text-input"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => setCommitValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") handleNext();
           }}
@@ -506,7 +544,9 @@ function TextInputStep({
                 type="button"
                 className={style === option.value ? "wizard-ai-style-button wizard-ai-style-button-active" : "wizard-ai-style-button"}
                 disabled={busy || generating}
-                onClick={() => setStyle(option.value)}
+                onClick={() => handleStyleSelect(option.value)}
+                title={option.tooltip}
+                aria-label={`${option.label}: ${option.tooltip}`}
               >
                 {option.label}
               </button>
@@ -521,7 +561,7 @@ function TextInputStep({
             >
               {generating ? "Generating..." : "Generate with AI"}
             </button>
-            <span>Uses selected diffs, stats, and recent commit style.</span>
+            <span>Uses selected diffs, stats, and recent commit style. Switch styles to compare saved drafts.</span>
           </div>
         </div>
       )}
@@ -554,7 +594,7 @@ function TextInputStep({
               type="button"
               className="wizard-ai-alternative-button"
               disabled={busy}
-              onClick={() => setValue(composeCommitMessage(alternative, receipt.body))}
+              onClick={() => setCommitValue(composeCommitMessage(alternative, receipt.body))}
             >
               {alternative}
             </button>

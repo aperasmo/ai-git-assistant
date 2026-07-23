@@ -169,7 +169,7 @@ Choose one provider:
 
 From now on, any request the app doesn't recognise locally is automatically sent to your AI provider. You still see and approve every step - the AI just figures out what steps to take.
 
-In the commit wizard, enable AI for the repository and choose a commit-message style: **Detailed**, **Concise**, **Conventional**, or **Release**. Each style button includes a tooltip explaining when to use it. Click **Generate with AI** to draft one consolidated commit message from the selected files. For multi-file changes, the app sends an organized in-memory context pack first - grouped paths, change status, diff stats, detected domains, recent commit subjects, and concise file hints - then the selected diff/file snippets, so the AI can produce a broader subject plus useful body bullets instead of overfitting to one file.
+In the commit wizard, enable AI for the repository and choose a commit-message style: **Detailed**, **Concise**, **Conventional**, or **Release**. Each style button includes a tooltip explaining when to use it, and generated drafts are remembered per style so you can compare wording before continuing. Click **Generate with AI** to draft one consolidated commit message from the selected files. For multi-file changes, the app sends an organized in-memory context pack first - grouped paths, change status, diff stats, detected domains, recent commit subjects, and concise file hints - then the selected diff/file snippets, so the AI can produce a broader subject plus useful body bullets instead of overfitting to one file.
 
 ### Repo-local team context
 

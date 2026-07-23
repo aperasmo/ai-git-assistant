@@ -182,6 +182,7 @@ These dates mark when the phase or feature set was first added to the project hi
 6. Added one-click Team Context template creation from the repository context panel.
 7. Clarified that the selected commit-message style takes priority over team context guidance.
 8. Added tooltips for the Detailed, Concise, Conventional, and Release commit-message style buttons.
+9. Remembered generated commit-message drafts per style so users can compare wording before continuing.
 
 ### Architecture
 
