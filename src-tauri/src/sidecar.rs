@@ -14,7 +14,7 @@ use crate::{
     sidecar_proxy::SidecarProxy,
 };
 
-const READY_PREFIX: &str = "AIGA_READY:";
+const READY_PREFIX: &str = "TM_READY:";
 
 #[derive(Deserialize)]
 struct ReadyMessage {
@@ -43,8 +43,8 @@ pub fn launch(app: AppHandle, state: AppState) {
         let token = Uuid::new_v4().to_string() + &Uuid::new_v4().to_string();
         let sidecar = match app.shell().sidecar("ai-git-sidecar") {
             Ok(command) => command
-                .env("AIGA_SESSION_TOKEN", &token)
-                .env("AIGA_ENV", "production"),
+                .env("TM_SESSION_TOKEN", &token)
+                .env("TM_ENV", "production"),
             Err(error) => {
                 state
                     .failed(format!("Unable to configure local service: {error}"))

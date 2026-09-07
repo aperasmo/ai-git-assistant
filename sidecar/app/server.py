@@ -22,7 +22,7 @@ class ReadyServer(uvicorn.Server):
 
         port = int(server.sockets[0].getsockname()[1])
         payload = json.dumps({"port": port, "protocol_version": "1"}, separators=(",", ":"))
-        print(f"AIGA_READY:{payload}", flush=True)
+        print(f"TM_READY:{payload}", flush=True)
 
 
 def run_sidecar() -> None:

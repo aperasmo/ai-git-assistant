@@ -311,9 +311,9 @@ export const HELP_COMMANDS: HelpCommand[] = [
   },
   {
     id: "revert",
-    name: "Revert (planned)",
-    category: "terminal",
-    description: "Creates a new commit that undoes the changes of a previous commit. Safe for shared branches because it preserves history rather than rewriting it.",
+    name: "Revert commit",
+    category: "write",
+    description: "Creates a reviewed new commit that undoes a regular commit. Safe for shared branches because it preserves history rather than rewriting it.",
     gitCommand: "git revert <commit-hash>",
     gitExample: "git revert a1b2c3d",
   },

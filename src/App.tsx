@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
 import { CloneRepositoryModal } from "./components/CloneRepositoryModal";
 import { DiagnosticsModal } from "./components/DiagnosticsModal";
@@ -1179,6 +1179,8 @@ export default function App() {
       startWriteWizard(repositoryId, flowId);
     } else if (flowId === "discard") {
       startDiscardWizard(repositoryId);
+    } else if (flowId === "revert") {
+      startRevertWizard(repositoryId);
     } else if (flowId === "switch_branch") {
       startSwitchBranchWizard(repositoryId);
     } else if (flowId === "pull") {
@@ -1293,6 +1295,27 @@ export default function App() {
       status: "active",
       choices: sortedFiles,
       gitignoreChoices: sortRepositoryPaths((snapshot?.untrackedPaths ?? []).map((c) => c.path)),
+    });
+  }
+
+  function startRevertWizard(repositoryId: string) {
+    const commits = snapshot?.recentCommits ?? [];
+    if (commits.length === 0) {
+      appendTranscriptEntry(repositoryId, {
+        id: createTranscriptId(), kind: "error", message: "No recent commits are available to revert.",
+      });
+      appendTranscriptEntry(repositoryId, { id: createTranscriptId(), kind: "wizard_menu", variant: "compact" });
+      return;
+    }
+    const stepId = createTranscriptId();
+    activeWizardRef.current = { flowId: "revert", currentStepId: stepId, currentStepKind: "option_select", data: {} };
+    appendTranscriptEntry(repositoryId, {
+      id: stepId,
+      kind: "wizard_step",
+      stepKind: "option_select",
+      prompt: "Which commit should be reverted?",
+      status: "active",
+      choices: commits.map((commit) => `${commit.shortHash}  ${commit.subject}`),
     });
   }
 
@@ -1941,6 +1964,27 @@ export default function App() {
             ...gitCmds(`git switch ${targetBranch}`),
           ],
         });
+      } else if (wizard.flowId === "revert") {
+        const selectedHash = choiceLabel.trim().split(/\s+/)[0];
+        const commit = (snapshot?.recentCommits ?? []).find(
+          (item) => item.shortHash === selectedHash || item.fullHash === selectedHash,
+        );
+        const commitHash = commit?.fullHash ?? selectedHash;
+        const revertData: WizardData = { ...updatedData, commitHash };
+        const next: WizardState = { ...wizard, currentStepId: nextStepId, currentStepKind: "confirm", data: revertData };
+        activeWizardRef.current = next;
+        appendTranscriptEntry(repositoryId, {
+          id: nextStepId,
+          kind: "wizard_step",
+          stepKind: "confirm",
+          prompt: "Revert commit",
+          status: "active",
+          confirmLines: [
+            `Commit: ${commit?.shortHash ?? selectedHash}  ${commit?.subject ?? ""}`,
+            "Creates a new commit; published history is not rewritten.",
+            ...gitCmds(`git revert --no-edit ${commitHash}`),
+          ],
+        });
       } else if (wizard.flowId === "draft_release") {
         if (!wizard.data.releaseMode) {
           const releaseMode = choiceData.releaseMode ?? (choiceLabel.toLowerCase().includes("edit") ? "edit" : "create");
@@ -2175,6 +2219,9 @@ export default function App() {
         steps.push({ kind: "switch", title: `Switch to ${targetBranch}`, detail: `git switch ${targetBranch}`, paths: [], branch: targetBranch });
       } else if (wizard.flowId === "discard") {
         steps.push({ kind: "discard", title: "Discard changes", detail: `${files.length} file(s)`, paths: files });
+      } else if (wizard.flowId === "revert") {
+        const commitHash = wizard.data.commitHash ?? "";
+        steps.push({ kind: "revert", title: `Revert commit ${commitHash.slice(0, 12)}`, detail: "Create a new inverse commit", paths: [], commitHash });
       } else if (wizard.flowId === "connect_remote") {
         const remoteUrl = wizard.data.message ?? "";
         const remoteName = wizard.data.remote ?? "origin";

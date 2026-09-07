@@ -1,5 +1,32 @@
 # Release Notes
 
+This file is the historical feature record for AI Git Assistant. Each release
+summarizes what changed, why it mattered, and what was verified before the
+installer or public release was prepared.
+
+## Release history at a glance
+
+| Version | Phase | Main theme | User-facing highlights |
+|---|---|---|---|
+| `0.9.0` | Phase 9 | Team context and conventions | Repo-local team guidance, AI privacy receipts for team context, per-style AI commit drafts, style tooltips, hidden Windows Git subprocess windows, macOS support parked |
+| `0.8.0` | Phase 8 | UI responsiveness and workflow polish | Adaptive command dock, More drawer, collapsible repository context panel, context-aware actions, dark/light theme toggle |
+| `0.7.9` | Phase 7.9 | Conflict resolution and HTTPS Git auth | Preview-first conflict resolver, AI conflict proposals, keep-local/keep-remote recovery, stored GitHub token use for HTTPS pull/push/fetch/tag operations |
+| `0.7.8` | Phase 7.8 | Publish local projects to GitHub | Create GitHub repo from a local project, commit selected files, add origin, push first main branch, recover from push rejection and merge conflicts |
+| `0.7.7` | Phase 7.7 | Cross-machine release assembly | Release Manager create/edit draft flow, existing draft preload, existing asset display, multi-machine Windows/Linux asset upload, missing tag creation |
+| `0.7.6` | Phase 7.6 | Diverged branch recovery and release polish | Fast-forward pull recovery, explicit merge plans, one-command installer wrapper, larger release notes editor, multiple release assets |
+| `0.7.5` | Phase 7.5 | GitHub push-auth recovery | Token permission guidance, retry-push flow, Settings copy for fine-grained GitHub tokens |
+| `0.7.4` | Phase 7.4 | Next Step Assistant | Guided recovery for missing upstream, existing remotes, missing Git author identity, and wrong repository selection |
+| `0.7.3` | Phase 7.3 | First-machine setup | Git author identity settings, scrollable/wider Settings layout, auto-close ignore flow |
+| `0.7.2` | Phase 7.2 | Gitignore Assistant and Ubuntu package | Ignore selected untracked files, exact `.gitignore` entries, Ubuntu `.deb` build verification |
+| `0.7.1` | Phase 7.1 | Linux hardening | Older Git compatibility, non-Windows local secret storage, Python command autodetection |
+| `0.7.0` | Phase 7 | Cross-platform release line | Portable sidecar build/test scripts, platform-aware sidecar binaries, Windows/macOS/Linux bundle commands |
+| `0.6.x` | Phase 6 | PR/MR workflow | GitHub draft PRs, GitLab draft MRs, AI PR/MR drafts, provider readiness checks, review-status visibility |
+| `0.5.x` | Phase 5 | Workflow polish and agent worktrees | Agent worktree control plane, session tracking, compare/merge/abandon/cleanup controls, stronger read-only guards |
+| `0.4.x` | Phase 4 | AI-native Git workflows | Release/tag support, provider awareness, GitHub release flow, premium AI commit-message composer styles |
+| `0.3.x` | Phase 3 | Git client parity | Commit graph, full diff, file history, blame, stash, remotes, tags, merge and conflict guidance |
+| `0.2.x` | Phase 2 | Release hardening | Repeatable sidecar/frontend/Tauri builds, encrypted local secrets, diagnostics, support logging |
+| `0.1.0` | Phase 1 | MVP installer | Windows installer, local planner, approval-gated Git writes, core read/write Git actions, LLM fallback |
+
 ## 0.9.0 - Phase 9
 
 Starts the team context and conventions phase.
@@ -16,13 +43,17 @@ Starts the team context and conventions phase.
 - Clarifies that the selected commit-message style takes priority over team context guidance.
 - Adds tooltips for the **Detailed**, **Concise**, **Conventional**, and **Release** commit-message style buttons.
 - Remembers generated commit-message drafts per style so users can switch between styles without losing the previous wording.
+- Hides Windows Git subprocess windows so Settings and Git checks do not flash terminal windows.
 - Fixes the Tauri bridge model so `teamContext` is preserved from the sidecar snapshot instead of causing a blank renderer on upgrade.
+- Parks macOS packaging/signing until a macOS build machine is available, while keeping Windows and Linux as the active release path.
 - Public docs and version metadata updated to `0.9.0`.
 
 Validation:
 
 - focused team-context sidecar regression test
 - frontend build verification
+- Rust command bridge check
+- Windows installer build verification
 
 ## 0.8.0 - Phase 8
 

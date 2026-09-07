@@ -12,6 +12,15 @@ from pathlib import Path
 from app.errors import GitCommandError
 
 
+_EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
+def _hidden_subprocess_flags() -> int:
+    if os.name == "nt":
+        return subprocess.CREATE_NO_WINDOW
+    return 0
+
+
 @dataclass(frozen=True)
 class GitResult:
     stdout: str
@@ -56,8 +65,8 @@ class GitClient:
             environment.update(
                 {
                     "GIT_ASKPASS": str(askpass_path),
-                    "AIGA_GIT_USERNAME": http_auth.username,
-                    "AIGA_GIT_PASSWORD": http_auth.password,
+                    "TM_GIT_USERNAME": http_auth.username,
+                    "TM_GIT_PASSWORD": http_auth.password,
                 }
             )
 
@@ -74,6 +83,7 @@ class GitClient:
                     errors="replace",
                     timeout=timeout_seconds,
                     env=environment,
+                    creationflags=_hidden_subprocess_flags(),
                 )
             except FileNotFoundError as exc:
                 raise GitCommandError("Git was not found on PATH.", status_code=503) from exc
@@ -105,9 +115,9 @@ class GitClient:
                 "@echo off\r\n"
                 "echo %* | findstr /I \"username\" >nul\r\n"
                 "if %ERRORLEVEL% EQU 0 (\r\n"
-                "  echo %AIGA_GIT_USERNAME%\r\n"
+                "  echo %TM_GIT_USERNAME%\r\n"
                 ") else (\r\n"
-                "  echo %AIGA_GIT_PASSWORD%\r\n"
+                "  echo %TM_GIT_PASSWORD%\r\n"
                 ")\r\n"
             )
             suffix = ".cmd"
@@ -115,8 +125,8 @@ class GitClient:
             content = (
                 "#!/bin/sh\n"
                 "case \"$1\" in\n"
-                "  *sername*|*Username*) printf '%s\\n' \"$AIGA_GIT_USERNAME\" ;;\n"
-                "  *) printf '%s\\n' \"$AIGA_GIT_PASSWORD\" ;;\n"
+                "  *sername*|*Username*) printf '%s\\n' \"$TM_GIT_USERNAME\" ;;\n"
+                "  *) printf '%s\\n' \"$TM_GIT_PASSWORD\" ;;\n"
                 "esac\n"
             )
             suffix = ".sh"
@@ -254,6 +264,13 @@ class GitClient:
             arguments = ["diff", "HEAD", "--no-ext-diff", "--stat"]
         return self.run(arguments).stdout
 
+    def diff_check(self, scope: str = "unstaged") -> str:
+        arguments = ["diff"]
+        if scope == "staged":
+            arguments.append("--cached")
+        arguments.extend(["--no-ext-diff", "--check"])
+        return self.run(arguments).stdout
+
     def diff_patch(self, scope: str = "all") -> str:
         if scope == "staged":
             arguments = ["diff", "--cached", "--no-ext-diff", "--find-renames", "--patch"]
@@ -269,7 +286,7 @@ class GitClient:
         return self.run(
             [
                 "diff",
-                "HEAD",
+                self._working_tree_diff_base(),
                 "--no-ext-diff",
                 "--find-renames",
                 "--patch",
@@ -285,7 +302,7 @@ class GitClient:
         return self.run(
             [
                 "diff",
-                "HEAD",
+                self._working_tree_diff_base(),
                 "--no-ext-diff",
                 "--numstat",
                 "--",
@@ -293,6 +310,14 @@ class GitClient:
             ],
             allow_failure=True,
         ).stdout
+
+    def _working_tree_diff_base(self) -> str:
+        """Use Git's empty tree when an initial repository has no HEAD commit."""
+        head = self.run(
+            ["rev-parse", "--verify", "HEAD^{commit}"],
+            allow_failure=True,
+        )
+        return "HEAD" if head.return_code == 0 else _EMPTY_TREE_HASH
 
     def fetch_prune(self, *, http_auth: GitHttpAuth | None = None) -> GitResult:
         return self.run(["fetch", "--prune"], timeout_seconds=45, http_auth=http_auth)
@@ -362,6 +387,7 @@ class GitClient:
                 errors="replace",
                 timeout=10,
                 env=environment,
+                creationflags=_hidden_subprocess_flags(),
             )
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return set()
@@ -371,6 +397,27 @@ class GitClient:
         # The message is passed as one subprocess argument, never concatenated
         # into a shell command. -m also prevents Git from opening an editor.
         return self.run(["commit", "-m", message], timeout_seconds=45)
+
+    def resolve_commit(self, revision: str) -> str:
+        return self.run(["rev-parse", "--verify", f"{revision}^{{commit}}"]).stdout.strip()
+
+    def commit_parent_count(self, revision: str) -> int:
+        line = self.run(["rev-list", "--parents", "-n", "1", revision]).stdout.strip()
+        return max(0, len(line.split()) - 1)
+
+    def revert_commit(self, commit_hash: str) -> GitResult:
+        result = self.run(["revert", "--no-edit", commit_hash], timeout_seconds=90, allow_failure=True)
+        if result.return_code == 0:
+            return result
+        combined = f"{result.stderr}\n{result.stdout}".strip()
+        if "conflict" in combined.lower():
+            # Keep the reviewed operation atomic. A failed revert must not leave
+            # the repository stuck in an in-progress sequencer state.
+            self.run(["revert", "--abort"], allow_failure=True)
+            raise GitCommandError(
+                "Revert would cause conflicts, so AI Git Assistant aborted it and restored the pre-revert state."
+            )
+        raise GitCommandError(self._safe_error(result))
 
     def remote_list(self) -> list[str]:
         result = self.run(["remote"], allow_failure=True)

@@ -13,8 +13,13 @@ class LocalIntentMatcher:
         original_text = " ".join(message.strip().split()).rstrip("?.!,")
         text = original_text.lower()
 
+        native = self._resolve_native_git(original_text)
+        if native is not None:
+            return native
+
         _STATUS_EXACT = {
             "status", "git status",
+            "git status --short", "git status --short --branch", "git status -sb",
             "what changed", "what's changed", "whats changed",
             "what to commit", "what can i commit", "what's ready to commit",
             "whats ready to commit", "show status", "show me status",
@@ -180,3 +185,36 @@ class LocalIntentMatcher:
             matched=False,
             explanation="No supported local request matched this message.",
         )
+
+    @staticmethod
+    def _resolve_native_git(command: str) -> LocalResolution | None:
+        """Map safe native Git read syntax onto the constrained read API."""
+        text = command.casefold()
+        if not text.startswith("git "):
+            return None
+
+        if text in {"git status", "git status --short", "git status --short --branch", "git status -sb"}:
+            return LocalResolution(matched=True, action=ReadAction.STATUS, explanation="Resolved native Git status locally.")
+        if text in {"git remote", "git remote -v", "git remote --verbose"}:
+            return LocalResolution(matched=True, action=ReadAction.REMOTES, explanation="Resolved native Git remote listing locally.")
+        if text in {"git branch", "git branch --list"}:
+            return LocalResolution(matched=True, action=ReadAction.BRANCHES, explanation="Resolved native Git branch listing locally.")
+        if text in {"git stash list"}:
+            return LocalResolution(matched=True, action=ReadAction.STASHES, explanation="Resolved native Git stash listing locally.")
+        if text in {"git tag", "git tag --list", "git tag -l"}:
+            return LocalResolution(matched=True, action=ReadAction.TAGS, explanation="Resolved native Git tag listing locally.")
+
+        diff_match = re.fullmatch(r"git diff(?P<flags>(?:\s+--(?:cached|staged|stat|check))*)", text)
+        if diff_match:
+            flags = set(diff_match.group("flags").split())
+            scope = "staged" if flags & {"--cached", "--staged"} else "unstaged"
+            output_format = "check" if "--check" in flags else "stat" if "--stat" in flags else "patch"
+            if "--check" in flags and "--stat" in flags:
+                return None
+            return LocalResolution(
+                matched=True,
+                action=ReadAction.DIFF,
+                params={"scope": scope, "format": output_format},
+                explanation=f"Resolved native Git diff {output_format} locally.",
+            )
+        return None

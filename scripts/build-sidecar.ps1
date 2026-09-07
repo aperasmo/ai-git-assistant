@@ -1,7 +1,7 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Python = "python",
-    [string]$TargetTriple = $env:AIGA_TARGET_TRIPLE
+    [string]$TargetTriple = $env:TM_TARGET_TRIPLE
 )
 
 $ErrorActionPreference = "Stop"

@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
   ChatTranscriptEntry,
   GenerateCommitMessageResponse,
@@ -499,7 +499,7 @@ export function ChatPanel({
                 : "Describe the Git action you want..."
           }
           disabled={!repositorySelected || busy || hasPendingPlan}
-          aria-label="Git assistant request"
+          aria-label="AI Git Assistant request"
         />
         <button
           type="submit"

@@ -18,6 +18,7 @@ export type WizardFlowId =
   | "pull"
   | "stash"
   | "discard"
+  | "revert"
   | "connect_remote"
   | "publish_github"
   | "resolve_conflict"
@@ -50,6 +51,7 @@ export const FLOWS: FlowDef[] = [
   { id: "pull", label: "Pull latest", icon: "U", description: "Pull from remote", category: "write" },
   { id: "stash", label: "Stash changes", icon: "H", description: "Save work in progress", category: "write" },
   { id: "discard", label: "Discard changes", icon: "X", description: "Revert file changes", category: "write" },
+  { id: "revert", label: "Revert commit", icon: "Z", description: "Undo a commit with a new commit", category: "write" },
   { id: "connect_remote", label: "Connect remote", icon: "@", description: "Add GitHub/GitLab origin", category: "write" },
   { id: "publish_github", label: "Publish GitHub", icon: "O", description: "Create GitHub repo and push", category: "write" },
   { id: "draft_release", label: "Release manager", icon: "V", description: "Create or update a GitHub draft release", category: "write" },
@@ -86,6 +88,7 @@ export interface WizardData {
   prTitle?: string;
   prBody?: string;
   prProvider?: "github" | "gitlab";
+  commitHash?: string;
 }
 
 export interface WizardState {

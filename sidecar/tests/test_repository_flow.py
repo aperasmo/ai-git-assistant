@@ -206,7 +206,62 @@ def test_read_shaped_unmatched_request_does_not_use_ai_write_fallback(
     assert body["matched"] is False
     assert body["planKind"] != "write"
     assert body["requiresConfirmation"] is False
-    assert "read-only Git request" in body["explanation"]
+    assert "Native Git syntax is supported by default" in body["explanation"]
+    assert fake_router.calls == 0
+
+    blocked_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "git reset --hard HEAD~1"},
+    )
+    assert blocked_response.status_code == 200, blocked_response.json()
+    assert blocked_response.json()["matched"] is False
+    assert "arbitrary shell execution remains disabled" in blocked_response.json()["explanation"]
+    assert fake_router.calls == 0
+
+
+def test_out_of_scope_unmatched_request_does_not_reach_ai_provider(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    class FakeLLMRouter:
+        def __init__(self):
+            self.calls = 0
+
+        def plan(self, message, snapshot):
+            self.calls += 1
+            return [
+                ActionPlanStep(
+                    kind=PlanStepKind.STAGE,
+                    title="Stage all files",
+                    detail="Should not be used for an out-of-scope request.",
+                    paths=["README.md"],
+                )
+            ]
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    repository_id = register.json()["id"]
+    app_client.app.state.repository_service.set_external_llm_allowed(repository_id, True)
+    fake_router = FakeLLMRouter()
+    app_client.app.state.repository_service._llm_router = fake_router
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": "tell me a joke"},
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["matched"] is False
+    assert body["planKind"] != "write"
+    assert body["requiresConfirmation"] is False
+    assert "out of scope" in body["explanation"]
     assert fake_router.calls == 0
 
 
@@ -513,6 +568,42 @@ def test_phase_c_read_actions_return_rich_git_context(
     assert "README.md" in stash_show_response.json()["content"]
 
 
+def test_native_git_diff_stat_and_check_execute_through_safe_read_api(
+    app_client,
+    auth_headers,
+    git_repository,
+):
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(git_repository)},
+    )
+    repository_id = register.json()["id"]
+
+    for command, expected_title in [
+        ("git diff --stat", "Diff Stat"),
+        ("git diff --check", "Diff Check"),
+        ("git status --short --branch", "Git Status"),
+    ]:
+        plan_response = app_client.post(
+            f"/v1/repositories/{repository_id}/resolve-local",
+            headers=auth_headers,
+            json={"message": command},
+        )
+        assert plan_response.status_code == 200, plan_response.json()
+        plan = plan_response.json()
+        assert plan["matched"] is True
+        assert plan["requiresConfirmation"] is False
+
+        read_response = app_client.post(
+            f"/v1/repositories/{repository_id}/read-actions",
+            headers=auth_headers,
+            json={"action": plan["readAction"], "params": plan["readParams"]},
+        )
+        assert read_response.status_code == 200, read_response.json()
+        assert read_response.json()["title"] == expected_title
+
+
 def test_phase_c_remote_read_action_lists_origin(
     app_client,
     auth_headers,
@@ -748,6 +839,62 @@ def test_phase_c_tag_read_create_push_and_delete_flow(
     ).stdout.strip() == ""
 
 
+def test_reviewed_revert_creates_inverse_commit(
+    app_client,
+    auth_headers,
+    tmp_path,
+):
+    import subprocess
+
+    repository = tmp_path / "revert-repository"
+    repository.mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", *args], cwd=repository, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    git("init")
+    git("config", "user.name", "Test User")
+    git("config", "user.email", "test@example.invalid")
+    tracked = repository / "production.txt"
+    tracked.write_text("safe\n", encoding="utf-8")
+    git("add", "production.txt")
+    git("commit", "-m", "Add safe production state")
+    tracked.write_text("wrong fix\n", encoding="utf-8")
+    git("add", "production.txt")
+    git("commit", "-m", "Apply wrong production fix")
+    bad_commit = git("rev-parse", "HEAD")
+
+    register = app_client.post(
+        "/v1/repositories/register", headers=auth_headers, json={"path": str(repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    plan_response = app_client.post(
+        f"/v1/repositories/{repository_id}/resolve-local",
+        headers=auth_headers,
+        json={"message": f"revert {bad_commit[:12]}"},
+    )
+    assert plan_response.status_code == 200, plan_response.json()
+    plan = plan_response.json()
+    assert plan["steps"][0]["kind"] == "revert"
+    assert plan["steps"][0]["commitHash"] == bad_commit
+    assert plan["requiresConfirmation"] is True
+
+    execute = app_client.post(
+        f"/v1/repositories/{repository_id}/execute-plan",
+        headers=auth_headers,
+        json={"planId": plan["planId"]},
+    )
+    assert execute.status_code == 200, execute.json()
+    assert "reverted" in execute.json()["title"].lower()
+    assert tracked.read_text(encoding="utf-8") == "safe\n"
+    assert git("rev-parse", "HEAD") != bad_commit
+    assert git("log", "-1", "--format=%s") == 'Revert "Apply wrong production fix"'
+
+
 def test_generate_commit_message_requires_repository_ai_opt_in(
     app_client,
     auth_headers,
@@ -858,6 +1005,80 @@ def test_generate_commit_message_uses_selected_changed_files(
     assert "Changed." in fake_router.diff_context
 
 
+def test_generate_commit_message_supports_initial_commit(
+    app_client,
+    auth_headers,
+    tmp_path,
+):
+    import subprocess
+
+    repository = tmp_path / "initial-repository"
+    repository.mkdir()
+    subprocess.run(
+        ["git", "init", "-b", "main"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repository / "README.md").write_text(
+        "# Initial project\n\nFirst release.\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", "README.md"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    class FakeLLMRouter:
+        def __init__(self) -> None:
+            self.diff_context = ""
+
+        def commit_message(self, *, branch, diff_context, style="detailed"):
+            self.diff_context = diff_context
+            return CommitMessageDraft(
+                subject="chore: initialize project",
+                body=["Add the initial project documentation"],
+            )
+
+    register = app_client.post(
+        "/v1/repositories/register",
+        headers=auth_headers,
+        json={"path": str(repository)},
+    )
+    assert register.status_code == 200, register.json()
+    repository_id = register.json()["id"]
+
+    allow_response = app_client.post(
+        f"/v1/repositories/{repository_id}/set-llm",
+        headers=auth_headers,
+        json={"allowed": True},
+    )
+    assert allow_response.status_code == 200, allow_response.json()
+
+    fake_router = FakeLLMRouter()
+    app_client.app.state.repository_service._llm_router = fake_router
+
+    response = app_client.post(
+        f"/v1/repositories/{repository_id}/generate-commit-message",
+        headers=auth_headers,
+        json={"paths": ["README.md"], "style": "conventional"},
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["message"] == (
+        "chore: initialize project\n\n- Add the initial project documentation"
+    )
+    assert "README.md" in fake_router.diff_context
+    assert "+3/-0" in fake_router.diff_context
+    assert "new file mode" in fake_router.diff_context
+    assert "+# Initial project" in fake_router.diff_context
+    assert "+First release." in fake_router.diff_context
+
+
 def test_create_team_context_template_adds_repo_guidance_file(
     app_client,
     auth_headers,
@@ -914,7 +1135,9 @@ def test_generate_commit_message_allows_large_file_selection(
             )
 
     paths: list[str] = []
-    for index in range(43):
+    # Regression: a new repository with 194 selected files previously failed
+    # request validation because the API accepted at most 100 paths.
+    for index in range(194):
         path = f"generated/file-{index:02d}.txt"
         file_path = git_repository / path
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -947,7 +1170,7 @@ def test_generate_commit_message_allows_large_file_selection(
 
     assert response.status_code == 200, response.json()
     assert response.json()["message"] == "Update generated files\n\n- Refresh generated text artifacts"
-    assert response.json()["contextSummary"] == "Generated one detailed message from 43 selected files."
+    assert response.json()["contextSummary"] == "Generated one detailed message from 194 selected files."
     assert "Organized change map" in fake_router.diff_context
     assert "Group: generated" in fake_router.diff_context
     assert response.json()["privacyReceipt"]["files"] == paths

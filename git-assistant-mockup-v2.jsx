@@ -28,7 +28,7 @@ const sans = '"Inter",-apple-system,"Segoe UI",sans-serif';
 
 const REPOS = [
   { id: "glaucoma", name: "GlaucomaAI", path: "~/Projects/GlaucomaAI", branch: "feature/reports", color: "#8B5CF6", letter: "G", active: true },
-  { id: "gitassist", name: "AI Git Assistant", path: "~/Projects/AI-Git-Assistant", branch: "main", color: "#34D399", letter: "A", active: false },
+  { id: "gitassist", name: "AI Git Assistant", path: "~/Projects/ai-git-assistant", branch: "main", color: "#34D399", letter: "T", active: false },
   { id: "website", name: "Personal Website", path: "~/Projects/Personal-Website", branch: "main", color: "#22C55E", letter: "P", active: false },
   { id: "devops", name: "DevOps Scripts", path: "~/Projects/DevOps-Scripts", branch: "dev", color: "#EC4899", letter: "D", active: false },
 ];
@@ -78,7 +78,7 @@ function StatRow({ icon, label, value, tone }) {
   );
 }
 
-export default function GitAssistantMockupV2() {
+export default function AI Git AssistantMockupV2() {
   const [actionApproved, setActionApproved] = useState(false);
   const [actionCancelled, setActionCancelled] = useState(false);
   const [input, setInput] = useState("");

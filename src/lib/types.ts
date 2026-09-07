@@ -78,7 +78,8 @@ export type PlanStepKind =
   | "push_tag"
   | "delete_branch"
   | "add_remote"
-  | "rename_branch";
+  | "rename_branch"
+  | "revert";
 
 export interface BootstrapStatus {
   sidecarStatus: SidecarStatus;
@@ -260,6 +261,7 @@ export interface ActionPlanStep {
   remoteUrl?: string | null;
   stashRef?: string | null;
   tagName?: string | null;
+  commitHash?: string | null;
   commandPreview?: string | null;
   ahead?: number | null;
   behind?: number | null;

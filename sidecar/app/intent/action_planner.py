@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import PurePosixPath
 
 from app.errors import ValidationFailure
@@ -21,6 +22,7 @@ _PUSH_TAIL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _STAGE_PATTERN = re.compile(r"^\s*(?:stage|add)\s+(?P<paths>.+?)\s*[.!?]*$", re.IGNORECASE | re.DOTALL)
+_GIT_ADD_PATTERN = re.compile(r"^\s*git\s+add\s+(?P<paths>.+?)\s*$", re.IGNORECASE | re.DOTALL)
 _PUSH_PATTERN = re.compile(
     r"^\s*push(?:\s+(?:current\s+branch|to\s+(?P<branch>[A-Za-z0-9._/-]+)))?\s*[.!?]*$",
     re.IGNORECASE,
@@ -99,6 +101,10 @@ _DELETE_TAG_PATTERN = re.compile(
 )
 _PUSH_TAG_PATTERN = re.compile(
     r"^\s*push\s+tag\s+(?P<tag>[A-Za-z0-9][A-Za-z0-9._/-]{0,254})(?:\s+to\s+(?P<remote>[A-Za-z0-9._-]+))?\s*[.!?]*$",
+    re.IGNORECASE,
+)
+_REVERT_PATTERN = re.compile(
+    r"^\s*(?:git\s+)?revert(?:\s+commit)?\s+(?P<commit>[0-9a-fA-F]{7,40})\s*[.!?]*$",
     re.IGNORECASE,
 )
 _STAGE_ALL_THEN_COMMIT_PATTERN = re.compile(
@@ -188,6 +194,30 @@ class LocalActionPlanner:
             rewritten = f'commit all modified files with message "{commit_msg}"{suffix}'
             return self._plan_commit(repository_id, rewritten, snapshot)  # type: ignore[return-value]
 
+        native_add_match = _GIT_ADD_PATTERN.match(raw_message)
+        if native_add_match:
+            if snapshot.write_blocked_reason and not snapshot.conflicts:
+                self._ensure_writes_allowed(snapshot)
+            native_paths = self._parse_native_path_arguments(native_add_match.group("paths"))
+            paths = self._resolve_path_list(
+                native_paths,
+                snapshot,
+                include_staged=True,
+                include_conflicts=bool(snapshot.conflicts),
+            )
+            return self._write_plan(
+                repository_id=repository_id,
+                message=raw_message,
+                steps=[ActionPlanStep(
+                    kind=PlanStepKind.STAGE,
+                    title=f"Stage {len(paths)} selected file{'s' if len(paths) != 1 else ''}",
+                    detail="Add only the explicit repository-relative paths after approval.",
+                    paths=paths,
+                    branch=snapshot.branch,
+                    command_preview=self._command_preview("git", "add", "--", *paths),
+                )],
+            )
+
         stage_match = _STAGE_PATTERN.match(raw_message)
         if stage_match:
             if snapshot.write_blocked_reason and not snapshot.conflicts:
@@ -213,6 +243,30 @@ class LocalActionPlanner:
                 ],
             )
 
+        revert_match = _REVERT_PATTERN.match(raw_message)
+        if revert_match:
+            self._ensure_writes_allowed(snapshot)
+            if snapshot.staged_changes or snapshot.modified_changes or snapshot.untracked_paths:
+                raise ValidationFailure(
+                    "Revert requires a clean working tree. Commit or stash local changes first."
+                )
+            commit_hash = revert_match.group("commit").lower()
+            return self._write_plan(
+                repository_id=repository_id,
+                message=raw_message,
+                steps=[
+                    ActionPlanStep(
+                        kind=PlanStepKind.REVERT,
+                        title=f"Revert commit {commit_hash[:12]}",
+                        detail=(
+                            "Create a new commit that reverses this commit without rewriting published history."
+                        ),
+                        commit_hash=commit_hash,
+                        branch=snapshot.branch,
+                        command_preview=self._command_preview("git", "revert", "--no-edit", commit_hash),
+                    )
+                ],
+            )
         push_match = _PUSH_PATTERN.match(raw_message)
         if push_match:
             self._ensure_writes_allowed(snapshot)
@@ -1367,6 +1421,35 @@ class LocalActionPlanner:
     ) -> list[str]:
         raw_parts = re.split(r"\s*(?:,|\band\b)\s*", expression, flags=re.IGNORECASE)
         parts = [self._normalise_requested_path(part) for part in raw_parts if part.strip()]
+        return self._resolve_path_list(
+            parts,
+            snapshot,
+            include_staged=include_staged,
+            staged_only=staged_only,
+            modified_only=modified_only,
+            include_conflicts=include_conflicts,
+        )
+
+    @staticmethod
+    def _parse_native_path_arguments(expression: str) -> list[str]:
+        try:
+            raw_paths = shlex.split(expression, posix=False)
+        except ValueError as exc:
+            raise ValidationFailure("Native Git path arguments contain an unmatched quote.") from exc
+        if not raw_paths or any(path.startswith("-") for path in raw_paths):
+            raise ValidationFailure("git add supports explicit file paths only; additional flags are not accepted.")
+        return [LocalActionPlanner._normalise_requested_path(path) for path in raw_paths]
+
+    def _resolve_path_list(
+        self,
+        parts: list[str],
+        snapshot: RepositorySnapshot,
+        *,
+        include_staged: bool = True,
+        staged_only: bool = False,
+        modified_only: bool = False,
+        include_conflicts: bool = False,
+    ) -> list[str]:
 
         if not parts:
             raise ValidationFailure("Name at least one repository-relative file path.")

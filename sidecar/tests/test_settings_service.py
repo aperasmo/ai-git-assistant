@@ -43,13 +43,13 @@ def test_set_anthropic_provider_and_key(svc: SettingsService):
         UpdateLLMSettingsRequest(
             provider=LLMProviderKind.ANTHROPIC,
             api_key="sk-ant-test-key",
-            model="claude-haiku-4-5-20251001",
+            model="claude-haiku-4-5",
         )
     )
     settings = svc.get_llm_settings()
     assert settings.provider is LLMProviderKind.ANTHROPIC
     assert settings.api_key_set is True
-    assert settings.model == "claude-haiku-4-5-20251001"
+    assert settings.model == "claude-haiku-4-5"
     # key must not be exposed in the settings response
     assert not hasattr(settings, "api_key")
 

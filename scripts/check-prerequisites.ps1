@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Continue"
 
 Write-Host "AI Git Assistant prerequisites" -ForegroundColor Cyan
 

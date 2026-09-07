@@ -191,6 +191,7 @@ pub struct ActionPlanStep {
     pub remote_url: Option<String>,
     pub stash_ref: Option<String>,
     pub tag_name: Option<String>,
+    pub commit_hash: Option<String>,
     pub command_preview: Option<String>,
     pub ahead: Option<i32>,
     pub behind: Option<i32>,

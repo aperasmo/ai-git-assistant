@@ -227,6 +227,7 @@ class PlanStepKind(StrEnum):
     DELETE_BRANCH = "delete_branch"
     ADD_REMOTE = "add_remote"
     RENAME_BRANCH = "rename_branch"
+    REVERT = "revert"
 
 
 class ActionPlanStep(ApiModel):
@@ -240,6 +241,7 @@ class ActionPlanStep(ApiModel):
     remote_url: str | None = None
     stash_ref: str | None = None
     tag_name: str | None = None
+    commit_hash: str | None = None
     command_preview: str | None = None
     ahead: int | None = None
     behind: int | None = None
@@ -299,7 +301,10 @@ CommitMessageStyle = Literal["concise", "detailed", "conventional", "release_rea
 
 
 class GenerateCommitMessageRequest(ApiModel):
-    paths: list[str] = Field(default_factory=list, max_length=100)
+    # Initial repositories commonly contain more than 100 files. Keep this in
+    # sync with PublishGitHubRepositoryRequest so the reviewed initial-commit
+    # selection can also be used to generate its commit message.
+    paths: list[str] = Field(default_factory=list, max_length=500)
     style: CommitMessageStyle = "detailed"
 
 
@@ -318,7 +323,7 @@ class GenerateCommitMessageResponse(ApiModel):
 
 
 class GenerateChangeSummaryRequest(ApiModel):
-    paths: list[str] = Field(default_factory=list, max_length=100)
+    paths: list[str] = Field(default_factory=list, max_length=500)
 
 
 class CommitSuggestion(ApiModel):

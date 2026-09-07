@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.llm.base import LLMProvider
 from app.llm.prompt import PLAN_TOOL
 
-_DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+_DEFAULT_MODEL = "claude-haiku-4-5"
 
 
 class AnthropicProvider(LLMProvider):

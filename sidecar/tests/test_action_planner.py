@@ -70,6 +70,81 @@ def test_question_mark_status_request_resolves_as_read_plan():
     assert plan.read_action == "status"
 
 
+def test_exact_short_branch_status_command_resolves_as_read_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+
+    plan = planner.plan("repo-1", "git status --short --branch", make_snapshot())
+
+    assert plan.matched is True
+    assert plan.plan_kind == "read"
+    assert plan.read_action == "status"
+
+
+def test_native_git_read_commands_are_the_default_safe_read_path():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    cases = {
+        "git status --short": ("status", {}),
+        "git remote -v": ("remotes", {}),
+        "git branch --list": ("branches", {}),
+        "git diff": ("diff", {"scope": "unstaged", "format": "patch"}),
+        "git diff --stat": ("diff", {"scope": "unstaged", "format": "stat"}),
+        "git diff --check": ("diff", {"scope": "unstaged", "format": "check"}),
+        "git diff --cached --check": ("diff", {"scope": "staged", "format": "check"}),
+    }
+
+    for command, (action, params) in cases.items():
+        plan = planner.plan("repo-1", command, make_snapshot())
+        assert plan.matched is True
+        assert plan.requires_confirmation is False
+        assert plan.read_action == action
+        assert plan.read_params == params
+
+
+def test_native_git_add_paths_creates_reviewed_stage_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+
+    plan = planner.plan(
+        "repo-1",
+        "git add backend/app/routes/login.py frontend/src/Login.tsx",
+        make_snapshot(),
+    )
+
+    assert plan.requires_confirmation is True
+    assert plan.steps[0].kind.value == "stage"
+    assert plan.steps[0].paths == ["backend/app/routes/login.py", "frontend/src/Login.tsx"]
+    assert plan.steps[0].command_preview == (
+        "git add -- backend/app/routes/login.py frontend/src/Login.tsx"
+    )
+
+
+@pytest.mark.parametrize("command", ["git add .", "git add *", "git add --all"])
+def test_native_git_add_keeps_explicit_path_safety_boundary(command: str):
+    planner = LocalActionPlanner(LocalIntentMatcher())
+
+    with pytest.raises(ValidationFailure):
+        planner.plan("repo-1", command, make_snapshot())
+
+
+def test_revert_commit_creates_reviewed_write_plan():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+    snapshot = make_snapshot().model_copy(update={"modified_changes": [], "untracked_paths": []})
+
+    plan = planner.plan("repo-1", "git revert a1b2c3d", snapshot)
+
+    assert plan.matched is True
+    assert plan.requires_confirmation is True
+    assert plan.steps[0].kind.value == "revert"
+    assert plan.steps[0].commit_hash == "a1b2c3d"
+    assert plan.steps[0].command_preview == "git revert --no-edit a1b2c3d"
+
+
+def test_revert_requires_clean_working_tree():
+    planner = LocalActionPlanner(LocalIntentMatcher())
+
+    with pytest.raises(ValidationFailure, match="clean working tree"):
+        planner.plan("repo-1", "revert a1b2c3d", make_snapshot())
+
+
 def test_phase_c_read_requests_resolve_locally():
     planner = LocalActionPlanner(LocalIntentMatcher())
 

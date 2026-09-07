@@ -10,7 +10,7 @@
 - Rust owns the sidecar endpoint and per-session token.
 - FastAPI listens on `127.0.0.1` with an operating-system-selected port.
 - The sidecar writes exactly one stdout readiness message:
-  `AIGA_READY:{"port":<port>,"protocol_version":"1"}`
+  `TM_READY:{"port":<port>,"protocol_version":"1"}`
 - All other sidecar output must go to stderr or controlled local logs.
 - No generic proxy command exists.
 

@@ -90,6 +90,29 @@ _READ_ONLY_REQUEST_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+# Vocabulary drawn from the supported local grammar (LocalIntentMatcher /
+# LocalActionPlanner) plus the step kinds in the AI plan tool schema. A message
+# that contains none of these is not a Git request at all, so it must be
+# rejected before ever reaching the AI provider — the plan tool has no way to
+# decline, it can only produce a (nonsensical) Git plan.
+_GIT_REQUEST_KEYWORD_PATTERN = re.compile(
+    r"\b(?:"
+    r"git|status|diff|difference|log|logs|history|blame|graph|"
+    r"branch(?:es)?|checkout|switch|"
+    r"remote|remotes|origin|upstream|fetch|pull|push|sync|"
+    r"stage|unstage|add|discard|restore|"
+    r"commit|commits|amend|"
+    r"merge|conflicts?|abort|"
+    r"stash(?:es)?|pop|"
+    r"tag(?:s|ged|ging)?|"
+    r"revert|reset|rebase|cherry-?pick|"
+    r"delete|remove|drop|rename|"
+    r"repo|repository|worktree|"
+    r"file|files|changes?|changed|modified|staged|untracked|working\s+tree|"
+    r"pr|pull\s+request|mr|merge\s+request|review|ci"
+    r")\b",
+    re.IGNORECASE,
+)
 _AGENT_BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
 _PR_BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 
@@ -393,6 +416,7 @@ class RepositoryService:
         if plan.matched:
             if not plan.requires_confirmation:
                 return plan
+            plan = self._validate_and_normalise_revert_steps(repository_id, plan, snapshot)
             plan_id = str(uuid4())
             persisted_plan = self._with_plan_metadata(
                 plan.model_copy(update={"plan_id": plan_id}),
@@ -409,12 +433,35 @@ class RepositoryService:
             return persisted_plan
 
         # Local planner didn't match — try LLM fallback if configured
+        # Native Git syntax is always handled deterministically. Never send an
+        # unmatched command-shaped request to an AI provider or a shell.
+        if message.strip().casefold().startswith("git "):
+            return plan.model_copy(update={
+                "explanation": (
+                    "Native Git syntax is supported by default for the app's safe command families, "
+                    "but this exact command or flag combination is not supported. Use Help to see the "
+                    "native forms available in the app; arbitrary shell execution remains disabled."
+                )
+            })
+
         if self._looks_like_read_only_request(message):
             return plan.model_copy(update={
                 "explanation": (
                     "This looks like a read-only Git request, but it did not match a supported local "
                     "read command. Rephrase it as 'show log', 'last 5 commits', 'show diff', or "
                     "'what changed?' so the app can run a safe read action."
+                )
+            })
+
+        # The AI plan tool is called with a forced tool choice, so the model has no
+        # way to decline an out-of-scope request — it can only invent a Git plan for
+        # it. Reject anything that is not recognisably Git-shaped before that call.
+        if not self._looks_like_git_request(message):
+            return plan.model_copy(update={
+                "explanation": (
+                    "This request is out of scope. The app only handles Git actions such as status, diff, "
+                    "stage, commit, push, pull, branch, merge, stash, tag, and revert — rephrase your "
+                    "request as one of those, or check Help for supported commands."
                 )
             })
 
@@ -493,6 +540,13 @@ class RepositoryService:
                 text,
             )
         )
+
+    @staticmethod
+    def _looks_like_git_request(message: str) -> bool:
+        text = " ".join(message.strip().split()).lower()
+        if not text:
+            return False
+        return bool(_GIT_REQUEST_KEYWORD_PATTERN.search(text))
 
     def _agent_worktree_root(self, repository_id: str) -> Path:
         return self.settings.database_path.parent / "agent-worktrees" / repository_id
@@ -604,21 +658,23 @@ class RepositoryService:
     ) -> str:
         """Store a pre-built wizard plan, bypassing the intent matcher."""
         snapshot = self.snapshot(repository_id)
+        draft_plan = self._validate_and_normalise_revert_steps(
+            repository_id,
+            LocalActionPlan(
+                matched=True,
+                repository_id=repository_id,
+                message="wizard",
+                plan_kind=PlanKind.WRITE,
+                requires_confirmation=True,
+                steps=steps,
+                explanation="Submitted via wizard.",
+                source="local",
+            ),
+            snapshot,
+        )
         plan_id = str(uuid4())
         plan = self._with_plan_metadata(
-            LocalActionPlan(
-            matched=True,
-            repository_id=repository_id,
-            message="wizard",
-            plan_kind=PlanKind.WRITE,
-            requires_confirmation=True,
-            plan_id=plan_id,
-            read_action=None,
-            read_params={},
-            steps=steps,
-            explanation="Submitted via wizard.",
-            source="local",
-            ),
+            draft_plan.model_copy(update={"plan_id": plan_id}),
             snapshot=snapshot,
             privacy_receipt=self._local_privacy_receipt("Submit wizard Git plan"),
         )
@@ -1414,6 +1470,13 @@ class RepositoryService:
                     completed_steps.append(step.title)
                     continue
 
+                if step.kind is PlanStepKind.REVERT:
+                    if not step.commit_hash:
+                        raise ValidationFailure("The reviewed plan has no commit to revert.")
+                    client.revert_commit(step.commit_hash)
+                    completed_steps.append(step.title)
+                    continue
+
                 if step.kind is PlanStepKind.PUSH:
                     self._validate_push_step_against_current_repository(repository_id, step)
                     if not step.remote or not step.branch:
@@ -1646,14 +1709,34 @@ class RepositoryService:
             scope = str(request.params.get("scope", "all"))
             if scope not in {"all", "staged", "unstaged"}:
                 raise ValidationFailure("Diff scope must be all, staged, or unstaged.")
+            output_format = str(request.params.get("format", "patch"))
+            if output_format not in {"patch", "stat", "check"}:
+                raise ValidationFailure("Diff format must be patch, stat, or check.")
             snapshot = self.snapshot(repository_id)
-            content = self._bound_read_output(client.diff_patch(scope).strip())
+            if output_format == "stat":
+                content = self._bound_read_output(client.diff_stat(scope).strip())
+                title = "Diff Stat"
+                summary = "Native Git diff statistics were read locally."
+                empty = "No differences in the selected scope."
+                content_kind = "text"
+            elif output_format == "check":
+                content = self._bound_read_output(client.diff_check(scope).strip())
+                title = "Diff Check"
+                summary = "Git checked the selected diff for whitespace errors locally."
+                empty = "No whitespace errors found in the selected diff."
+                content_kind = "text"
+            else:
+                content = self._bound_read_output(client.diff_patch(scope).strip())
+                title = "Patch Diff"
+                summary = "Full patch diff was read locally with external diff tools disabled."
+                empty = "No differences in the selected scope."
+                content_kind = "diff"
             return ReadActionResult(
                 action=request.action,
-                title="Patch Diff",
-                summary="Full patch diff was read locally with external diff tools disabled.",
-                content=content or "No differences in the selected scope.",
-                content_kind="diff",
+                title=title,
+                summary=summary,
+                content=content or empty,
+                content_kind=content_kind,
                 snapshot=snapshot,
             )
 
@@ -2185,6 +2268,9 @@ class RepositoryService:
             if step.kind is PlanStepKind.COMMIT:
                 score += 5
                 reasons.append("Creates a local commit.")
+            elif step.kind is PlanStepKind.REVERT:
+                score += 35
+                reasons.append("Creates a new commit that reverses an earlier commit.")
             elif step.kind is PlanStepKind.PUSH:
                 score += 20
                 reasons.append("Publishes commits to a remote.")
@@ -2692,6 +2778,42 @@ class RepositoryService:
                 f"Remote '{step.remote}' is no longer available. Request a new plan and review it again."
             )
 
+    def _validate_and_normalise_revert_steps(
+        self,
+        repository_id: str,
+        plan: LocalActionPlan,
+        snapshot: RepositorySnapshot,
+    ) -> LocalActionPlan:
+        revert_steps = [step for step in plan.steps if step.kind is PlanStepKind.REVERT]
+        if not revert_steps:
+            return plan
+        if len(plan.steps) != 1 or len(revert_steps) != 1:
+            raise ValidationFailure("Revert must be reviewed and executed as a single Git action.")
+        if snapshot.write_blocked_reason or snapshot.conflicts:
+            raise ValidationFailure(snapshot.write_blocked_reason or "Resolve conflicts before reverting a commit.")
+        if snapshot.staged_changes or snapshot.modified_changes or snapshot.untracked_paths:
+            raise ValidationFailure("Revert requires a clean working tree. Commit or stash local changes first.")
+
+        step = revert_steps[0]
+        if not step.commit_hash or not re.fullmatch(r"[0-9a-fA-F]{7,40}", step.commit_hash):
+            raise ValidationFailure("Choose a valid 7-40 character hexadecimal commit hash to revert.")
+        client = GitClient(self.store.canonical_path(repository_id))
+        try:
+            full_hash = client.resolve_commit(step.commit_hash)
+        except GitCommandError as exc:
+            raise ValidationFailure(f"Commit '{step.commit_hash}' was not found in this repository.") from exc
+        if client.commit_parent_count(full_hash) > 1:
+            raise ValidationFailure(
+                "The selected commit is a merge commit. Reverting a merge requires choosing a mainline parent, "
+                "which is not yet supported in the app."
+            )
+        normalised_step = step.model_copy(update={
+            "commit_hash": full_hash,
+            "title": f"Revert commit {full_hash[:12]}",
+            "command_preview": f"git revert --no-edit {full_hash}",
+        })
+        return plan.model_copy(update={"steps": [normalised_step]})
+
     @staticmethod
     def _render_execution_result(
         plan: LocalActionPlan,
@@ -2715,6 +2837,11 @@ class RepositoryService:
         elif PlanStepKind.COMMIT in step_kinds:
             title = "Commit created"
             summary = "The reviewed commit was created locally."
+        elif step_kinds == {PlanStepKind.REVERT}:
+            revert_step = next((s for s in plan.steps if s.kind is PlanStepKind.REVERT), None)
+            commit_hash = (revert_step.commit_hash if revert_step else None) or "commit"
+            title = f"Commit {commit_hash[:12]} reverted"
+            summary = "A new local commit reversed the selected commit without rewriting history."
         elif PlanStepKind.PUSH in step_kinds:
             title = "Push completed"
             summary = "The current branch was pushed to its configured upstream without force."
@@ -2804,6 +2931,8 @@ class RepositoryService:
                     lines.append(f"Commit: {commit.short_hash}  {commit.subject}")
                 else:
                     lines.append("Commit created.")
+            elif step.kind is PlanStepKind.REVERT:
+                lines.append(f"Reverted commit {step.commit_hash}")
             elif step.kind is PlanStepKind.PUSH:
                 lines.append(f"Push: {step.branch} → {step.remote}/{step.branch}")
             elif step.kind is PlanStepKind.PULL:

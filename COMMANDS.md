@@ -1,6 +1,6 @@
 # AI Git Assistant Command Reference
 
-Every typed request is resolved locally first. Write operations always create a reviewed plan before anything changes.
+Native Git syntax is the default parsing path. Supported commands such as `git status --short --branch`, `git remote -v`, `git diff --stat`, and `git add <paths>` resolve deterministically before natural-language matching. Write operations always create a reviewed plan before anything changes, and arbitrary shell execution remains disabled.
 
 Provider awareness is per selected repository. The app reads configured remotes and labels GitHub, GitLab, Bitbucket, Azure DevOps, unknown, local-only, and mixed-provider repositories in the right panel. Standard Git commands work across providers; platform-specific actions explain when the selected provider is not supported yet.
 
@@ -10,7 +10,7 @@ Read commands run immediately and never modify the repository.
 
 | Request examples | Git command family | Notes |
 |---|---|---|
-| `status`, `git status`, `what changed?` | `git status --porcelain=v2 --branch` | Shows staged, modified, untracked, conflicts, ahead/behind. |
+| `status`, `git status`, `git status --short --branch`, `what changed?` | `git status --porcelain=v2 --branch` | Shows staged, modified, untracked, conflicts, ahead/behind. |
 | `show diff`, `show me the diff`, `diff` | `git diff HEAD --patch` | Full patch diff with local line highlighting. |
 | `show staged diff` | `git diff --cached --patch` | Shows staged patch only. |
 | `show unstaged diff` | `git diff --patch` | Shows working-tree patch only. |
@@ -88,6 +88,15 @@ remove login.py from staging
 ```
 
 Runs `git restore --staged -- <file> ...`.
+
+### Revert Commit
+
+```text
+revert a1b2c3d
+git revert a1b2c3d
+```
+
+Creates a new commit that reverses one regular commit after approval. The working tree must be clean. Merge commits are rejected because they require choosing a mainline parent, and a conflict-producing revert is automatically aborted without leaving a partial revert in progress.
 
 ### Discard
 

@@ -8,6 +8,10 @@ src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 .venv/
 .python-version
+.env
+.env.*
+!.env.example
+!.env.*.example
 sidecar/.venv/
 sidecar/.pytest_cache/
 sidecar/.pytest-tmp/
@@ -18,8 +22,12 @@ sidecar/**/*.pyo
 sidecar/build/
 sidecar/dist/
 sidecar/*.spec
+sidecar/*.egg-info/
 .build/
 .local/
+.tmp-cwd.txt
+test.txt
+*.cwd
 *.db
 *.db-shm
 *.db-wal

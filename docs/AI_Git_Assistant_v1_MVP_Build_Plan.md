@@ -3,7 +3,7 @@
 **Author:** Allan P. Erasmo
 **Status:** All three phases complete — see `IMPLEMENTATION_STATUS.md` for current state.
 **Last updated:** 25 June 2026
-**Relationship to other docs:** `AI_Git_Assistant_System_Design_v1_Implementation_Baseline.md` is the full reference architecture. It is correct and worth keeping as the north star. This document trims it down to the smallest version that still proves every core idea, so implementation can start this week instead of after several more weeks of specification.
+**Relationship to other docs:** `AI Git Assistant_System_Design_v1_Implementation_Baseline.md` is the full reference architecture. It is correct and worth keeping as the north star. This document trims it down to the smallest version that still proves every core idea, so implementation can start this week instead of after several more weeks of specification.
 
 ---
 

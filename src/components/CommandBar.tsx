@@ -51,6 +51,7 @@ function availabilityFor(flowId: WizardFlowId, snapshot?: RepositorySnapshot | n
     "pull",
     "stash",
     "discard",
+    "revert",
     "switch_branch",
     "draft_pr",
     "draft_release",
@@ -79,6 +80,11 @@ function availabilityFor(flowId: WizardFlowId, snapshot?: RepositorySnapshot | n
       return stats.changedCount > 0
         ? { enabled: true }
         : { enabled: false, reason: "No local changes to discard." };
+    case "revert":
+      if (stats.changedCount > 0) return { enabled: false, reason: "Commit or stash local changes before reverting." };
+      return (snapshot.recentCommits?.length ?? 0) > 0
+        ? { enabled: true }
+        : { enabled: false, reason: "No commits are available to revert." };
     case "switch_branch":
       return stats.localBranchCount > 1
         ? { enabled: true }

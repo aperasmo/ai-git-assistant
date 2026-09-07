@@ -1,5 +1,8 @@
 use std::{io::ErrorKind, process::Command};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -23,9 +26,11 @@ pub struct LLMTestResult {
 }
 
 fn run_git_config(args: &[&str]) -> Result<(bool, String, String), String> {
-    let output = Command::new("git")
-        .arg("config")
-        .args(args)
+    let mut command = Command::new("git");
+    command.arg("config").args(args);
+    hide_command_window(&mut command);
+
+    let output = command
         .output()
         .map_err(|err| {
             if err.kind() == ErrorKind::NotFound {
@@ -41,6 +46,15 @@ fn run_git_config(args: &[&str]) -> Result<(bool, String, String), String> {
         String::from_utf8_lossy(&output.stderr).trim().to_string(),
     ))
 }
+
+#[cfg(windows)]
+fn hide_command_window(command: &mut Command) {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_command_window(_command: &mut Command) {}
 
 fn get_global_git_config_value(key: &str) -> Result<Option<String>, String> {
     let (ok, stdout, stderr) = run_git_config(&["--global", "--get", key])?;

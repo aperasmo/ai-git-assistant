@@ -23,7 +23,7 @@ const PROVIDERS: { value: LLMProviderKind; label: string; needsKey: boolean }[] 
 ];
 
 const DEFAULT_MODELS: Record<LLMProviderKind, string> = {
-  anthropic: "claude-haiku-4-5-20251001",
+  anthropic: "claude-haiku-4-5",
   gemini: "gemini-3.5-flash",
   openai: "gpt-4o-mini",
   groq: "llama-3.3-70b-versatile",

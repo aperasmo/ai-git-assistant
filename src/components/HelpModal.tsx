@@ -68,7 +68,7 @@ function commandBadge(cmd: HelpCommand): string {
   if (cmd.category === "read") return "Read";
   if (cmd.category === "write") return "In app";
   if (cmd.id === "reset_hard") return "Blocked";
-  if (cmd.id === "revert") return "Planned";
+  if (cmd.id === "revert") return "Available";
   return "Terminal";
 }
 

@@ -13,7 +13,7 @@ const distDirectory = path.join(buildDirectory, "dist");
 
 const options = parseArgs(process.argv.slice(2));
 const python = options.python ?? process.env.PYTHON ?? detectPythonCommand();
-const targetTriple = options.targetTriple ?? process.env.AIGA_TARGET_TRIPLE ?? detectRustHostTriple();
+const targetTriple = options.targetTriple ?? process.env.TM_TARGET_TRIPLE ?? detectRustHostTriple();
 const executableSuffix = targetTriple.includes("windows") ? ".exe" : "";
 const sidecarName = "ai-git-sidecar";
 

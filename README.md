@@ -4,6 +4,8 @@
 
 AI Git Assistant is a cross-platform desktop app that turns what you want to do into the exact Git steps needed. Type something like *"commit all my changes with message 'Fix login bug'"* and the app shows you exactly what it will run - before running anything. You review, you approve, it executes.
 
+Native Git commands are also first-class input. Safe supported forms such as `git status --short --branch`, `git remote -v`, `git diff --stat`, `git diff --cached --check`, and `git add <explicit paths>` are matched before natural-language requests. Native writes still use the reviewed approval flow; the app never passes arbitrary text to a shell.
+
 ---
 
 ## Current release
@@ -14,7 +16,7 @@ Phase 9 keeps the safety and UI work from Phase 8: write actions still show revi
 
 Versioning follows the product phase number: Phase 1 = `0.1.x`, Phase 2 = `0.2.x`, Phase 3 = `0.3.x`, Phase 4 = `0.4.x`, Phase 5 = `0.5.x`, Phase 6 = `0.6.x`, Phase 7 = `0.7.x`, Phase 8 = `0.8.x`, Phase 9 = `0.9.x`. The first release in a phase uses `.0`, so Phase 9 starts at `0.9.0`.
 
-See [release notes](docs/RELEASE_NOTES.md) for the shipped feature list and validation notes.
+See [release notes](docs/RELEASE_NOTES.md) for the historical feature list, release-by-release timeline, and validation notes.
 
 ---
 
@@ -71,7 +73,7 @@ No Python, Node.js, or Rust setup is required to use the installed app.
 
 ## Installation
 
-1. Download the latest installer from the [Releases](https://github.com/aperasmo/ai-git-assistant-app/releases) page: **`.exe`** for Windows or **`.deb`** for Ubuntu Linux
+1. Download the latest installer from the [Releases](https://github.com/aperasmo/ai-git-assistant/releases) page: **`.exe`** for Windows or **`.deb`** for Ubuntu Linux
 2. Double-click the installer and follow the prompts
 3. Launch **AI Git Assistant** from your Start menu or desktop shortcut
 
@@ -342,7 +344,7 @@ Or click any button in the command bar for a guided step-by-step wizard.
 
 ## 20 common Git functions coverage
 
-> **18/20 available in app.** AI Git Assistant already covers the day-to-day Git workflow from the common "20 important Git functions" list. The remaining two are intentionally treated carefully: `git revert` is safe and planned for a reviewed app workflow; `git reset --hard` is destructive and intentionally blocked.
+> **19/20 available in app.** AI Git Assistant includes a reviewed `git revert <commit>` workflow that creates a new inverse commit without rewriting history. `git reset --hard` remains destructive and intentionally blocked.
 
 | # | Function | App status |
 |---|---|---|
@@ -363,11 +365,11 @@ Or click any button in the command bar for a guided step-by-step wizard.
 | 15 | Fetch changes | Available |
 | 16 | Check differences | Available |
 | 17 | Undo staging | Available |
-| 18 | Revert commit | Planned |
+| 18 | Revert commit | Available |
 | 19 | Reset to previous state | Blocked by design |
 | 20 | Stash changes | Available |
 
-**Why the two exceptions?** `git revert <commit>` creates a new commit that undoes an older commit, so it preserves history and is safe for shared branches. `git reset --hard <commit>` rewrites the current state and can permanently discard local work, so the app does not expose it as a normal workflow.
+**Why is reset excluded?** `git revert <commit>` is available as a reviewed workflow because it preserves shared history. `git reset --hard <commit>` rewrites state and can permanently discard local work, so the app does not expose it as a normal workflow.
 
 ---
 
@@ -468,7 +470,7 @@ Delete that file for a completely clean start.
 
 - **Phase 5:** Agent worktree control plane
 - **Phase 6:** PR and review workflow
-- **Phase 7:** Mac and Linux release support
+- **Phase 7:** Windows/Linux release support; macOS packaging parked until a macOS build/signing machine is available
 - **Phase 8:** UI responsiveness and workflow polish
 - **Phase 9:** Team context and conventions
 

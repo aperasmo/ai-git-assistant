@@ -3,7 +3,7 @@
 > A desktop Git client where you describe what you want in plain English,
 > review an exact plan of Git commands, and approve before anything changes.
 
-Last updated: 23/07/2026
+Last updated: 25/07/2026
 
 ---
 
@@ -183,6 +183,8 @@ These dates mark when the phase or feature set was first added to the project hi
 7. Clarified that the selected commit-message style takes priority over team context guidance.
 8. Added tooltips for the Detailed, Concise, Conventional, and Release commit-message style buttons.
 9. Remembered generated commit-message drafts per style so users can compare wording before continuing.
+10. Hid Windows Git subprocess windows so opening Settings and running Git checks no longer flashes terminals.
+11. Added a release-history index to the release notes so shipped features can be traced by version.
 
 ### Architecture
 
@@ -311,6 +313,15 @@ discard changes in login.py
 
 Runs: `git restore -- <files>` — reverts the file to its last committed state. The plan displays a **DESTRUCTIVE** warning before you approve.
 
+#### Revert commit
+
+```
+revert a1b2c3d
+git revert a1b2c3d
+```
+
+Runs: `git revert --no-edit <commit>` after approval. This creates a new inverse commit without rewriting published history. It requires a clean working tree; merge commits are rejected until the app can review a mainline-parent choice, and conflict-producing reverts are automatically aborted.
+
 #### Switch branch
 
 ```
@@ -425,7 +436,6 @@ Phase 1 includes the AI fallback layer. If the local planner cannot recognise a 
 | Not supported | Why deferred |
 |---|---|
 | `git rebase`, `cherry-pick` | Complex multi-step operations; Phase 3 scope |
-| `git revert <commit>` | Safe undo-by-new-commit workflow; planned for a future reviewed app flow |
 | `git reset` | Destructive history rewrite; intentionally blocked |
 | Force push | Intentionally blocked |
 | Repos with submodules | Not supported |
@@ -529,8 +539,8 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Build and verify Linux `.deb` packaging on Ubuntu 22.04.
 - [x] Add Settings support for global Git author identity on new machines.
 - [x] Make Settings usable on shorter Linux VM screens with scrollable responsive layout.
-- [ ] Build and verify macOS `.app` / `.dmg` packaging.
-- [ ] Add Apple code signing and notarization path.
+- [ ] Parked: build and verify macOS `.app` / `.dmg` packaging when a macOS build machine is available.
+- [ ] Parked: add Apple code signing and notarization path after macOS packaging is verified.
 - [ ] Build and verify Linux AppImage packaging.
 - [ ] Upgrade macOS/Linux secrets to native Keychain / Secret Service storage.
 - [ ] Verify bundled sidecar startup, Git discovery, file pickers, and installer/update behavior on macOS and Linux.
@@ -555,6 +565,11 @@ Phase 1 is complete and has already been published as a Windows installer. Phase
 - [x] Add a reusable real-world team context template and use it in regression testing.
 - [x] Add in-app Team Context onboarding with one-click template creation.
 - [x] Preserve Team Context through the Tauri bridge so upgraded installs do not blank-screen on older repo state.
+- [x] Clarify that the selected commit-message style takes priority over team context guidance.
+- [x] Add tooltips for the Detailed, Concise, Conventional, and Release commit-message style buttons.
+- [x] Remember generated commit-message drafts per style so users can compare wording before continuing.
+- [x] Hide Windows Git subprocess windows so Settings and Git checks do not flash terminals.
+- [x] Park macOS platform support deliberately after confirming the Windows/Linux release path.
 - [ ] Import team conventions from `CONTRIBUTING.md`, PR templates, changelog rules, and recent commit history.
 - [ ] Let AI commit messages, PR summaries, release notes, branch names, and logical commit splits follow team style.
 - [ ] Add shared convention profiles that can be checked into the repository without storing secrets.

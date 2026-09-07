@@ -11,7 +11,7 @@
 
 - Tauri 2 shell with React 18 / TypeScript / Vite frontend.
 - Python FastAPI sidecar bundled as a single Windows executable (PyInstaller).
-- Sidecar binds to `127.0.0.1:0` (OS-assigned port), emits one stdout readiness line: `AIGA_READY:{"port":<port>,"protocol_version":"1"}`.
+- Sidecar binds to `127.0.0.1:0` (OS-assigned port), emits one stdout readiness line: `TM_READY:{"port":<port>,"protocol_version":"1"}`.
 - Rust generates a per-session bearer token; React never receives the port or token.
 - `GET /v1/health` authenticated health check before any feature is enabled.
 - Git installation detection on startup with a clear UI error if Git is missing.
@@ -52,7 +52,7 @@
 ### Phase 3 — LLM fallback layer and settings UI
 
 - **Provider abstraction:** `LLMProvider` abstract base class with structured plan generation and plain-text completion, backed by five concrete provider configurations:
-  - `AnthropicProvider` — uses the Anthropic SDK with tool use (`create_git_plan` tool); default model `claude-haiku-4-5-20251001`.
+  - `AnthropicProvider` — uses the Anthropic SDK with tool use (`create_git_plan` tool); default model `claude-haiku-4-5`.
   - `OllamaProvider` — HTTP calls to a local Ollama instance; default model `llama3.2`, default base URL `http://localhost:11434`.
   - `OpenAICompatProvider` — shared implementation covering OpenAI (`gpt-4o-mini`), Groq (`llama-3.3-70b-versatile`, base URL `https://api.groq.com/openai/v1`), and Gemini (`gemini-3.5-flash`, base URL `https://generativelanguage.googleapis.com/v1beta/openai/`). Gemini uses Google's OpenAI-compatible endpoint — no additional SDK required.
 - **LLM fallback routing:** when the local planner returns `matched=False` and the repository has `external_llm_allowed=True`, `LLMRouter` calls the configured provider, validates the returned steps, and produces a `LocalActionPlan` with `source="llm"`.

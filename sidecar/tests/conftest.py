@@ -12,7 +12,7 @@ from app.main import create_app
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("GIT_CEILING_DIRECTORIES", str(PROJECT_ROOT))
-os.environ.setdefault("AIGA_PORTABLE_SECRET_STORE", "1")
+os.environ.setdefault("TM_PORTABLE_SECRET_STORE", "1")
 
 
 def _git_init_bare_main(path: Path) -> None:

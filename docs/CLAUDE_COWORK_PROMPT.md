@@ -8,11 +8,11 @@ You are working inside a Windows-first desktop application repository named **AI
 
 ## Read these files before making changes
 
-1. `docs/AI_Git_Assistant_v1_MVP_Build_Plan.md`
-2. `docs/AI_Git_Assistant_System_Design_v1_Implementation_Baseline.md`
+1. `docs/AI Git Assistant_v1_MVP_Build_Plan.md`
+2. `docs/AI Git Assistant_System_Design_v1_Implementation_Baseline.md`
 3. `docs/DECISIONS.md`
 4. `docs/IMPLEMENTATION_STATUS.md`
-5. `git-assistant-mockup-v2.jsx` (visual reference only)
+5. `ai-git-assistant-mockup-v2.jsx` (visual reference only)
 
 ## Scope authority
 
@@ -54,7 +54,7 @@ Launch app
 2. FastAPI must bind only to `127.0.0.1` on port `0`.
 3. Rust must generate a unique random session token in memory and pass it only through the sidecar process environment.
 4. The sidecar must print one and only one stdout readiness event:
-   `AIGA_READY:{"port":<port>,"protocol_version":"1"}`
+   `TM_READY:{"port":<port>,"protocol_version":"1"}`
 5. Sidecar logs must not go to stdout after readiness. Use stderr or a controlled local log.
 6. Every FastAPI endpoint must require `Authorization: Bearer <session-token>`.
 7. The frontend may call only typed, named Tauri commands. Do not build a generic `proxy_request` command.
@@ -90,7 +90,7 @@ At add/repository registration time:
 
 ## UI direction
 
-Use `git-assistant-mockup-v2.jsx` as the visual and interaction baseline:
+Use `ai-git-assistant-mockup-v2.jsx` as the visual and interaction baseline:
 
 - left: repositories, future conversation area, local provider indicator
 - centre: chat and local result cards
